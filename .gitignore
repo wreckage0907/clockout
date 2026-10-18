@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.env*
+*.log
+.DS_Store
+
+# Personal agent settings
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Scratch
+.firecrawl/
