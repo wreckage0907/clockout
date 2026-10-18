@@ -1,0 +1,112 @@
+{
+  "kind": "calendar#events",
+  "summary": "dev@example.com",
+  "timeZone": "Asia/Kolkata",
+  "items": [
+    {
+      "id": "focus",
+      "iCalUID": "focus@google.com",
+      "status": "confirmed",
+      "summary": "Focus: write release notes",
+      "eventType": "focusTime",
+      "start": {
+        "dateTime": "2026-10-16T17:30:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "end": {
+        "dateTime": "2026-10-16T18:00:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "organizer": {
+        "email": "dev@example.com",
+        "self": true
+      }
+    },
+    {
+      "id": "client-call",
+      "iCalUID": "client-call@google.com",
+      "status": "confirmed",
+      "summary": "Acme weekly sync",
+      "eventType": "default",
+      "start": {
+        "dateTime": "2026-10-16T18:00:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "end": {
+        "dateTime": "2026-10-16T18:30:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "organizer": {
+        "email": "lead@example.com"
+      },
+      "attendees": [
+        {
+          "email": "dev@example.com",
+          "self": true,
+          "responseStatus": "needsAction"
+        },
+        {
+          "email": "pm@acme.example",
+          "organizer": true,
+          "responseStatus": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "ooo",
+      "iCalUID": "ooo@google.com",
+      "status": "confirmed",
+      "summary": "Out of office",
+      "eventType": "outOfOffice",
+      "start": {
+        "dateTime": "2026-10-16T19:00:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "end": {
+        "dateTime": "2026-10-16T20:00:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "organizer": {
+        "email": "dev@example.com",
+        "self": true
+      }
+    },
+    {
+      "id": "where",
+      "iCalUID": "where@google.com",
+      "status": "confirmed",
+      "summary": "Home",
+      "eventType": "workingLocation",
+      "start": {
+        "dateTime": "2026-10-16T09:00:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "end": {
+        "dateTime": "2026-10-16T18:00:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "organizer": {
+        "email": "dev@example.com",
+        "self": true
+      }
+    },
+    {
+      "id": "cancelled",
+      "iCalUID": "cancelled@google.com",
+      "status": "cancelled",
+      "summary": "Cancelled thing",
+      "eventType": "default",
+      "start": {
+        "dateTime": "2026-10-16T11:00:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "end": {
+        "dateTime": "2026-10-16T11:30:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "organizer": {
+        "email": "lead@example.com"
+      }
+    }
+  ]
+}

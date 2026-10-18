@@ -37,11 +37,12 @@ node dist/cli.js init          # finds Claude Code and your gh login, asks for y
 node dist/cli.js               # review today
 ```
 
-`init` writes `~/.config/clockout/config.toml`. It needs:
+`init` writes `~/.config/clockout/config.toml`. It uses:
 
 - **Claude Code** sessions in `~/.claude/projects` (found automatically).
 - **GitHub**: `gh auth login`, or a `GITHUB_TOKEN`.
-- **Google Calendar** (optional): Settings → your calendar → Integrate calendar → **Secret address in iCal format**. It includes your RSVPs, so declined meetings drop out and unanswered ones become questions.
+- **Google Calendar**: sign in once with `clockout connect google` (read-only). It reads your RSVPs, so declined meetings drop out and unanswered ones become questions. First time only: [create a Google sign-in client](docs/google-setup.md) (5 minutes).
+- Or any calendar's private ICS address, if your account allows one.
 
 ## The review screen
 
@@ -75,6 +76,7 @@ clockout edit "the gap was lunch" [--date yesterday] [--dry-run]
 clockout undo [--date yesterday]
 clockout export [date] --format csv|md|tsv|json [--out file] [--from DATE --to DATE]
 clockout demo
+clockout connect google        # sign in once; disconnect google to revoke
 ```
 
 `--no-ai` uses session, PR and meeting titles instead of AI summaries.
@@ -110,9 +112,12 @@ type = "claude-code"
 type = "github"
 
 [[sources]]
-type = "calendar"
-method = "ics"
-url = "https://calendar.google.com/calendar/ical/…/basic.ics"
+type = "google-calendar"             # added by `clockout connect google`
+calendars = ["primary"]
+
+[google]                             # your sign-in client: docs/google-setup.md
+client_id = "…apps.googleusercontent.com"
+client_secret = "GOCSPX-…"
 
 [[projects]]                         # map repos, titles or attendees to your timesheet's project names
 name = "Acme API"
@@ -132,7 +137,7 @@ match = { repo = "acme/api", title = "(?i)acme", attendee_domain = "acme.com" }
 - Everything is read and stored on your machine (`~/.local/share/clockout`). No telemetry.
 - The AI sees session titles, branch names, PR titles and meeting names, never your prompts or code.
 - Clockout runs your own `claude` binary with tools off and never reads your credentials.
-- The config file is readable only by you; it holds your private calendar address.
+- The config and the Google sign-in (`credentials.json`) are readable only by you. Calendar access is read-only.
 
 ## Development
 

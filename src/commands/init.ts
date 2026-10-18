@@ -9,6 +9,7 @@ import { type ConfigInput, isTimeZone, type SourceConfig } from "../config/schem
 import { detectClaudeCode } from "../sources/claude-code/paths";
 import { detectGitHub } from "../sources/github/token";
 import type { Detected } from "../sources/types";
+import { runConnect } from "./connect";
 
 export interface Detections {
   claudeCode: Detected | null;
@@ -133,21 +134,35 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
   });
   if (p.isCancel(workingHours)) return cancelled();
 
-  p.note(
-    [
-      "Google Calendar → Settings → your calendar →",
-      'Integrate calendar → "Secret address in iCal format".',
-      "It lets Clockout read your meetings and RSVPs. Leave empty to skip.",
-    ].join("\n"),
-    "Calendar",
-  );
-  const icsUrl = await p.text({
-    message: "Private calendar address (ICS)",
-    placeholder: "https://calendar.google.com/calendar/ical/…/basic.ics",
-    validate: (v) =>
-      !v || httpsUrl.safeParse(v).success ? undefined : "Paste the full https:// address",
+  const calendarChoice = await p.select({
+    message: "Calendar (for meetings and your RSVPs)",
+    initialValue: "google" as const,
+    options: [
+      { value: "google" as const, label: "Sign in with Google", hint: "once; read-only" },
+      { value: "ics" as const, label: "Paste a private calendar address (ICS)" },
+      { value: "none" as const, label: "Skip for now" },
+    ],
   });
-  if (p.isCancel(icsUrl)) return cancelled();
+  if (p.isCancel(calendarChoice)) return cancelled();
+
+  let icsUrl: string | symbol = "";
+  if (calendarChoice === "ics") {
+    p.note(
+      [
+        "Google Calendar → Settings → Settings for my calendars → your calendar →",
+        'Integrate calendar → "Secret address in iCal format".',
+        "Work accounts often have this turned off; use Sign in with Google instead.",
+      ].join("\n"),
+      "Calendar",
+    );
+    icsUrl = await p.text({
+      message: "Private calendar address (ICS)",
+      placeholder: "https://calendar.google.com/calendar/ical/…/basic.ics",
+      validate: (v) =>
+        !v || httpsUrl.safeParse(v).success ? undefined : "Paste the full https:// address",
+    });
+    if (p.isCancel(icsUrl)) return cancelled();
+  }
 
   let ai: InitAnswers["ai"] = "none";
   if (claudeCli) {
@@ -173,13 +188,18 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
       emails: parseEmails(emails || gitEmail || ""),
       timezone: timezone || systemTz,
       workingHours: workingHours || "09:30-18:30",
-      icsUrl: icsUrl || undefined,
+      icsUrl: (typeof icsUrl === "string" && icsUrl) || undefined,
       ai,
     },
     found,
   );
   await saveConfig(configFile, config);
 
+  if (calendarChoice === "google") {
+    p.outro(`Saved ${tildify(configFile, home)}. Now connecting Google Calendar…`);
+    await runConnect("google");
+    return;
+  }
   p.outro(`Saved ${tildify(configFile, home)}. Edit it any time to add project rules.`);
 }
 

@@ -39,6 +39,9 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Skip all-day and cancelled events (declined are kept so core can drop them visibly)
 - [x] Fixture tests
 
+- [x] Google Calendar API: `clockout connect google` (sign in once, read-only, loopback + PKCE), RSVP from the `self` attendee; Workspace accounts often block the secret ICS address
+- [ ] Create Clockout's Google OAuth client (needs the owner's Google account: docs/google-setup.md)
+
 ## Day 5–6 — First real draft (milestone)
 
 - [x] Project resolution: config rules → git remote → repo root → cwd; ticket keys from branches

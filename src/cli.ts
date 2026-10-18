@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
+import { runConnect, runDisconnect } from "./commands/connect";
 import { runDay } from "./commands/day";
 import { runEdit, runUndo } from "./commands/edit";
 import { runExport } from "./commands/export";
@@ -58,6 +59,18 @@ program
   .description("Undo the last correction")
   .option("-d, --date <date>", "day (default: today)")
   .action((opts) => runUndo(opts));
+
+program
+  .command("connect")
+  .argument("<service>", "google")
+  .description("Sign in once so Clockout can read your Google Calendar")
+  .action((service: string) => runConnect(service));
+
+program
+  .command("disconnect")
+  .argument("<service>", "google")
+  .description("Revoke access and forget the sign-in")
+  .action((service: string) => runDisconnect(service));
 
 program
   .command("init")

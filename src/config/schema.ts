@@ -45,10 +45,17 @@ const calendarSource = z.object({
   }),
 });
 
+const googleCalendarSource = z.object({
+  type: z.literal("google-calendar"),
+  /** Calendar ids; "primary" is your own. Connect with `clockout connect google`. */
+  calendars: z.array(z.string().min(1)).min(1).default(["primary"]),
+});
+
 export const sourceConfig = z.discriminatedUnion("type", [
   claudeCodeSource,
   githubSource,
   calendarSource,
+  googleCalendarSource,
 ]);
 
 const projectRule = z.object({
@@ -94,6 +101,13 @@ export const configSchema = z.object({
       meeting: z.string().min(1).default("Meetings"),
     })
     .prefault({}),
+  /** Your own Google OAuth client (see docs/google-setup.md); overrides the built-in one. */
+  google: z
+    .object({
+      client_id: z.string().min(1).optional(),
+      client_secret: z.string().min(1).optional(),
+    })
+    .optional(),
   ai: z
     .object({
       backend: z.enum(["auto", "claude-code", "none"]).default("auto"),

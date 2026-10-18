@@ -1,0 +1,119 @@
+{
+  "kind": "calendar#events",
+  "summary": "dev@example.com",
+  "timeZone": "Asia/Kolkata",
+  "items": [
+    {
+      "id": "standup",
+      "iCalUID": "standup@google.com",
+      "status": "confirmed",
+      "summary": "Daily standup",
+      "eventType": "default",
+      "start": {
+        "dateTime": "2026-10-16T09:30:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "end": {
+        "dateTime": "2026-10-16T10:00:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "organizer": {
+        "email": "lead@example.com"
+      },
+      "recurringEventId": "standup",
+      "attendees": [
+        {
+          "email": "dev@example.com",
+          "self": true,
+          "responseStatus": "accepted"
+        },
+        {
+          "email": "sam@example.com",
+          "responseStatus": "accepted"
+        },
+        {
+          "email": "lead@example.com",
+          "organizer": true,
+          "responseStatus": "accepted"
+        },
+        {
+          "email": "room-1@resource.calendar.google.com",
+          "resource": true,
+          "responseStatus": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "design-sync",
+      "iCalUID": "design-sync@google.com",
+      "status": "confirmed",
+      "summary": "Design sync",
+      "eventType": "default",
+      "start": {
+        "dateTime": "2026-10-16T15:00:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "end": {
+        "dateTime": "2026-10-16T15:30:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "organizer": {
+        "email": "lead@example.com"
+      },
+      "attendees": [
+        {
+          "email": "dev@example.com",
+          "self": true,
+          "responseStatus": "tentative"
+        },
+        {
+          "email": "designer@example.com",
+          "organizer": true,
+          "responseStatus": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "vendor-demo",
+      "iCalUID": "vendor-demo@google.com",
+      "status": "confirmed",
+      "summary": "Vendor demo",
+      "eventType": "default",
+      "start": {
+        "dateTime": "2026-10-16T17:00:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "end": {
+        "dateTime": "2026-10-16T17:30:00+05:30",
+        "timeZone": "Asia/Kolkata"
+      },
+      "organizer": {
+        "email": "lead@example.com"
+      },
+      "attendees": [
+        {
+          "email": "dev@example.com",
+          "self": true,
+          "responseStatus": "declined"
+        },
+        {
+          "email": "sales@vendor.example",
+          "responseStatus": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "offsite",
+      "status": "confirmed",
+      "summary": "Team offsite planning",
+      "eventType": "default",
+      "start": {
+        "date": "2026-10-16"
+      },
+      "end": {
+        "date": "2026-10-17"
+      }
+    }
+  ],
+  "nextPageToken": "p2"
+}
