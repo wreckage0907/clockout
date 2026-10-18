@@ -1,9 +1,30 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
+import { runDay } from "./commands/day";
 import { runInit } from "./commands/init";
 
 const program = new Command().name("clockout").description(pkg.description).version(pkg.version);
+
+const dayOptions = (cmd: Command) =>
+  cmd
+    .option("--md", "print a Markdown timesheet")
+    .option("--csv", "print a CSV timesheet")
+    .option("--json", "print the drafted day as JSON")
+    .option("--refresh", "rebuild from fresh activity, dropping corrections");
+
+dayOptions(program.command("today", { isDefault: true }).description("Draft today")).action(
+  (opts) => runDay("today", opts),
+);
+dayOptions(program.command("yesterday").description("Draft yesterday")).action((opts) =>
+  runDay("yesterday", opts),
+);
+dayOptions(
+  program
+    .command("day")
+    .argument("<date>", "YYYY-MM-DD, or -N for N days ago")
+    .description("Draft a specific day"),
+).action((date, opts) => runDay(date, opts));
 
 program
   .command("init")

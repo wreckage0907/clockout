@@ -170,9 +170,12 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
   gaps.forEach((g, i) => {
     g.id = `g${i + 1}`;
     if (g.end.getTime() - g.start.getTime() >= ASK_GAP) {
+      const agent = agentDuring(turns, g.start.getTime(), g.end.getTime());
       questions.push({
         kind: "gap",
-        text: `Nothing recorded ${localTime(g.start, tz)}–${localTime(g.end, tz)}. Lunch, a break, or work?`,
+        text: agent
+          ? `Nothing from you ${localTime(g.start, tz)}–${localTime(g.end, tz)}, but an agent was working in ${agent.project} for ${Math.round(agent.minutes)} min. Were you on it, or away?`
+          : `Nothing recorded ${localTime(g.start, tz)}–${localTime(g.end, tz)}. Lunch, a break, or work?`,
         gapId: g.id,
       });
     }
@@ -265,6 +268,22 @@ function subtract(p: Piece, ms: number, me: number): Piece[] {
   if (ms - p.start >= SLIVER) out.push({ ...p, end: ms });
   if (p.end - me >= SLIVER) out.push({ ...p, start: me });
   return out;
+}
+
+/** The project an agent spent most time in during [from, to), if it ran for at least a third of it. */
+function agentDuring(
+  turns: Activity[],
+  from: number,
+  to: number,
+): { project: string; minutes: number } | null {
+  const byProject = new Map<string, number>();
+  for (const t of turns) {
+    const overlap = Math.min(t.end?.getTime() ?? 0, to) - Math.max(t.start.getTime(), from);
+    if (overlap > 0 && t.project)
+      byProject.set(t.project, (byProject.get(t.project) ?? 0) + overlap);
+  }
+  const [project, ms] = [...byProject].sort((a, b) => b[1] - a[1])[0] ?? [];
+  return project && ms && ms >= (to - from) / 3 ? { project, minutes: ms / MINUTE } : null;
 }
 
 /** The same event can arrive from two calendars; keep one per event and start time. */

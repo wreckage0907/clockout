@@ -41,14 +41,14 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 ## Day 5–6 — First real draft (milestone)
 
-- [ ] Project resolution: config rules → git remote → repo root → cwd; ticket keys from branches
-- [ ] Blocks from human activity; idle cutoff; rounding; calendar wins on overlap
-- [ ] Gaps inside working hours
-- [ ] Attendance questions (tentative / no response / coding during a meeting)
-- [ ] Task rules (meeting → "Meetings", review → "Code Review", default per project)
-- [ ] Heuristic summaries
-- [ ] JSON store for days and corrections
-- [ ] `clockout today | yesterday | --from --to` with `--md` and `--json`
+- [x] Project resolution: config rules → git remote → repo root → cwd; ticket keys from branches
+- [x] Blocks from human activity; idle cutoff; rounding; calendar wins on overlap
+- [x] Gaps inside working hours
+- [x] Attendance questions (tentative / no response / coding during a meeting)
+- [x] Task rules (meeting → "Meetings", review → "Code Review", default per project)
+- [x] Heuristic summaries
+- [x] JSON store for days and corrections
+- [x] `clockout today | yesterday | --from --to` with `--md` and `--json`
 
 ## Day 7 — Claude summaries
 

@@ -167,6 +167,25 @@ describe("buildDay rules", () => {
     ]);
   });
 
+  it("mentions a running agent when asking about a gap", () => {
+    const short = fixtureConfig({
+      day: { working_hours: "10:00-11:00", idle_cutoff: "20m", round_to: "15m" },
+    });
+    const turn: Activity = {
+      source: "test",
+      kind: "agent_turn",
+      actor: "agent",
+      start: at("10:01"),
+      end: at("11:00"),
+      sessionId: "s1",
+      repo: "acme/api",
+    };
+    const day = buildDay(D, [prompt("10:00"), turn], short);
+    expect(day.questions.map((q) => q.text)).toEqual([
+      "Nothing from you 10:20–11:00, but an agent was working in acme/api for 40 min. Were you on it, or away?",
+    ]);
+  });
+
   it("drops declined meetings with a note and clips meetings at midnight", () => {
     const day = buildDay(
       D,

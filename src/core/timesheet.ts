@@ -7,14 +7,18 @@ export function countedBlocks(day: Day): Block[] {
   return day.blocks.filter((b) => b.confirmed && b.billable);
 }
 
-/** One row per counted block, hours rounded to `round_to`. */
+/** A block's hours, rounded to `round_to`. */
+export function blockHours(b: Block, config: Config): number {
+  return roundedHours(minutesBetween(b.start, b.end), durationMinutes(config.day.round_to));
+}
+
+/** One row per counted block. */
 export function timesheetRows(day: Day, config: Config): TimesheetRow[] {
-  const step = durationMinutes(config.day.round_to);
   return countedBlocks(day).map((b) => ({
     date: day.date,
     project: b.project,
     task: b.task,
-    hours: roundedHours(minutesBetween(b.start, b.end), step),
+    hours: blockHours(b, config),
     description: b.summary,
   }));
 }
