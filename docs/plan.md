@@ -34,10 +34,10 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 ## Day 4 — Google Calendar source
 
-- [ ] Fetch the ICS link; expand recurring events for the range
-- [ ] Own RSVP from `ATTENDEE;PARTSTAT` matched against configured emails
-- [ ] Skip all-day and declined events
-- [ ] Fixture tests
+- [x] Fetch the ICS link; expand recurring events for the range
+- [x] Own RSVP from `ATTENDEE;PARTSTAT` matched against configured emails
+- [x] Skip all-day and cancelled events (declined are kept so core can drop them visibly)
+- [x] Fixture tests
 
 ## Day 5–6 — First real draft (milestone)
 

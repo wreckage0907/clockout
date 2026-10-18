@@ -1,9 +1,14 @@
+import { calendar } from "./calendar";
 import { claudeCode } from "./claude-code";
 import { github } from "./github";
 import type { Source } from "./types";
 
 // Each source registers here once its collector exists.
-export const sources: readonly Source[] = [claudeCode as Source, github as Source];
+export const sources: readonly Source[] = [
+  claudeCode as Source,
+  github as Source,
+  calendar as Source,
+];
 
 export function getSource(id: string): Source | undefined {
   return sources.find((s) => s.id === id);

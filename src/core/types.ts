@@ -38,6 +38,8 @@ export interface Activity {
   /** Stable references, e.g. "pr:owner/repo#42", "jira:ABC-123", "event:<uid>". */
   refs?: string[];
   attendance?: Attendance;
+  /** Other attendees' emails, for meetings. */
+  attendees?: string[];
 }
 
 /** A stretch of time on one thing, shown as one timesheet row. */
