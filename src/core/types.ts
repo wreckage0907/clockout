@@ -52,7 +52,10 @@ export interface Block {
   task: string;
   summary: string;
   kind: "work" | "meeting" | "review";
+  /** Exported and counted only when true. False for lunch, breaks and the like. */
   billable: boolean;
+  /** False for meetings you haven't confirmed attending; they're left out until you do. */
+  confirmed: boolean;
   evidence: Activity[];
 }
 
@@ -78,6 +81,8 @@ export interface Day {
   blocks: Block[];
   gaps: Gap[];
   questions: Question[];
+  /** Things the user should know, e.g. declined meetings that were left out. */
+  notes: string[];
 }
 
 /** Local wall-clock time on the day being edited, "HH:MM". */
@@ -107,6 +112,7 @@ export type EditOp =
       task?: string;
       summary?: string;
       billable?: boolean;
+      confirmed?: boolean;
     }
   | { op: "delete"; id: string }
   | { op: "split"; id: string; at: LocalTime }

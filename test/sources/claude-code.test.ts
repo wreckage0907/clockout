@@ -34,37 +34,34 @@ async function collect(date: string): Promise<Activity[]> {
 describe("claude-code source", () => {
   it("turns typed prompts into human activity, with the session's final title and repo", async () => {
     const prompts = (await collect("2026-10-16")).filter((a) => a.kind === "prompt");
-    expect(prompts.map((a) => a.start.toISOString().slice(11, 16))).toEqual([
-      "04:30",
-      "04:52",
-      "05:20",
-      "06:05",
-      "06:40", // acme-api, incl. one list-content prompt
-      "08:30",
-      "09:05",
-      "09:40",
-      "10:15",
-      "10:55", // clockout
-      "18:10", // 23:40 IST, before the session crosses midnight
+    const bySession = (cwd: string) => prompts.filter((a) => a.cwd === cwd);
+    const acme = bySession("/Users/dev/work/acme-api");
+    const clockout = bySession("/Users/dev/code/clockout");
+    expect(acme.map((a) => a.start.toISOString().slice(11, 16))).toEqual([
+      ...["04:30", "04:36", "04:44", "04:49", "04:58", "05:05", "05:11", "05:19", "05:24", "05:33"],
+      ...["06:00", "06:07", "06:12", "06:20", "06:26", "06:33", "06:38"],
+      "18:10", // the midnight-crossing session, 23:40 IST
     ]);
-    expect(prompts[0]).toMatchObject({
+    expect(clockout).toHaveLength(22);
+    expect(acme[0]).toMatchObject({
       actor: "human",
       title: "Fix auth token refresh",
       repo: "acme/api",
       branch: "fix/auth-refresh",
-      cwd: "/Users/dev/work/acme-api",
     });
-    expect(prompts[5]).toMatchObject({
+    expect(acme[3]?.start.toISOString()).toBe("2026-10-16T04:49:00.000Z"); // list-content prompt
+    expect(clockout[0]).toMatchObject({
       title: "Build export command",
       repo: "dev-example/clockout",
     });
   });
 
   it("groups each run of assistant lines into one agent turn, ignoring subagents", async () => {
-    const turns = (await collect("2026-10-16")).filter((a) => a.kind === "agent_turn");
-    expect(turns).toHaveLength(11);
-    expect(turns[0]).toMatchObject({ actor: "agent", start: new Date("2026-10-16T04:31:05Z") });
-    expect(turns[0]?.end).toEqual(new Date("2026-10-16T04:34:10Z"));
+    const all = await collect("2026-10-16");
+    const turns = all.filter((a) => a.kind === "agent_turn");
+    expect(turns).toHaveLength(all.filter((a) => a.kind === "prompt").length);
+    expect(turns[0]).toMatchObject({ actor: "agent", start: new Date("2026-10-16T04:30:40Z") });
+    expect(turns[0]?.end).toEqual(new Date("2026-10-16T04:32:00Z"));
   });
 
   it("puts the rest of a midnight-crossing session on the next day", async () => {

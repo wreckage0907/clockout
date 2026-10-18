@@ -8,3 +8,6 @@ pre-commit:
     - name: typecheck
       glob: "*.{ts,tsx}"
       run: pnpm typecheck
+    - name: test
+      glob: "*.{ts,tsx,json,jsonl,ics}"
+      run: pnpm test

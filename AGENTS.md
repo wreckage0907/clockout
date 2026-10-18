@@ -72,7 +72,7 @@ src/store/        JSON store for days and corrections
 
 ## Commits
 
-Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`). Small, focused commits. The pre-commit hook (lefthook) runs Biome and the typecheck.
+Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`). Small, focused commits. The pre-commit hook (lefthook) runs Biome, the typecheck and the tests.
 
 ## Never
 

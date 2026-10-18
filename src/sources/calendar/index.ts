@@ -35,7 +35,7 @@ export function createCalendarSource(fetcher: IcsFetcher = fetchIcs): Source<Cal
       const me = ctx.config.me.emails.map((e) => e.toLowerCase());
       const data = ical.parseICS(await fetcher(cfg.url));
       for (const item of Object.values(data)) {
-        if (!item || item.type !== "VEVENT" || item.status === "CANCELLED") continue;
+        if (item?.type !== "VEVENT" || item.status === "CANCELLED") continue;
         const instances = ical.expandRecurringEvent(item, {
           from: range.from,
           to: range.to,
