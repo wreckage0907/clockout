@@ -5,9 +5,11 @@ coverage/
 *.log
 .DS_Store
 
-# Personal agent settings
+# Personal agent settings. Any CLAUDE.md stops Claude Code from reading AGENTS.md.
 .claude/settings.local.json
 CLAUDE.local.md
+CLAUDE.md
+.claude/CLAUDE.md
 
 # Scratch
 .firecrawl/
