@@ -216,7 +216,7 @@ collect → store → resolve projects → blocks → attendance → summarize �
 6. **Summarize**: one verb-first line per block, ≤ 8 words. AI backend if available, else aiTitle → PR title → commit subject → branch name.
 7. **Gaps**: unaccounted time inside working hours.
 8. **Review**: type or dictate. The AI returns operations (`add`, `update`, `delete`, `split`, `merge`, `fill_gap`, `clarify`), never a rewritten sheet. Clockout validates them, shows the diff, applies on `y`, and supports undo.
-9. **Export**: clipboard, Markdown, CSV, JSON, or a user template.
+9. **Export**: one row per block with **date, project, task, hours, description** — the fields most timesheet forms ask for. Clipboard, Markdown, CSV, JSON. Task comes from config rules (by activity kind, e.g. meeting → "Meetings", review → "Code Review", or a default per project) and can be changed by voice. After the MVP: user-defined export templates (own columns and formats) and documented presets for common timesheet tools.
 
 ## 9. MVP (must ship)
 
@@ -229,7 +229,7 @@ collect → store → resolve projects → blocks → attendance → summarize �
 - [ ] Edit operations + diff + undo
 - [ ] Ink TUI review screen with the "say it" bar
 - [ ] `clockout today | yesterday | week | --from --to`, `--md`, `--json`
-- [ ] Export: clipboard, Markdown, CSV
+- [ ] Export: clipboard, Markdown, CSV with date, project, task, hours, description
 - [ ] `clockout init` with auto-detect
 - [ ] `--demo` with fixtures; VHS demo GIF
 - [ ] README + demo video
