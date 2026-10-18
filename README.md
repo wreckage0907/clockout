@@ -6,6 +6,14 @@ Built for the **#NoHandsChallenge** (WeMakeDevs × Wispr Flow).
 
 > Status: scaffolded. Building the personal MVP — see the [plan](docs/plan.md).
 
+## Usage
+
+```sh
+clockout init            # finds Claude Code and your gh login, asks for your calendar link
+```
+
+Config lives in `~/.config/clockout/config.toml`.
+
 ## Development
 
 ```sh

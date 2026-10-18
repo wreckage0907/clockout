@@ -11,11 +11,11 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] AGENTS.md, `.claude/settings.json` + format hook, `add-source` skill
 - [x] ADRs 0001–0004
 - [x] CI workflow (Node 22/24 × macOS/Ubuntu)
-- [ ] `src/core/types.ts`: `Activity`, `Block`, `Day`, `Question`, `EditOp`
-- [ ] `src/sources/types.ts`: `Source` interface + registry
-- [ ] Config: zod schema, TOML load/save, XDG paths
-- [ ] `clockout init`: detect `~/.claude/projects` and `gh` login; ask ICS link, email, time zone, working hours
-- [ ] Synthetic fixtures: one Claude Code day, GitHub responses, an ICS file
+- [x] `src/core/types.ts`: `Activity`, `Block`, `Day`, `Question`, `EditOp`
+- [x] `src/sources/types.ts`: `Source` interface + registry
+- [x] Config: zod schema, TOML load/save, XDG paths
+- [x] `clockout init`: detect `~/.claude/projects` and `gh` login; ask ICS link, email, time zone, working hours
+- [x] Synthetic fixtures: one Claude Code day, GitHub responses, an ICS file
 
 ## Day 2 — Claude Code source
 

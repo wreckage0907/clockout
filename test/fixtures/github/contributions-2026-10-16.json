@@ -1,0 +1,107 @@
+{
+  "data": {
+    "viewer": {
+      "login": "dev-example",
+      "contributionsCollection": {
+        "startedAt": "2026-10-15T18:30:00Z",
+        "endedAt": "2026-10-16T18:29:59Z",
+        "pullRequestContributions": {
+          "nodes": [
+            {
+              "occurredAt": "2026-10-16T06:07:00Z",
+              "pullRequest": {
+                "number": 87,
+                "title": "Fix auth token refresh race",
+                "url": "https://github.com/acme/api/pull/87",
+                "createdAt": "2026-10-16T06:07:00Z",
+                "mergedAt": null,
+                "headRefName": "fix/auth-refresh",
+                "repository": {
+                  "nameWithOwner": "acme/api"
+                }
+              }
+            },
+            {
+              "occurredAt": "2026-10-16T10:58:00Z",
+              "pullRequest": {
+                "number": 48,
+                "title": "Add CSV export",
+                "url": "https://github.com/dev-example/clockout/pull/48",
+                "createdAt": "2026-10-16T10:58:00Z",
+                "mergedAt": null,
+                "headRefName": "feat/export",
+                "repository": {
+                  "nameWithOwner": "dev-example/clockout"
+                }
+              }
+            }
+          ]
+        },
+        "pullRequestReviewContributions": {
+          "nodes": [
+            {
+              "occurredAt": "2026-10-16T11:25:00Z",
+              "pullRequest": {
+                "number": 212,
+                "title": "Rate-limit login attempts",
+                "url": "https://github.com/acme/api/pull/212",
+                "author": {
+                  "login": "sam-example"
+                },
+                "repository": {
+                  "nameWithOwner": "acme/api"
+                }
+              },
+              "pullRequestReview": {
+                "state": "CHANGES_REQUESTED",
+                "submittedAt": "2026-10-16T11:25:00Z",
+                "url": "https://github.com/acme/api/pull/212#pullrequestreview-1",
+                "comments": {
+                  "nodes": [
+                    {
+                      "createdAt": "2026-10-16T11:10:00Z"
+                    },
+                    {
+                      "createdAt": "2026-10-16T11:16:00Z"
+                    },
+                    {
+                      "createdAt": "2026-10-16T11:22:00Z"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "commitContributionsByRepository": [
+          {
+            "repository": {
+              "nameWithOwner": "acme/api"
+            },
+            "contributions": {
+              "nodes": [
+                {
+                  "occurredAt": "2026-10-16T00:00:00Z",
+                  "commitCount": 3
+                }
+              ]
+            }
+          },
+          {
+            "repository": {
+              "nameWithOwner": "dev-example/clockout"
+            },
+            "contributions": {
+              "nodes": [
+                {
+                  "occurredAt": "2026-10-16T00:00:00Z",
+                  "commitCount": 5
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}
