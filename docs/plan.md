@@ -77,7 +77,7 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 ## Day 12 — Publish (milestone)
 
-- [ ] npm trusted publishing workflow on version tags
+- [x] npm trusted publishing workflow on version tags (needs one-time setup on npmjs.com)
 - [ ] `clockout-cli@0.1.0` published
 - [ ] Generate real timesheets for the build
 
