@@ -1,0 +1,64 @@
+{
+  "name": "clockout-cli",
+  "version": "0.0.0",
+  "description": "Turn your coding-agent sessions, GitHub activity and calendar into a ready-to-paste timesheet, corrected by voice.",
+  "keywords": [
+    "timesheet",
+    "time-tracking",
+    "claude-code",
+    "cli",
+    "tui"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wreckage0907/clockout.git"
+  },
+  "type": "module",
+  "bin": {
+    "clockout": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "packageManager": "pnpm@11.28.6",
+  "scripts": {
+    "dev": "tsdown --watch",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "fix": "biome check --write .",
+    "test": "vitest run",
+    "check": "pnpm lint && pnpm typecheck && pnpm build && pnpm test && publint"
+  },
+  "dependencies": {
+    "@clack/prompts": "1.8.1",
+    "@date-fns/tz": "1.5.0",
+    "@octokit/graphql": "9.0.5",
+    "clipboardy": "5.3.2",
+    "commander": "15.0.0",
+    "date-fns": "4.4.0",
+    "execa": "10.2.0",
+    "ink": "8.0.0",
+    "ink-text-input": "6.0.0",
+    "node-ical": "0.27.3",
+    "react": "19.3.1",
+    "smol-toml": "1.9.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@vitest/coverage-v8": "5.0.5",
+    "ink-testing-library": "4.0.0",
+    "lefthook": "2.2.2",
+    "publint": "0.3.25",
+    "tsdown": "0.23.1",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}

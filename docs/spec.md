@@ -256,15 +256,16 @@ collect → store → resolve projects → blocks → attendance → summarize �
 
 ## 12. Stack
 
-- **TypeScript / Node ≥ 22**
-- TUI: `ink` 8 + `ink-text-input`; CLI: `commander`
+See [ADR 0004](adr/0004-toolchain.md) for the toolchain and [docs/plan.md](plan.md) for the day-by-day plan.
+
+- **TypeScript 7 / Node ≥ 22.12**, ESM, pnpm 11, tsdown, vitest, Biome, lefthook
+- TUI: `ink` 8 + `ink-text-input`; CLI: `commander`; setup wizard: `@clack/prompts`
 - Config: `smol-toml`; validation: `zod`
-- Store: `better-sqlite3` (also reads Codex, Antigravity, opencode SQLite)
-- Calendar: `node-ical`; macOS: small Swift EventKit helper shipped as a prebuilt binary
-- GitHub: `@octokit/graphql`; git: shell out
-- AI: `execa` for agent CLIs; Vercel AI SDK for API keys; Ollama HTTP
-- `clipboardy`, `date-fns-tz`
-- Tests: `vitest` with fixture sessions (also powers `--demo`); demo recording: VHS
+- Store: JSON files ([ADR 0003](adr/0003-json-store.md)); reading Codex / Antigravity / opencode SQLite comes later via `node:sqlite`
+- Calendar: `node-ical`; macOS EventKit helper later
+- GitHub: `@octokit/graphql`; git and agent CLIs via `execa`
+- `clipboardy`, `date-fns` + `@date-fns/tz`
+- Tests: fixture sessions (also power `--demo`); demo recording: VHS
 
 ## 13. Two-week plan
 

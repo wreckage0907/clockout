@@ -1,0 +1,4 @@
+allowBuilds:
+  lefthook: false
+minimumReleaseAgeExclude:
+  - execa@10.2.0
