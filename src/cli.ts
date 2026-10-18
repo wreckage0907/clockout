@@ -11,7 +11,8 @@ const dayOptions = (cmd: Command) =>
     .option("--md", "print a Markdown timesheet")
     .option("--csv", "print a CSV timesheet")
     .option("--json", "print the drafted day as JSON")
-    .option("--refresh", "rebuild from fresh activity, dropping corrections");
+    .option("--refresh", "rebuild from fresh activity, dropping corrections")
+    .option("--no-ai", "use session and PR titles instead of AI summaries");
 
 dayOptions(program.command("today", { isDefault: true }).description("Draft today")).action(
   (opts) => runDay("today", opts),

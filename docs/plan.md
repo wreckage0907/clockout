@@ -52,9 +52,9 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 ## Day 7 — Claude summaries
 
-- [ ] `LlmBackend` interface
-- [ ] `claude -p --output-format json --json-schema … --tools ""`, no session persistence, empty temp dir
-- [ ] Whole day in one call; zod validation; one retry; heuristic fallback
+- [x] `LlmBackend` interface
+- [x] `claude -p --output-format json --json-schema … --tools ""`, no session persistence, empty temp dir
+- [x] Whole day in one call; zod validation; one retry; heuristic fallback; summaries cached per block
 
 ## Day 8 — Corrections (milestone)
 

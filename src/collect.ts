@@ -1,4 +1,6 @@
 import { homedir } from "node:os";
+import { summarizeDay } from "./ai/summarize";
+import type { LlmBackend } from "./ai/types";
 import type { Config } from "./config/schema";
 import { buildDay } from "./core/blocks";
 import { dayRange } from "./core/time";
@@ -65,7 +67,12 @@ export async function openDay(
   date: string,
   config: Config,
   store: DayStore,
-  opts: { refresh?: boolean; ctx?: Partial<Omit<SourceContext, "config">> } = {},
+  opts: {
+    refresh?: boolean;
+    ctx?: Partial<Omit<SourceContext, "config">>;
+    /** Writes better summaries when given; failures fall back to the heuristic ones. */
+    ai?: LlmBackend | null;
+  } = {},
 ): Promise<OpenedDay> {
   const existing = await store.load(date);
   if (existing && existing.edits.length > 0 && !opts.refresh) {
@@ -78,15 +85,27 @@ export async function openDay(
       !fresh.ok.has(a.source) || (!freshSources.has(a.source) && DELETES_OLD_LOGS.has(a.source)),
   );
   const activities = [...fresh.activities, ...carried];
+  const day = buildDay(date, activities, config);
+  const summaryCache = { ...existing?.summaryCache };
+  const warnings = [...fresh.warnings];
+  if (opts.ai) {
+    try {
+      const summaries = await summarizeDay(day, opts.ai, summaryCache);
+      for (const b of day.blocks) b.summary = summaries.get(b.id) ?? b.summary;
+    } catch (err) {
+      warnings.push(`${(err as Error).message}. Using session and PR titles instead.`);
+    }
+  }
   const stored: StoredDay = {
     version: 1,
     date,
     collectedAt: new Date().toISOString(),
     activities,
-    day: buildDay(date, activities, config),
+    day,
     history: [],
     edits: [],
+    summaryCache,
   };
   await store.save(stored);
-  return { stored, warnings: fresh.warnings, kept: false };
+  return { stored, warnings, kept: false };
 }

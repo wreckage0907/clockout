@@ -19,6 +19,8 @@ export interface StoredDay {
   /** Previous versions of `day`, newest last, for undo. */
   history: Day[];
   edits: EditRecord[];
+  /** AI summaries by block signature, so unchanged blocks aren't summarized again. */
+  summaryCache: Record<string, string>;
 }
 
 const HISTORY_LIMIT = 50;

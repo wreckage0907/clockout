@@ -96,6 +96,8 @@ export const configSchema = z.object({
   ai: z
     .object({
       backend: z.enum(["auto", "claude-code", "none"]).default("auto"),
+      /** Model alias passed to the backend; small and fast is plenty. */
+      model: z.string().min(1).default("haiku"),
     })
     .prefault({}),
   sources: z.array(sourceConfig).default([]),
