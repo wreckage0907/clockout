@@ -19,6 +19,9 @@ Follow the [add-source skill](.agents/skills/add-source/SKILL.md): research the 
 
 ## Pull requests
 
-- One focused change per PR, with Conventional Commit titles.
+`main` only accepts pull requests, and CI must pass (lint, typecheck, build, tests on Node 22 and 24, macOS and Ubuntu) before one can merge.
+
+- Branch from `main`, e.g. `fix/gap-questions`, and open a PR with `gh pr create --fill`.
+- One focused change per PR, with Conventional Commit titles. PRs are squash-merged.
 - `pnpm check` passes.
 - Never include real session logs, calendar data or tokens in fixtures, issues or PRs.

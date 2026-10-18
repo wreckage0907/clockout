@@ -73,9 +73,15 @@ src/demo.ts       --demo: bundled fixtures, temp store, fixed date
 - TUI: `ink-testing-library`.
 - `test/e2e/` runs the built CLI.
 
-## Commits
+## Commits and pull requests
 
-Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`). Small, focused commits. The pre-commit hook (lefthook) runs Biome, the typecheck and the tests.
+Every change goes through a pull request; `main` is protected and only accepts merged PRs with green CI.
+
+1. Branch from an up-to-date `main`: `git switch main && git pull && git switch -c <type>/<short-name>` (e.g. `fix/gap-questions`).
+2. Commit with Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`). The pre-commit hook (lefthook) runs Biome, the typecheck and the tests.
+3. Push and open a PR: `git push -u origin HEAD && gh pr create --fill`. Say what changed, why, and how it was tested.
+4. Wait for CI (`gh pr checks --watch`). Fix failures on the same branch.
+5. The owner reviews and merges (squash). Don't merge your own PR unless asked.
 
 ## Never
 
@@ -83,7 +89,7 @@ Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`).
 - Weaken `tsconfig.json` or Biome rules to make an error go away.
 - Delete or skip a failing test to get green.
 - Edit `dist/` or `pnpm-lock.yaml` by hand.
-- Push to `main` without `pnpm check` passing.
+- Push to `main` directly; open a PR instead.
 
 ## Voice-driven work
 
