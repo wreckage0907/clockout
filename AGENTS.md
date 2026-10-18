@@ -12,7 +12,7 @@ Clockout turns a developer's day (coding-agent sessions, GitHub activity, calend
 pnpm install             # pnpm 11 via corepack (see ADR 0004)
 pnpm dev                 # rebuild dist/ on change
 pnpm build               # bundle src/cli.ts → dist/cli.js
-node dist/cli.js --help  # run the built CLI
+node dist/cli.js demo     # run the built CLI on the fixture day
 pnpm test                # vitest; builds dist/ first
 pnpm exec vitest run test/path/to/file.test.ts   # one test file
 pnpm lint                # biome check
@@ -49,9 +49,12 @@ src/tui/          Ink components. Render state; never fetch.
 src/export/       formatters for clipboard, Markdown, CSV
 src/config/       zod schema, TOML load/save, XDG paths
 src/store/        JSON store for days and corrections
+src/collect.ts    runs sources for a day, builds and saves it (openDay)
+src/corrections.ts applies edits to a stored day with undo
+src/demo.ts       --demo: bundled fixtures, temp store, fixed date
 ```
 
-- `core/` must never import from `tui/`, `sources/`, `ai/` or Node built-ins with side effects.
+- `core/` must never import from `tui/`, `sources/`, `ai/` or Node built-ins with side effects. It may import `config/schema` (pure).
 - Sources never decide projects, durations or summaries; `core/` does.
 - The AI never rewrites the timesheet. It returns edit operations that `core/edits` validates and applies.
 

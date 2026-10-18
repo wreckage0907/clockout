@@ -6,7 +6,7 @@ import { buildDay } from "./core/blocks";
 import { dayRange } from "./core/time";
 import type { Activity } from "./core/types";
 import { getSource } from "./sources";
-import type { SourceContext } from "./sources/types";
+import type { Source, SourceContext } from "./sources/types";
 import type { DayStore, StoredDay } from "./store/json-store";
 
 export interface Collected {
@@ -18,16 +18,19 @@ export interface Collected {
 }
 
 /** Runs every configured source for the local day, in parallel. */
+export type SourceLookup = (type: string) => Source | undefined;
+
 export async function collect(
   date: string,
   config: Config,
   ctx: Partial<Omit<SourceContext, "config">> = {},
+  lookup: SourceLookup = getSource,
 ): Promise<Collected> {
   const range = dayRange(date, config.me.timezone);
   const full: SourceContext = { config, homeDir: homedir(), env: process.env, ...ctx };
   const results = await Promise.allSettled(
     config.sources.map(async (cfg) => {
-      const source = getSource(cfg.type);
+      const source = lookup(cfg.type);
       if (!source) throw new Error(`unknown source type "${cfg.type}"`);
       const out: Activity[] = [];
       for await (const a of source.collect(range, cfg, full)) out.push(a);
@@ -72,13 +75,15 @@ export async function openDay(
     ctx?: Partial<Omit<SourceContext, "config">>;
     /** Writes better summaries when given; failures fall back to the heuristic ones. */
     ai?: LlmBackend | null;
+    /** Overrides which implementation runs for a source type (used by --demo). */
+    sources?: SourceLookup;
   } = {},
 ): Promise<OpenedDay> {
   const existing = await store.load(date);
   if (existing && existing.edits.length > 0 && !opts.refresh) {
     return { stored: existing, warnings: [], kept: true };
   }
-  const fresh = await collect(date, config, opts.ctx);
+  const fresh = await collect(date, config, opts.ctx, opts.sources);
   const freshSources = new Set(fresh.activities.map((a) => a.source));
   const carried = (existing?.activities ?? []).filter(
     (a) =>

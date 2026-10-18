@@ -199,3 +199,18 @@ describe("buildDay rules", () => {
     expect(day.notes).toEqual(["Left out 1 declined meeting: Demo"]);
   });
 });
+
+describe("timesheetRows", () => {
+  it("merges blocks of the same work into one entry, rounding the total once", () => {
+    const config = fixtureConfig();
+    const day = buildDay(
+      D,
+      [prompt("10:00"), prompt("10:07"), prompt("11:00"), prompt("11:04")],
+      config,
+    );
+    expect(day.blocks).toHaveLength(2); // 10:00-10:12 and 11:00-11:09, split by idle time
+    expect(timesheetRows(day, config)).toEqual([
+      { date: D, project: "acme/api", task: "Development", hours: 0.25, description: "Task A" },
+    ]);
+  });
+});

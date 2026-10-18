@@ -39,8 +39,9 @@ const calendarSource = z.object({
   type: z.literal("calendar"),
   method: z.literal("ics"),
   url: z.url({
-    protocol: /^(https|webcal)$/,
-    error: "use the https:// address of your private calendar feed",
+    protocol: /^(https|webcal|file)$/,
+    error:
+      "use the https:// address of your private calendar feed (or a file:// path to an .ics file)",
   }),
 });
 

@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import ical, { type Attendee, type VEvent } from "node-ical";
 import type { Activity, Attendance } from "../../core/types";
 import type { Detected, Source } from "../types";
@@ -12,6 +14,11 @@ export type IcsFetcher = (url: string) => Promise<string>;
 
 /** Downloads the feed. Errors never include the URL: it's a secret. */
 export async function fetchIcs(url: string): Promise<string> {
+  if (url.startsWith("file:")) {
+    return readFile(fileURLToPath(url), "utf8").catch(() => {
+      throw new Error("Calendar: couldn't read the local .ics file");
+    });
+  }
   const res = await fetch(url.replace(/^webcal:/, "https:"), {
     signal: AbortSignal.timeout(20_000),
   }).catch((err: Error) => {

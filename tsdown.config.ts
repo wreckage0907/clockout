@@ -9,4 +9,6 @@ export default defineConfig({
   clean: true,
   fixedExtension: false,
   dts: false,
+  // Synthetic fixtures double as --demo data.
+  copy: [{ from: "test/fixtures/**/*", to: "dist/demo", flatten: false }],
 });

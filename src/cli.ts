@@ -3,6 +3,7 @@ import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
 import { runDay } from "./commands/day";
 import { runEdit, runUndo } from "./commands/edit";
+import { runExport } from "./commands/export";
 import { runInit } from "./commands/init";
 
 const program = new Command().name("clockout").description(pkg.description).version(pkg.version);
@@ -14,7 +15,8 @@ const dayOptions = (cmd: Command) =>
     .option("--json", "print the drafted day as JSON")
     .option("--refresh", "rebuild from fresh activity, dropping corrections")
     .option("--no-ai", "use session and PR titles instead of AI summaries")
-    .option("--plain", "print the day instead of opening the review screen");
+    .option("--plain", "print the day instead of opening the review screen")
+    .option("--demo", "try it on a made-up day, without any setup");
 
 dayOptions(program.command("today", { isDefault: true }).description("Draft today")).action(
   (opts) => runDay("today", opts),
@@ -28,6 +30,24 @@ dayOptions(
     .argument("<date>", "YYYY-MM-DD, or -N for N days ago")
     .description("Draft a specific day"),
 ).action((date, opts) => runDay(date, opts));
+
+program
+  .command("export")
+  .argument("[date]", "today, yesterday, -N or YYYY-MM-DD (default: today)")
+  .description("Write the timesheet: date, project, task, hours, description")
+  .option("-f, --format <format>", "csv, md, tsv or json", "csv")
+  .option("-o, --out <file>", "write to a file instead of the terminal")
+  .option("--from <date>", "first day of a range")
+  .option("--to <date>", "last day of a range")
+  .option("--no-ai", "use session and PR titles instead of AI summaries")
+  .action((date, opts) => runExport(date, opts));
+
+program
+  .command("demo")
+  .description("Try Clockout on a made-up day, without any setup")
+  .option("--plain", "print the day instead of opening the review screen")
+  .option("--no-ai", "use session and PR titles instead of AI summaries")
+  .action((opts) => runDay(undefined, { ...opts, demo: true }));
 
 program
   .command("edit")

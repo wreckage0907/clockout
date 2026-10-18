@@ -71,9 +71,9 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 ## Day 11 — Export and demo
 
-- [ ] Clipboard, Markdown, CSV: date, project, task, hours, description
-- [ ] `--demo` on bundled fixtures
-- [ ] README: install, quick start, config, privacy
+- [x] Clipboard, Markdown, CSV, TSV, JSON: date, project, task, hours, description (same work merged into one row)
+- [x] `--demo` on bundled fixtures
+- [x] README: install, quick start, config, privacy
 
 ## Day 12 — Publish (milestone)
 

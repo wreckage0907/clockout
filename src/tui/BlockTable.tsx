@@ -53,7 +53,7 @@ export function BlockTable({
     rest: string,
   ) =>
     `${lead.padEnd(4)}${id.padEnd(5)}${time.padEnd(12)}${dur.padEnd(6)}${hours.padEnd(7)}${project.padEnd(projectWidth)}  ${rest}`;
-  const fit = (text: string) =>
+  const clip = (text: string) =>
     text.length > summaryWidth ? `${text.slice(0, summaryWidth - 1)}…` : text;
 
   return (
@@ -96,7 +96,7 @@ export function BlockTable({
               formatDuration(minutesBetween(b.start, b.end)),
               hours,
               b.project.slice(0, projectWidth),
-              fit(`${b.summary}${task}`),
+              clip(`${b.summary}${task}`),
             )}
           </Text>
         );

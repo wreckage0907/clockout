@@ -1,12 +1,46 @@
 import { execFileSync } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import pkg from "../../package.json" with { type: "json" };
 
 const bin = new URL("../../dist/cli.js", import.meta.url).pathname;
+const home = mkdtempSync(join(tmpdir(), "clockout-e2e-"));
+const env = {
+  PATH: process.env.PATH ?? "",
+  HOME: home,
+  XDG_CONFIG_HOME: join(home, ".config"),
+  XDG_DATA_HOME: join(home, ".local", "share"),
+};
+
+function run(...args: string[]) {
+  try {
+    return {
+      out: execFileSync(process.execPath, [bin, ...args], { encoding: "utf8", env, stdio: "pipe" }),
+      code: 0,
+    };
+  } catch (err) {
+    const e = err as { stdout: string; stderr: string; status: number };
+    return { out: `${e.stdout}${e.stderr}`, code: e.status };
+  }
+}
 
 describe("built cli", () => {
   it("prints the package version", () => {
-    const out = execFileSync(process.execPath, [bin, "--version"], { encoding: "utf8" });
-    expect(out.trim()).toBe(pkg.version);
+    expect(run("--version").out.trim()).toBe(pkg.version);
+  });
+
+  it("drafts the demo day with no setup", () => {
+    const { out, code } = run("demo", "--plain", "--no-ai");
+    expect(code).toBe(0);
+    expect(out).toContain("6.25h · 4 questions");
+    expect(out).toContain("Fix auth token refresh (PR #87)");
+  });
+
+  it("explains how to start when there's no config", () => {
+    const { out, code } = run("today", "--plain");
+    expect(code).toBe(1);
+    expect(out).toContain("Run `clockout init` first (or `clockout --demo` to try it).");
   });
 });
