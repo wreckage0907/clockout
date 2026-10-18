@@ -53,7 +53,7 @@ export function renderDay(day: Day, config: Config, color = process.stdout.isTTY
       formatDuration(minutesBetween(b.start, b.end)),
       hours === undefined ? "     " : `${formatHours(hours)}h`,
       b.project.slice(0, projectWidth).padEnd(projectWidth),
-      `${b.summary}${b.task !== config.tasks.work ? s("dim", ` · ${b.task}`) : ""}`,
+      `${b.summary}${b.task !== config.tasks.work && b.task !== b.project ? s("dim", ` · ${b.task}`) : ""}`,
     ].join("  ");
     lines.push(b.confirmed && b.billable ? line : s("dim", line));
   }

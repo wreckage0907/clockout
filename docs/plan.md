@@ -64,10 +64,10 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 ## Day 9–10 — Review screen (milestone)
 
-- [ ] Ink TUI: timeline, block table, questions, evidence, "say it" bar
-- [ ] Bracketed paste (`usePaste`); newlines never auto-submit
-- [ ] Proposed changes shown as a diff; `y` / `n` / `u`
-- [ ] Wispr tested in Terminal, iTerm2, Ghostty, VS Code terminal
+- [x] Ink TUI: timeline, block table, questions, evidence, "say it" bar
+- [x] Bracketed paste (`usePaste`); newlines never auto-submit
+- [x] Proposed changes shown as a diff; `y` / `n` / `u`
+- [ ] Wispr tested in Terminal, iTerm2, Ghostty, VS Code terminal (needs a human: manual test)
 
 ## Day 11 — Export and demo
 

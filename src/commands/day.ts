@@ -12,12 +12,20 @@ export interface DayOptions {
   refresh?: boolean;
   /** commander sets this to false for --no-ai */
   ai?: boolean;
+  /** Print the table instead of opening the review screen. */
+  plain?: boolean;
 }
 
 export async function runDay(dateInput: string | undefined, opts: DayOptions, app?: AppContext) {
   const { config, store } = app ?? (await appContext());
   const date = resolveDate(dateInput, config.me.timezone);
   const ai = opts.ai === false ? null : await chooseBackend(config);
+  const interactive = !opts.md && !opts.csv && !opts.json && !opts.plain;
+  if (interactive && process.stdin.isTTY && process.stdout.isTTY) {
+    const { runTui } = await import("../tui/run");
+    await runTui(date, config, store, ai);
+    return;
+  }
   const { stored, warnings, kept } = await openDay(date, config, store, {
     refresh: opts.refresh,
     ai,
