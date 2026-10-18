@@ -42,13 +42,9 @@ program
   .option("--no-ai", "use session and PR titles instead of AI summaries")
   .action((date, opts) => runExport(date, opts));
 
-program
-  .command("demo")
-  .description("Try Clockout on a made-up day, without any setup")
-  .option("--plain", "print the day instead of opening the review screen")
-  .option("--no-ai", "use session and PR titles instead of AI summaries")
-  .action((opts) => runDay(undefined, { ...opts, demo: true }));
-
+dayOptions(
+  program.command("demo").description("Try Clockout on a made-up day, without any setup"),
+).action((opts) => runDay(undefined, { ...opts, demo: true }));
 program
   .command("edit")
   .argument("<text...>", "what to change, in plain words")

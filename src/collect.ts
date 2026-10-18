@@ -3,8 +3,9 @@ import { summarizeDay } from "./ai/summarize";
 import type { LlmBackend } from "./ai/types";
 import type { Config } from "./config/schema";
 import { buildDay } from "./core/blocks";
+import { applyEdits } from "./core/edits";
 import { dayRange } from "./core/time";
-import type { Activity } from "./core/types";
+import type { Activity, Day } from "./core/types";
 import { getSource } from "./sources";
 import type { Source, SourceContext } from "./sources/types";
 import type { DayStore, StoredDay } from "./store/json-store";
@@ -57,7 +58,7 @@ const DELETES_OLD_LOGS = new Set(["claude-code"]);
 export interface OpenedDay {
   stored: StoredDay;
   warnings: string[];
-  /** True when the day has corrections and was not rebuilt from fresh activity. */
+  /** True when the day has your corrections (replayed on fresh activity where possible). */
   kept: boolean;
 }
 
@@ -80,9 +81,8 @@ export async function openDay(
   } = {},
 ): Promise<OpenedDay> {
   const existing = await store.load(date);
-  if (existing && existing.edits.length > 0 && !opts.refresh) {
-    return { stored: existing, warnings: [], kept: true };
-  }
+  const corrected = existing && existing.edits.length > 0 && !opts.refresh ? existing : null;
+
   const fresh = await collect(date, config, opts.ctx, opts.sources);
   const freshSources = new Set(fresh.activities.map((a) => a.source));
   const carried = (existing?.activities ?? []).filter(
@@ -90,27 +90,78 @@ export async function openDay(
       !fresh.ok.has(a.source) || (!freshSources.has(a.source) && DELETES_OLD_LOGS.has(a.source)),
   );
   const activities = [...fresh.activities, ...carried];
-  const day = buildDay(date, activities, config);
+  const draft = buildDay(date, activities, config);
   const summaryCache = { ...existing?.summaryCache };
   const warnings = [...fresh.warnings];
   if (opts.ai) {
     try {
-      const summaries = await summarizeDay(day, opts.ai, summaryCache);
-      for (const b of day.blocks) b.summary = summaries.get(b.id) ?? b.summary;
+      const summaries = await summarizeDay(draft, opts.ai, summaryCache);
+      for (const b of draft.blocks) b.summary = summaries.get(b.id) ?? b.summary;
     } catch (err) {
       warnings.push(`${(err as Error).message}. Using session and PR titles instead.`);
     }
   }
+
+  let day = draft;
+  let history: Day[] = [];
+  if (corrected) {
+    const replayed = replayEdits(corrected, draft, config);
+    if (!replayed) {
+      warnings.push(
+        "There's newer activity that can't be merged under your corrections automatically. Run with --refresh to rebuild the day (drops corrections).",
+      );
+      return { stored: corrected, warnings, kept: true };
+    }
+    if (sameBlocks(replayed.day, corrected.day)) return { stored: corrected, warnings, kept: true };
+    ({ day, history } = replayed);
+  }
+
   const stored: StoredDay = {
     version: 1,
     date,
     collectedAt: new Date().toISOString(),
     activities,
     day,
-    history: [],
-    edits: [],
+    history,
+    edits: corrected?.edits ?? [],
     summaryCache,
   };
   await store.save(stored);
-  return { stored, warnings, kept: false };
+  return { stored, warnings, kept: !!corrected };
+}
+
+/**
+ * Re-applies saved corrections to a freshly built draft, so new activity shows up under them.
+ * Only when every block of the original draft is still there with the same id, start and
+ * project (new blocks may only be added); otherwise ids could point at the wrong blocks.
+ */
+function replayEdits(
+  saved: StoredDay,
+  draft: Day,
+  config: Config,
+): { day: Day; history: Day[] } | null {
+  const original = saved.history[0];
+  if (!original) return null;
+  const same = original.blocks.every((o) => {
+    const b = draft.blocks.find((x) => x.id === o.id);
+    return b && b.start.getTime() === o.start.getTime() && b.project === o.project;
+  });
+  if (!same) return null;
+  let day = draft;
+  const history: Day[] = [];
+  for (const record of saved.edits) {
+    const r = applyEdits(day, record.ops, config);
+    if (r.errors.length) return null;
+    history.push(day);
+    day = r.day;
+  }
+  return { day, history };
+}
+
+function sameBlocks(a: Day, b: Day): boolean {
+  const key = (d: Day) =>
+    JSON.stringify(
+      d.blocks.map((x) => [x.id, x.start, x.end, x.project, x.task, x.summary, x.confirmed]),
+    );
+  return key(a) === key(b);
 }

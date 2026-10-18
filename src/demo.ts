@@ -9,7 +9,7 @@ import { getSource } from "./sources";
 import { createGitHubSource } from "./sources/github";
 import { DayStore } from "./store/json-store";
 
-/** The synthetic day the demo shows: Thu 16 Oct 2026 in Asia/Kolkata. */
+/** The synthetic day the demo shows: Fri 16 Oct 2026 in Asia/Kolkata. */
 export const DEMO_DATE = "2026-10-16";
 
 const DEMO_REPOS: Record<string, string> = {

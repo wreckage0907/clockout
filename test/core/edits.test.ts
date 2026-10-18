@@ -124,3 +124,37 @@ describe("describeEdits", () => {
     ]);
   });
 });
+
+describe("review fixes", () => {
+  it("drops leftovers under 5 minutes instead of billing them as 15", () => {
+    const work = buildDay(
+      "2026-10-20",
+      ["09:58", "10:05", "10:12", "10:19", "10:25"].map((t) => ({
+        source: "test",
+        kind: "prompt" as const,
+        actor: "human" as const,
+        start: new Date(`2026-10-20T${t}:00+05:30`),
+        repo: "acme/api",
+        sessionId: "s",
+        title: "Task",
+      })),
+      config,
+    );
+    const d = apply(
+      [{ op: "add", start: "10:00", end: "11:00", project: "Acme", summary: "Call" }],
+      work,
+    );
+    expect(view(d)).toEqual(["b2 10:00-11:00 Acme Call"]);
+  });
+
+  it("refuses to merge a block with itself", () => {
+    expect(applyEdits(day, [{ op: "merge", ids: ["b1", "b1"] }], config).errors).toEqual([
+      "Merging needs at least two different blocks.",
+    ]);
+  });
+
+  it("accepts 24:00 as the end of the day", () => {
+    const d = apply([{ op: "update", id: "b8", end: "24:00" }]);
+    expect(d.blocks.find((b) => b.id === "b8")?.end.toISOString()).toBe("2026-10-16T18:30:00.000Z");
+  });
+});

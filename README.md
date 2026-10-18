@@ -50,12 +50,13 @@ node dist/cli.js               # review today
 | type or dictate, then **Enter** | Send a correction in plain words |
 | **y** / **n** | Apply or discard the proposed changes |
 | **↑ ↓** | Select a block or gap; its evidence shows on the right |
-| **c** / **m** | Copy the timesheet (tab-separated, or Markdown) |
-| **u** | Undo the last correction |
-| **[** / **]** | Previous / next day |
-| **q** | Quit |
+| **Ctrl+Y** / **Ctrl+T** | Copy the timesheet (tab-separated, or Markdown) |
+| **Ctrl+Z** | Undo the last correction |
+| **PgUp** / **PgDn** | Previous / next day |
+| **Esc** | Clear the input |
+| **Ctrl+C** | Quit |
 
-Single-key shortcuts work when the input is empty. Dictated text arrives as one paste, so a line break never sends it early.
+Shortcuts use Ctrl, so typing never triggers them. Dictated text arrives as one paste, so a line break never sends it early.
 
 Things you can say:
 
@@ -123,7 +124,8 @@ match = { repo = "acme/api", title = "(?i)acme", attendee_domain = "acme.com" }
 
 - Time comes from what **you** did: prompts, PRs, review comments and meetings. A prompt counts until the agent's reply is read, so an agent running unattended for an hour doesn't become an hour of your time.
 - Pauses shorter than `idle_cutoff` are bridged. When two sessions overlap, the time goes to the one you touched last.
-- Accepted meetings take their time from work. Tentative and unanswered ones wait for you to confirm; declined ones are left out with a note.
+- Accepted meetings take their time from work. Tentative and unanswered ones wait for you to confirm; declined ones are left out with a note. Blocks on your own calendar with no guests (lunch, gym, focus time) are asked about, not billed. If two accepted meetings overlap, only the first counts until you say otherwise.
+- Corrections stick: when you open a corrected day again, new activity is added under your corrections.
 
 ## Privacy
 

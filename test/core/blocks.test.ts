@@ -54,7 +54,7 @@ describe("buildDay on the fixture day", async () => {
       "14:00-16:33 work dev-example/clockout | Development | Build export command (PR #48)",
       "15:00-15:30 meeting? Meetings | Meetings | Design sync",
       "16:40-17:00 review acme/api | Code Review | Review Rate-limit login attempts (PR #212)",
-      "17:30-18:00 meeting Meetings | Meetings | Focus: write release notes",
+      "17:30-18:00 meeting? Meetings | Meetings | Focus: write release notes",
       "18:00-18:30 meeting? Meetings | Meetings | Acme weekly sync",
       "23:40-23:46 work acme/api | Development | Investigate flaky deploy",
     ]);
@@ -64,9 +64,10 @@ describe("buildDay on the fixture day", async () => {
   it("asks about unconfirmed meetings and long gaps", () => {
     expect(day.questions.map((q) => [q.id, q.kind, q.blockId ?? q.gapId])).toEqual([
       ["q1", "attendance", "b4"],
-      ["q2", "attendance", "b7"],
-      ["q3", "gap", "g1"],
-      ["q4", "gap", "g2"],
+      ["q2", "attendance", "b6"],
+      ["q3", "attendance", "b7"],
+      ["q4", "gap", "g1"],
+      ["q5", "gap", "g2"],
     ]);
     expect(day.questions[0]?.text).toContain("You were working on dev-example/clockout then.");
     expect(day.notes).toEqual(["Left out 1 declined meeting: Vendor demo"]);
@@ -79,7 +80,6 @@ describe("buildDay on the fixture day", async () => {
       "acme/api|Development|2.25",
       "dev-example/clockout|Development|2.5",
       "acme/api|Code Review|0.25",
-      "Meetings|Meetings|0.5",
       "acme/api|Development|0.25",
     ]);
   });
@@ -212,5 +212,34 @@ describe("timesheetRows", () => {
     expect(timesheetRows(day, config)).toEqual([
       { date: D, project: "acme/api", task: "Development", hours: 0.25, description: "Task A" },
     ]);
+  });
+});
+
+describe("review fixes", () => {
+  const config = fixtureConfig();
+
+  it("asks whether blocks on your own calendar were work instead of billing them", async () => {
+    const day = buildDay(FIXTURE_DATE, await fixtureActivities(), config);
+    expect(day.questions.find((q) => q.blockId === "b6")?.text).toBe(
+      'Was "Focus: write release notes" (17:30–18:00) work? It\'s a block on your own calendar.',
+    );
+  });
+
+  it("counts only the first of two overlapping accepted meetings, and asks about the other", () => {
+    const guests = { attendees: ["x@example.com"] };
+    const day = buildDay(
+      D,
+      [
+        meeting("10:00", "11:00", { ...guests, title: "A" }),
+        meeting("10:30", "11:30", { ...guests, title: "B" }),
+      ],
+      config,
+    );
+    expect(rows(day)).toEqual([
+      "10:00-11:00 meeting Meetings | Meetings | A",
+      "10:30-11:30 meeting? Meetings | Meetings | B",
+    ]);
+    expect(day.questions[0]).toMatchObject({ kind: "overlap", blockId: "b2" });
+    expect(timesheetRows(day, config).reduce((s, r) => s + r.hours, 0)).toBe(1);
   });
 });

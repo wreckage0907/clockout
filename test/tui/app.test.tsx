@@ -54,7 +54,7 @@ describe("review screen", () => {
     await tick();
     const frame = ui.lastFrame() ?? "";
     expect(frame).toContain("clockout");
-    expect(frame).toContain("6.25h");
+    expect(frame).toContain("5.75h");
     expect(frame).toContain("Daily standup");
     expect(frame).toContain("Fix auth token refresh (PR #87)");
     expect(frame).toContain("── gap ──");
@@ -86,14 +86,19 @@ describe("review screen", () => {
     ui.unmount();
   });
 
-  it("copies the timesheet as tab-separated rows when the input is empty", async () => {
+  it("copies the timesheet as tab-separated rows on Ctrl+Y, and types letters normally", async () => {
     const { ui, copied } = setup(async () => ({ ops: [], reply: "" }));
     await tick();
     ui.stdin.write("c");
     await tick();
-    expect(copied[0]?.split("\n")).toHaveLength(6);
+    expect(copied).toEqual([]);
+    expect(ui.lastFrame()).toContain("› c");
+    ui.stdin.write("\u001b"); // Esc clears
+    ui.stdin.write("\u0019"); // Ctrl+Y
+    await tick();
+    expect(copied[0]?.split("\n")).toHaveLength(5);
     expect(copied[0]).toContain("2026-10-16\tacme/api\tDevelopment\t2.25\t");
-    expect(ui.lastFrame()).toContain("Copied 6 rows");
+    expect(ui.lastFrame()).toContain("Copied 5 rows");
     ui.unmount();
   });
 });

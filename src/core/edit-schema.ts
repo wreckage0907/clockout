@@ -5,7 +5,7 @@ import type { EditOp } from "./types";
 const localTime = z
   .string()
   .regex(/^(([01]\d|2[0-3]):[0-5]\d|24:00)$/, 'use 24-hour "HH:MM"')
-  .describe('24-hour local time "HH:MM"');
+  .describe('24-hour local time "HH:MM"; "24:00" is midnight at the end of the day');
 
 const blockId = z
   .string()

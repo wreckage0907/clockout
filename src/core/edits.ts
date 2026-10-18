@@ -3,6 +3,8 @@ import { ASK_GAP_MINUTES, computeGaps, gapQuestionText } from "./blocks";
 import { addDays, atLocalTime, formatDuration, localTime, MINUTE, minutesBetween } from "./time";
 import type { Block, Day, EditOp, Question } from "./types";
 
+const MIN_LEFTOVER = 5 * MINUTE;
+
 /** Project used for lunch and breaks when no project is given. */
 export const BREAK_PROJECT = "Break";
 
@@ -60,7 +62,8 @@ export function applyEdits(day: Day, ops: readonly EditOp[], config: Config): Ed
       if (bs < ws) out.push({ ...b, end: winner.start });
       if (be > we) out.push({ ...b, id: bs < ws ? newId() : b.id, start: winner.end });
     }
-    blocks = out.filter((b) => b.end.getTime() - b.start.getTime() >= MINUTE);
+    // Leftovers this short would bill a full rounding step for almost nothing.
+    blocks = out.filter((b) => b.end.getTime() - b.start.getTime() >= MIN_LEFTOVER);
   };
 
   const validRange = (start: Date, end: Date) => {
@@ -141,8 +144,13 @@ export function applyEdits(day: Day, ops: readonly EditOp[], config: Config): Ed
         break;
       }
       case "merge": {
-        const found = op.ids.map(find).filter((b): b is Block => !!b);
-        if (found.length !== op.ids.length) break;
+        const ids = [...new Set(op.ids)];
+        if (ids.length < 2) {
+          errors.push("Merging needs at least two different blocks.");
+          break;
+        }
+        const found = ids.map(find).filter((b): b is Block => !!b);
+        if (found.length !== ids.length) break;
         found.sort((a, b) => a.start.getTime() - b.start.getTime());
         const [first, ...rest] = found as [Block, ...Block[]];
         first.end = new Date(Math.max(...found.map((b) => b.end.getTime())));

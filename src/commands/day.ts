@@ -35,7 +35,7 @@ export async function runDay(dateInput: string | undefined, opts: DayOptions, ap
     ...(demo ? { sources: demo.sources, ctx: demo.ctx } : {}),
   });
   if (demo)
-    console.error("Demo: a made-up day (Thu 16 Oct 2026). Run `clockout init` to use your own.\n");
+    console.error("Demo: a made-up day (Fri 16 Oct 2026). Run `clockout init` to use your own.\n");
   const day = stored.day;
 
   for (const w of warnings) console.error(`warning: ${w}`);
@@ -48,10 +48,7 @@ export async function runDay(dateInput: string | undefined, opts: DayOptions, ap
     console.log(toMarkdown(timesheetRows(day, config)));
   } else {
     console.log(renderDay(day, config));
-    if (kept) {
-      console.error(
-        "\nShowing your corrected day. Run with --refresh to rebuild from fresh activity (drops corrections).",
-      );
-    }
+    if (kept)
+      console.error("\nIncludes your corrections. --refresh rebuilds from scratch (drops them).");
   }
 }

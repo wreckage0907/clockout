@@ -35,7 +35,7 @@ describe("calendar source", () => {
       "09:30-10:00 Daily standup [accepted]",
       "15:00-15:30 Design sync [tentative]",
       "17:00-17:30 Vendor demo [declined]",
-      "17:30-18:00 Focus: write release notes [accepted]",
+      "17:30-18:00 Focus: write release notes [unknown]",
       "18:00-18:30 Acme weekly sync [needs_action]",
     ]);
   });

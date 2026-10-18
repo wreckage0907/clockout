@@ -67,3 +67,62 @@ describe("openDay", () => {
     expect(stored.day.blocks.length).toBeGreaterThan(0);
   });
 });
+
+describe("corrections and new activity", () => {
+  const prompt = (hhmm: string, title: string) => ({
+    source: "fake",
+    kind: "prompt" as const,
+    actor: "human" as const,
+    start: new Date(`${FIXTURE_DATE}T${hhmm}:00+05:30`),
+    repo: "acme/api",
+    sessionId: title,
+    title,
+  });
+  const fakeConfig = fixtureConfig({ sources: [{ type: "claude-code" }] });
+  let feed = [prompt("10:00", "Morning")];
+  const sources = () => ({
+    id: "claude-code",
+    name: "fake",
+    detect: async () => null,
+    async *collect() {
+      yield* feed;
+    },
+  });
+
+  it("replays your corrections on top of new activity", async () => {
+    const s = await store();
+    feed = [prompt("10:00", "Morning")];
+    const first = await openDay(FIXTURE_DATE, fakeConfig, s, { sources });
+    const { commitEdits } = await import("../../src/corrections");
+    await commitEdits(
+      first.stored,
+      [{ op: "update", id: "b1", summary: "Fix login" }],
+      fakeConfig,
+      s,
+    );
+
+    feed = [prompt("10:00", "Morning"), prompt("16:00", "Afternoon")];
+    const later = await openDay(FIXTURE_DATE, fakeConfig, s, { sources });
+    expect(later.kept).toBe(true);
+    expect(later.stored.day.blocks.map((b) => b.summary)).toEqual(["Fix login", "Afternoon"]);
+    expect(later.stored.edits).toHaveLength(1);
+  });
+
+  it("keeps your corrected day and warns when new activity would shift the blocks", async () => {
+    const s = await store();
+    feed = [prompt("10:00", "Morning")];
+    const first = await openDay(FIXTURE_DATE, fakeConfig, s, { sources });
+    const { commitEdits } = await import("../../src/corrections");
+    await commitEdits(
+      first.stored,
+      [{ op: "update", id: "b1", summary: "Fix login" }],
+      fakeConfig,
+      s,
+    );
+
+    feed = [prompt("08:00", "Early"), prompt("10:00", "Morning")];
+    const later = await openDay(FIXTURE_DATE, fakeConfig, s, { sources });
+    expect(later.stored.day.blocks.map((b) => b.summary)).toEqual(["Fix login"]);
+    expect(later.warnings.join(" ")).toMatch(/can't be merged under your corrections/);
+  });
+});

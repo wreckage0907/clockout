@@ -34,7 +34,7 @@ describe("built cli", () => {
   it("drafts the demo day with no setup", () => {
     const { out, code } = run("demo", "--plain", "--no-ai");
     expect(code).toBe(0);
-    expect(out).toContain("6.25h · 4 questions");
+    expect(out).toContain("5.75h · 5 questions");
     expect(out).toContain("Fix auth token refresh (PR #87)");
   });
 

@@ -74,10 +74,13 @@ export function createCalendarSource(fetcher: IcsFetcher = fetchIcs): Source<Cal
 
 export const calendar = createCalendarSource();
 
-/** Your RSVP. Events with no guest list are your own blocks, so they count as accepted. */
+/**
+ * Your RSVP. Events with no guest list are blocks on your own calendar (lunch, gym, focus time):
+ * `unknown`, so you're asked whether they were work.
+ */
 export function attendanceFor(event: VEvent, me: string[]): Attendance {
   const attendees = list(event.attendee);
-  if (attendees.length === 0) return "accepted";
+  if (attendees.length === 0) return "unknown";
   const mine = attendees.find((a) => me.includes(emailOf(a)));
   if (!mine) return me.includes(emailOf(event.organizer)) ? "accepted" : "unknown";
   const stat = typeof mine === "object" ? mine.params?.PARTSTAT : undefined;

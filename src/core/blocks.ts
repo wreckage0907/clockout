@@ -55,8 +55,20 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
         .join(", ")}`,
     );
   }
-  const attended = meetings.filter((m) => m.attendance === "accepted");
-  const unsure = meetings.filter((m) => m.attendance !== "accepted" && m.attendance !== "declined");
+  // Of overlapping accepted meetings only the earliest counts; the others are asked about.
+  const attended: Activity[] = [];
+  const doubleBooked: { m: Activity; other: Activity }[] = [];
+  for (const m of meetings
+    .filter((x) => x.attendance === "accepted")
+    .sort((a, b) => a.start.getTime() - b.start.getTime())) {
+    const other = attended.find((o) => (o.end?.getTime() ?? 0) > m.start.getTime());
+    if (other) doubleBooked.push({ m, other });
+    else attended.push(m);
+  }
+  const unsure = [
+    ...meetings.filter((m) => m.attendance !== "accepted" && m.attendance !== "declined"),
+    ...doubleBooked.map((d) => d.m),
+  ];
 
   // Work: your actions → spans per project/branch → non-overlapping pieces
   const human = acts
@@ -84,14 +96,28 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
     const overlapping = pieces.find(
       (p) => p.start < (m.end?.getTime() ?? 0) && p.end > m.start.getTime(),
     );
-    const why = m.attendance === "tentative" ? "You replied maybe." : "You didn't reply.";
-    questions.push({
-      kind: "attendance",
-      text: `Did you attend "${m.title}" (${span(m, tz)})? ${why}${
-        overlapping ? ` You were working on ${overlapping.span.project} then.` : ""
-      }`,
-      blockId: meetingKey(m),
-    });
+    const working = overlapping ? ` You were working on ${overlapping.span.project} then.` : "";
+    const clash = doubleBooked.find((d) => d.m === m);
+    if (clash) {
+      questions.push({
+        kind: "overlap",
+        text: `"${m.title}" (${span(m, tz)}) overlaps "${clash.other.title}" (${span(clash.other, tz)}). Did you attend it too?`,
+        blockId: meetingKey(m),
+      });
+    } else if (!m.attendees?.length) {
+      questions.push({
+        kind: "attendance",
+        text: `Was "${m.title}" (${span(m, tz)}) work? It's a block on your own calendar.${working}`,
+        blockId: meetingKey(m),
+      });
+    } else {
+      const why = m.attendance === "tentative" ? "You replied maybe." : "You didn't reply.";
+      questions.push({
+        kind: "attendance",
+        text: `Did you attend "${m.title}" (${span(m, tz)})? ${why}${working}`,
+        blockId: meetingKey(m),
+      });
+    }
   }
 
   // Blocks
@@ -136,7 +162,7 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
           project: m.project ?? resolveProject(m, config.projects),
           task: ruleTask(m, config.projects) ?? config.tasks.meeting,
           billable: true,
-          confirmed: m.attendance === "accepted",
+          confirmed: attended.includes(m),
           evidence: [m],
         },
         meetingKey(m),

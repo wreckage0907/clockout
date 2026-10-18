@@ -65,3 +65,15 @@ describe("parseCorrection", () => {
     ).toBe(false);
   });
 });
+
+describe("midnight", () => {
+  it("shows a block ending at midnight as 24:00, which edits accept", () => {
+    const late = {
+      ...day,
+      blocks: day.blocks.map((b) =>
+        b.id === "b8" ? { ...b, end: new Date("2026-10-16T18:30:00Z") } : b,
+      ),
+    };
+    expect(correctionContext(late, config).blocks.find((b) => b.id === "b8")?.end).toBe("24:00");
+  });
+});

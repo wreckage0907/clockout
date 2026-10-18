@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Config } from "../config/schema";
 import { editOpSchema } from "../core/edit-schema";
 import { prNumber } from "../core/summarize";
-import { localTime, minutesBetween } from "../core/time";
+import { localDate, localTime, minutesBetween } from "../core/time";
 import type { Day, EditOp } from "../core/types";
 import type { LlmBackend } from "./types";
 
@@ -11,7 +11,7 @@ Return edit operations on the day you're given, plus a one-sentence reply saying
 
 Rules:
 - Use block ids (b1, b2…) and gap ids (g1, g2…) exactly as given. Never invent ids.
-- Times are 24-hour local "HH:MM" on that day. "X was 2 hours" means set end = start + 2h.
+- Times are 24-hour local "HH:MM" on that day; "24:00" is midnight at the end of the day. "X was 2 hours" means set end = start + 2h.
 - Lunch, breaks, personal time: fill_gap (or add) with billable false and project "Break".
 - "I attended / was at <meeting>": update that meeting with confirmed true. "I skipped / missed <meeting>": delete it.
 - Work without a time: put it in the earliest gap that fits, otherwise right after the last block of the day.
@@ -31,6 +31,8 @@ export type Correction = z.infer<typeof correctionSchema>;
 export function correctionContext(day: Day, config: Config, now = new Date()) {
   const tz = day.timezone;
   const t = (d: Date) => localTime(d, tz);
+  // A block ending at the next midnight ends at "24:00" on this day, which edits accept.
+  const tEnd = (d: Date) => (localDate(d, tz) > day.date ? "24:00" : t(d));
   const prs = new Map<string, { pr: string; title?: string; author?: string }>();
   for (const b of day.blocks) {
     for (const a of b.evidence) {
@@ -52,7 +54,7 @@ export function correctionContext(day: Day, config: Config, now = new Date()) {
     blocks: day.blocks.map((b) => ({
       id: b.id,
       start: t(b.start),
-      end: t(b.end),
+      end: tEnd(b.end),
       minutes: Math.round(minutesBetween(b.start, b.end)),
       kind: b.kind,
       project: b.project,
@@ -61,7 +63,7 @@ export function correctionContext(day: Day, config: Config, now = new Date()) {
       confirmed: b.confirmed,
       billable: b.billable,
     })),
-    gaps: day.gaps.map((g) => ({ id: g.id, start: t(g.start), end: t(g.end) })),
+    gaps: day.gaps.map((g) => ({ id: g.id, start: t(g.start), end: tEnd(g.end) })),
     open_questions: day.questions.map((q) => q.text),
     known_projects: [
       ...new Set([...config.projects.map((p) => p.name), ...day.blocks.map((b) => b.project)]),

@@ -112,17 +112,36 @@ export function App({
   const accept = useCallback(async () => {
     if (!stored || !proposal) return;
     setBusy("Saving…");
-    const result = await actions.commit(stored, proposal.ops, proposal.text);
-    setBusy(null);
-    setProposal(null);
-    if (result.errors.length) {
-      setStatus(`Couldn't apply that: ${result.errors.join(" ")}`);
+    try {
+      const result = await actions.commit(stored, proposal.ops, proposal.text);
+      if (result.errors.length) {
+        setStatus(`Couldn't apply that: ${result.errors.join(" ")}`);
+        setInput(proposal.text);
+      } else {
+        setStored(result.stored);
+        setStatus(`Saved. ${proposal.reply} Ctrl+Z to undo.`.replace(/\s+/g, " ").trim());
+      }
+    } catch (err) {
+      setStatus(`Couldn't save: ${(err as Error).message}`);
       setInput(proposal.text);
-    } else {
-      setStored(result.stored);
-      setStatus(`Saved. ${proposal.reply} Press u to undo.`.replace(/\s+/g, " ").trim());
+    } finally {
+      setProposal(null);
+      setBusy(null);
     }
   }, [stored, proposal, actions]);
+
+  const undo = useCallback(async () => {
+    if (!stored) return;
+    try {
+      const s = await actions.undo(stored);
+      if (s) {
+        setStored(s);
+        setStatus("Undone.");
+      } else setStatus("Nothing to undo.");
+    } catch (err) {
+      setStatus(`Couldn't undo: ${(err as Error).message}`);
+    }
+  }, [stored, actions]);
 
   const copy = useCallback(
     async (format: "tsv" | "md") => {
@@ -168,36 +187,35 @@ export function App({
       return;
     }
     if (key.upArrow) return setSelected((s) => Math.max(0, s - 1));
-    if (key.downArrow) return setSelected((s) => Math.min(rows.length - 1, s + 1));
+    if (key.downArrow) return setSelected((s) => Math.max(0, Math.min(rows.length - 1, s + 1)));
+    if (key.pageUp) return setDate((d) => addDays(d, -1));
+    if (key.pageDown) return setDate((d) => addDays(d, 1));
     if (key.escape) return setInput("");
-    if (key.ctrl && ch === "u") return setInput("");
     if (key.return) {
       const text = input.trim();
       if (text) void send(text);
       return;
     }
     if (key.backspace || key.delete) return setInput((v) => v.slice(0, -1));
-    if (input === "" && !key.ctrl && !key.meta) {
-      if (ch === "q") return exit();
-      if (ch === "c") return void copy("tsv");
-      if (ch === "m") return void copy("md");
-      if (ch === "[") return setDate((d) => addDays(d, -1));
-      if (ch === "]") return setDate((d) => addDays(d, 1));
-      if (ch === "u" && stored) {
-        void actions.undo(stored).then((s) => {
-          if (s) {
-            setStored(s);
-            setStatus("Undone.");
-          } else setStatus("Nothing to undo.");
-        });
-        return;
-      }
+    // Shortcuts use Ctrl so typed text never triggers them.
+    if (key.ctrl) {
+      if (ch === "u") return setInput("");
+      if (ch === "y") return void copy("tsv");
+      if (ch === "t") return void copy("md");
+      if (ch === "z") return void undo();
+      if (ch === "d") return exit();
+      return;
     }
-    if (ch && !key.ctrl && !key.meta && !key.tab) {
+    if (ch && !key.meta && !key.tab) {
       setInput((v) => v + ch.replace(/[\r\n]/g, " "));
       setStatus(null);
     }
   });
+
+  // Keep the selection on a real row when edits or undo shrink the list.
+  useEffect(() => {
+    setSelected((s) => Math.max(0, Math.min(s, rows.length - 1)));
+  }, [rows.length]);
 
   const totals = day ? dayTotals(day, config) : null;
   const fixed =
@@ -275,7 +293,8 @@ export function App({
       <SayIt value={input} busy={busy} status={status} width={width} />
       {status && input !== "" ? <Text dimColor>{status}</Text> : null}
       <Text dimColor>
-        ↑↓ select · Enter send · when empty: c copy · m markdown · u undo · [ ] day · q quit
+        ↑↓ select · Enter send · Ctrl+Y copy · Ctrl+T markdown · Ctrl+Z undo · PgUp/PgDn day ·
+        Ctrl+C quit
       </Text>
       {warnings.length ? <Text color="yellow">⚠ {warnings.join(" · ")}</Text> : null}
     </Box>
