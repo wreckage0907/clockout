@@ -1,6 +1,11 @@
 // Domain types shared by sources, core, AI backends, the TUI and exporters.
 // Times are UTC `Date`s; convert to the user's time zone only for display and export.
 
+export interface DateRange {
+  from: Date;
+  to: Date;
+}
+
 export type ActivityKind =
   | "prompt" // the user sent a prompt to a coding agent
   | "agent_turn" // a coding agent worked (may run while the user is elsewhere)

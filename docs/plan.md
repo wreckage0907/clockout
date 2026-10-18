@@ -19,11 +19,11 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 ## Day 2 — Claude Code source
 
-- [ ] Read `~/.claude/projects/*/*.jsonl` for a date range
-- [ ] `user` prompts (not tool results) → human activity; `assistant` → agent activity
-- [ ] Title from the last `ai-title`; `cwd` and `gitBranch` from events
-- [ ] Skip `isSidechain` and `isMeta` lines; count and skip malformed lines
-- [ ] Fixture tests incl. a session crossing midnight
+- [x] Read `~/.claude/projects/*/*.jsonl` for a date range
+- [x] `user` prompts (not tool results) → human activity; `assistant` → agent activity
+- [x] Title from the last `ai-title`; `cwd` and `gitBranch` from events
+- [x] Skip `isSidechain` and `isMeta` lines; count and skip malformed lines
+- [x] Fixture tests incl. a session crossing midnight
 
 ## Day 3 — GitHub source
 

@@ -1,16 +1,15 @@
 import type { Config } from "../config/schema";
-import type { Activity } from "../core/types";
+import type { Activity, DateRange } from "../core/types";
 
-export interface DateRange {
-  from: Date;
-  to: Date;
-}
+export type { DateRange };
 
 /** What a source needs from the outside world, injectable for tests. */
 export interface SourceContext {
   config: Config;
   homeDir: string;
   env: NodeJS.ProcessEnv;
+  /** "owner/name" for a working directory; defaults to reading its git origin remote. */
+  resolveRepo?: (cwd: string) => Promise<string | undefined>;
 }
 
 /** Returned by `detect()` when the tool is present. */
