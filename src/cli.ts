@@ -2,6 +2,7 @@
 import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
 import { runDay } from "./commands/day";
+import { runEdit, runUndo } from "./commands/edit";
 import { runInit } from "./commands/init";
 
 const program = new Command().name("clockout").description(pkg.description).version(pkg.version);
@@ -28,10 +29,24 @@ dayOptions(
 ).action((date, opts) => runDay(date, opts));
 
 program
+  .command("edit")
+  .argument("<text...>", "what to change, in plain words")
+  .description('Correct a day in plain words, e.g. clockout edit "the gap was lunch"')
+  .option("-d, --date <date>", "day to edit (default: today)")
+  .option("--dry-run", "show the changes without saving them")
+  .action((words: string[], opts) => runEdit(words.join(" "), opts));
+
+program
+  .command("undo")
+  .description("Undo the last correction")
+  .option("-d, --date <date>", "day (default: today)")
+  .action((opts) => runUndo(opts));
+
+program
   .command("init")
   .description("Find your tools and write ~/.config/clockout/config.toml")
   .option("-f, --force", "replace an existing config without asking")
-  .action(runInit);
+  .action((opts) => runInit(opts));
 
 try {
   await program.parseAsync();

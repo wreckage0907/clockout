@@ -9,7 +9,8 @@ const TAIL = 5 * MINUTE;
 /** Slivers shorter than this are folded into the neighbouring block. */
 const SLIVER = 5 * MINUTE;
 /** Gaps at least this long get a question. */
-const ASK_GAP = 30 * MINUTE;
+export const ASK_GAP_MINUTES = 30;
+const ASK_GAP = ASK_GAP_MINUTES * MINUTE;
 /** This many of your actions during an accepted meeting suggest you skipped it. */
 const BUSY_IN_MEETING = 2;
 
@@ -33,7 +34,6 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
   const range = dayRange(date, tz);
   const [from, to] = [range.from.getTime(), range.to.getTime()];
   const idle = durationMinutes(config.day.idle_cutoff) * MINUTE;
-  const step = durationMinutes(config.day.round_to) * MINUTE;
   const notes: string[] = [];
   const questions: Omit<Question, "id">[] = [];
 
@@ -155,31 +155,18 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
   });
 
   // Gaps inside working hours
-  const [whFrom, whTo] = config.day.working_hours.split("-") as [string, string];
-  const gaps: Gap[] = [];
-  let cursor = atLocalTime(date, whFrom, tz).getTime();
-  const end = atLocalTime(date, whTo, tz).getTime();
-  for (const b of blocks) {
-    const [bs, be] = [b.start.getTime(), b.end.getTime()];
-    if (bs - cursor >= step && cursor < end) {
-      gaps.push({ id: "", start: new Date(cursor), end: new Date(Math.min(bs, end)) });
-    }
-    cursor = Math.max(cursor, be);
+  const gaps = computeGaps(date, blocks, config);
+  for (const g of gaps) {
+    if (g.end.getTime() - g.start.getTime() < ASK_GAP) continue;
+    const agent = agentDuring(turns, g.start.getTime(), g.end.getTime());
+    questions.push({
+      kind: "gap",
+      text: agent
+        ? `Nothing from you ${localTime(g.start, tz)}–${localTime(g.end, tz)}, but an agent was working in ${agent.project} for ${Math.round(agent.minutes)} min. Were you on it, or away?`
+        : gapQuestionText(g, tz),
+      gapId: g.id,
+    });
   }
-  if (end - cursor >= step) gaps.push({ id: "", start: new Date(cursor), end: new Date(end) });
-  gaps.forEach((g, i) => {
-    g.id = `g${i + 1}`;
-    if (g.end.getTime() - g.start.getTime() >= ASK_GAP) {
-      const agent = agentDuring(turns, g.start.getTime(), g.end.getTime());
-      questions.push({
-        kind: "gap",
-        text: agent
-          ? `Nothing from you ${localTime(g.start, tz)}–${localTime(g.end, tz)}, but an agent was working in ${agent.project} for ${Math.round(agent.minutes)} min. Were you on it, or away?`
-          : `Nothing recorded ${localTime(g.start, tz)}–${localTime(g.end, tz)}. Lunch, a break, or work?`,
-        gapId: g.id,
-      });
-    }
-  });
 
   return {
     date,
@@ -268,6 +255,36 @@ function subtract(p: Piece, ms: number, me: number): Piece[] {
   if (ms - p.start >= SLIVER) out.push({ ...p, end: ms });
   if (p.end - me >= SLIVER) out.push({ ...p, start: me });
   return out;
+}
+
+/** Unaccounted stretches of at least `round_to` inside working hours, numbered g1, g2, … */
+export function computeGaps(date: string, blocks: readonly Block[], config: Config): Gap[] {
+  const tz = config.me.timezone;
+  const step = durationMinutes(config.day.round_to) * MINUTE;
+  const [whFrom, whTo] = config.day.working_hours.split("-") as [string, string];
+  const end = atLocalTime(date, whTo, tz).getTime();
+  let cursor = atLocalTime(date, whFrom, tz).getTime();
+  const gaps: Gap[] = [];
+  const sorted = [...blocks].sort((a, b) => a.start.getTime() - b.start.getTime());
+  for (const b of sorted) {
+    const [bs, be] = [b.start.getTime(), b.end.getTime()];
+    if (Math.min(bs, end) - cursor >= step) {
+      gaps.push({
+        id: `g${gaps.length + 1}`,
+        start: new Date(cursor),
+        end: new Date(Math.min(bs, end)),
+      });
+    }
+    cursor = Math.max(cursor, be);
+  }
+  if (end - cursor >= step) {
+    gaps.push({ id: `g${gaps.length + 1}`, start: new Date(cursor), end: new Date(end) });
+  }
+  return gaps;
+}
+
+export function gapQuestionText(g: Gap, tz: string): string {
+  return `Nothing recorded ${localTime(g.start, tz)}–${localTime(g.end, tz)}. Lunch, a break, or work?`;
 }
 
 /** The project an agent spent most time in during [from, to), if it ran for at least a third of it. */

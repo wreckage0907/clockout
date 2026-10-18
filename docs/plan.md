@@ -58,9 +58,9 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 ## Day 8 — Corrections (milestone)
 
-- [ ] Edit operations: add, update, delete, split, merge, fill_gap, clarify
-- [ ] Validation (no overlaps, inside the day), diff, apply, undo
-- [ ] `clockout edit "<sentence>"`
+- [x] Edit operations: add, update, delete, split, merge, fill_gap, clarify
+- [x] Validation (no overlaps, inside the day), diff, apply, undo
+- [x] `clockout edit "<sentence>"` (with --dry-run) and `clockout undo`
 
 ## Day 9–10 — Review screen (milestone)
 
