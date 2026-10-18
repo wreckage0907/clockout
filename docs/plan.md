@@ -27,10 +27,10 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 ## Day 3 — GitHub source
 
-- [ ] Token from `gh auth token`, falling back to `GITHUB_TOKEN`
-- [ ] GraphQL `contributionsCollection`: PRs opened, reviews, review comments, commits
-- [ ] Repo → project via git remote
-- [ ] Fixture tests from recorded-shape responses
+- [x] Token from `gh auth token`, falling back to `GITHUB_TOKEN`
+- [x] GraphQL `contributionsCollection`: PRs opened, reviews, review comments (commit times need local git: later)
+- [x] Repo → project via git remote
+- [x] Fixture tests from recorded-shape responses
 
 ## Day 4 — Google Calendar source
 
