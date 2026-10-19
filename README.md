@@ -7,18 +7,18 @@ The AI work runs on the Claude Code subscription you already have. No API key ne
 Built for the **#NoHandsChallenge** (WeMakeDevs × Wispr Flow).
 
 ```
-clockout · Fri, Oct 16 · DRAFT                    6.25h · 4 questions · AI: Claude Code (haiku)
-▓▓▓▓███████████████░░░░░░░░███████████████████░███░░░▓▓▓▓???░░░░░░░░░░░░░░░░░░░░░░░░░░░░░█
-    #    TIME        DUR   HOURS  PROJECT               SUMMARY
-    b1   09:30–10:00 0h30  0.50h  Meetings              Daily standup
-    b2   10:00–12:15 2h15  2.25h  Acme API              Fix auth token refresh race (PR #87)
-  ░      12:15–14:00 1h45                               ── gap ──
-    b3   14:00–16:33 2h33  2.50h  dev-example/clockout  Add CSV export command (PR #48)
-  ? b4   15:00–15:30 0h30         Meetings              Design sync
-╭ Say it ───────────────────────────────────────────────────────────────────────────────────╮
-│ › I skipped the design sync, and the gap after lunch was just lunch                       │
-╰───────────────────────────────────────────────────────────────────────────────────────────╯
+  ◷ clockout · Fri, Oct 16 · draft · 5.75h · 5 questions · AI: Claude Code (haiku)
+  ▍  09:30–10:00 Meetings            Daily standup                          0h30
+      10:00–12:15 Acme API            Fix auth token refresh race (PR #87)   2h15
+      12:15–14:00 Nothing recorded 12:15–14:00. Lunch, a break, or work?
+      14:00–16:33 dev-example/clockout Build CSV export command (PR #48)     2h33
+    ? 15:00–15:30 Meetings            Design sync                            0h30
+      Did you attend "Design sync" (15:00–15:30)? You replied maybe.
+  ▏ Say it, or / for commands
+  ▏ skipped the design sync, and the gap after lunch was lunch
 ```
+
+Type or dictate a correction, Clockout proposes the edits, you press y. `/` opens the command menu (pick a day, copy, undo); gaps and unanswered questions are shown as plain questions, not decoration.
 
 > Status: MVP. Not yet on npm; run it from a clone (below).
 
@@ -27,7 +27,7 @@ clockout · Fri, Oct 16 · DRAFT                    6.25h · 4 questions · AI: 
 ```sh
 git clone https://github.com/wreckage0907/clockout && cd clockout
 corepack enable && pnpm install && pnpm build
-node dist/cli.js demo          # a made-up day, no setup needed
+node dist/cli.js init
 ```
 
 ## Use it on your own day
@@ -46,18 +46,19 @@ node dist/cli.js               # review today
 
 ## The review screen
 
+One line per block — time, project, one sentence, hours. Questions are a `?` and a yellow line under their row; select a row to see the evidence behind it. Gaps read as a question, not a wall of shading.
+
 | Key | Does |
 |---|---|
 | type or dictate, then **Enter** | Send a correction in plain words |
+| **/** | Open the command menu: pick a day, copy sheet, copy as markdown, undo, previous/next day |
 | **y** / **n** | Apply or discard the proposed changes |
-| **↑ ↓** | Select a block or gap; its evidence shows on the right |
-| **Ctrl+Y** / **Ctrl+T** | Copy the timesheet (tab-separated, or Markdown) |
-| **Ctrl+Z** | Undo the last correction |
+| **↑ ↓** | Select a block or gap; its evidence shows underneath |
 | **PgUp** / **PgDn** | Previous / next day |
 | **Esc** | Clear the input |
 | **Ctrl+C** | Quit |
 
-Shortcuts use Ctrl, so typing never triggers them. Dictated text arrives as one paste, so a line break never sends it early.
+The command menu and the day picker (a mini month; bright days have a draft) live in the input, so the screen itself stays quiet. Dictated text arrives as one paste, so a line break never sends it early.
 
 Things you can say:
 
@@ -75,7 +76,6 @@ clockout today --plain         # print instead of opening the review screen
 clockout edit "the gap was lunch" [--date yesterday] [--dry-run]
 clockout undo [--date yesterday]
 clockout export [date] --format csv|md|tsv|json [--out file] [--from DATE --to DATE]
-clockout demo
 clockout connect google        # sign in once; disconnect google to revoke
 ```
 

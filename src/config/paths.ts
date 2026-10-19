@@ -8,7 +8,7 @@ export interface Paths {
 
 /**
  * XDG locations on every platform: $XDG_CONFIG_HOME/clockout/config.toml and
- * $XDG_DATA_HOME/clockout. CLOCKOUT_CONFIG overrides the config file (tests, --demo).
+ * $XDG_DATA_HOME/clockout. CLOCKOUT_CONFIG overrides the config file (tests).
  */
 export function resolvePaths(env: NodeJS.ProcessEnv = process.env, home = homedir()): Paths {
   const configHome = env.XDG_CONFIG_HOME || join(home, ".config");

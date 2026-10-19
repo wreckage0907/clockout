@@ -38,6 +38,7 @@ function setup(parse: (text: string, day: Day) => Promise<Correction>) {
     copy: async (t) => {
       copied.push(t);
     },
+    savedDates: async () => [FIXTURE_DATE],
   };
   const ui = render(
     <App initialDate={FIXTURE_DATE} config={config} actions={actions} aiLabel="Fake AI" />,
@@ -57,9 +58,9 @@ describe("review screen", () => {
     expect(frame).toContain("5.75h");
     expect(frame).toContain("Daily standup");
     expect(frame).toContain("Fix auth token refresh (PR #87)");
-    expect(frame).toContain("── gap ──");
-    expect(frame).toContain("Questions");
+    expect(frame).toContain("Lunch, a break, or work?");
     expect(frame).toContain("Did you attend");
+    expect(frame).not.toContain("░░░");
     ui.unmount();
   });
 
@@ -92,7 +93,7 @@ describe("review screen", () => {
     ui.stdin.write("c");
     await tick();
     expect(copied).toEqual([]);
-    expect(ui.lastFrame()).toContain("› c");
+    expect(ui.lastFrame()).toContain("▏ c");
     ui.stdin.write("\u001b"); // Esc clears
     ui.stdin.write("\u0019"); // Ctrl+Y
     await tick();

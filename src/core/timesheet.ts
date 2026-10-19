@@ -1,6 +1,6 @@
 import { type Config, durationMinutes } from "../config/schema";
 import { minutesBetween, roundedHours } from "./time";
-import type { Block, Day, TimesheetRow } from "./types";
+import type { Block, Day, Gap, TimesheetRow } from "./types";
 
 /** Blocks that go on the timesheet: confirmed and billable. */
 export function countedBlocks(day: Day): Block[] {
@@ -45,4 +45,19 @@ export function dayTotals(day: Day, config: Config): DayTotals {
     gaps: day.gaps.length,
     questions: day.questions.length,
   };
+}
+
+/** One review-screen row: a block of work, or an unaccounted gap. */
+export type Row = { kind: "block"; block: Block } | { kind: "gap"; gap: Gap };
+
+/** Blocks and gaps of a day in chronological order. */
+export function tableRows(day: Day): Row[] {
+  return [
+    ...day.blocks.map((block) => ({ kind: "block" as const, block })),
+    ...day.gaps.map((gap) => ({ kind: "gap" as const, gap })),
+  ].sort((a, b) => start(a) - start(b));
+}
+
+function start(r: Row): number {
+  return (r.kind === "block" ? r.block.start : r.gap.start).getTime();
 }

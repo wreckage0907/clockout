@@ -23,7 +23,7 @@ Existing trackers don't solve this for developers. They see *which app* was open
 
 ## 3. Hackathon constraints
 
-- Judges must be able to try it with zero setup → `npx clockout-cli --demo` (bundled fixtures, full day to correct, no AI login required thanks to the heuristic fallback).
+- Judges try it with their own data after `clockout init` (the bundled-fixtures `--demo` day was removed; fixtures live on in the tests and the hidden `design` prototypes).
 - Submission needs **one real result**: Clockout generates the timesheet for its own two-week build.
 - Bonuses: weekly Wispr usage card (words dictated); build in public with `#NoHandsChallenge`, tag WeMakeDevs + Wispr Flow.
 
@@ -33,7 +33,7 @@ One npm package, `clockout-cli` (bin: `clockout`), Node ≥ 22. The bare `clocko
 
 | Surface | Role |
 |---|---|
-| **TUI** (`clockout`, built with Ink) | Main surface. Timeline strip, block table, questions, evidence pane, and an always-focused "say it" bar for Wispr dictation. |
+| **TUI** (`clockout`, built with Ink) | Main surface. A calm block list (no timeline strip): one line per block — time, project, one sentence, hours — with questions and evidence shown as quiet lines under their row. Corrections go through the always-focused input bar (`/` opens commands, including a day picker for filling previous days). |
 | **Plain CLI** (`clockout today --md`, `--json`) | Scripting and piping; no interactive UI. |
 | **MCP server + skill** (`clockout mcp`) | Run Clockout from inside your agent: "fill in yesterday's timesheet". The agent's own model does the AI work. |
 | `clockout serve` *(stretch)* | Small local web view of the same data. |
@@ -45,25 +45,24 @@ Voice in the terminal: Wispr Flow pastes into Terminal, iTerm2, Ghostty, Warp, k
 ### Review screen
 
 ```
- clockout · Thu 16 Oct · DRAFT                 7h40m · 3 questions
- 09    10    11    12    13    14    15    16    17
- ████████▓▓▓▓░░░██████  ····  ▒▒▒█████████████░░██████
- ──────────────────────────────────────────────────────────────
-   #  TIME         DUR   PROJECT     SUMMARY                 SRC
- › 1  09:05–10:40  1h35  clockout    Ink review screen       cc git
-   2  10:40–11:30  0h50  acme-api    Reviewed PR #212        gh
- ? 3  11:30–12:00  0h30  meeting     Acme standup            cal
- ░ 4  12:00–13:10  1h10  — gap —     no activity
- ┌ Questions ──────────────────┐ ┌ Block 1 · evidence ─────────┐
- │ 1 Attended "Acme standup"?  │ │ 3 Claude Code sessions      │
- │ 2 12:00–13:10: lunch/work?  │ │ 7 commits · branch tui      │
- └─────────────────────────────┘ └─────────────────────────────┘
- ┌ Say it  (hold Fn · Wispr)  ─ ⌃⌘V re-paste ──────────────────┐
- │ › skipped standup, lunch till one, block 1 was 2 hours▌     │
- └─────────────────────────────────────────────────────────────┘
- Proposed: ✕#3 · #4→Lunch (unbilled) · #1 1h35→2h00   [y]es [n]o [u]ndo
- ↑↓ select · a approve day · x export · ? help
+  ◷ clockout · Fri, Oct 16 · draft · 5.75h · 5 questions · AI: Claude Code (haiku)
+  ▍  09:30–10:00 Meetings            Daily standup                          0h30
+      calendar: Daily standup
+      10:00–12:15 Acme API            Fix auth token refresh race (PR #87)   2h15
+      12:15–14:00 Nothing recorded 12:15–14:00. Lunch, a break, or work?
+      14:00–16:33 dev-example/clockout Build CSV export command (PR #48)     2h33
+    ? 15:00–15:30 Meetings            Design sync                            0h30
+      Did you attend "Design sync" (15:00–15:30)? You replied maybe.
+      16:40–17:00 Acme API            Review login rate-limiting (PR #212)   0h20
+  ▏ Say it, or / for commands
+  ▏ enter to send
 ```
+
+One line per block: time, project, one sentence, hours. Questions are a `?` and a
+yellow line under their row; evidence shows when a row is selected. Gaps read as a
+question, not a wall of shading. Type or dictate to correct; `/` opens the command
+menu (pick a day, copy sheet, copy as markdown, undo, previous/next day); the day
+picker is a mini month where days with a saved draft are bright.
 
 ## 5. Sources
 
@@ -231,7 +230,7 @@ collect → store → resolve projects → blocks → attendance → summarize �
 - [ ] `clockout today | yesterday | week | --from --to`, `--md`, `--json`
 - [ ] Export: clipboard, Markdown, CSV with date, project, task, hours, description
 - [ ] `clockout init` with auto-detect
-- [ ] `--demo` with fixtures; VHS demo GIF
+- [ ] VHS demo GIF (records a real day; the `--demo` command was removed)
 - [ ] README + demo video
 
 ## 10. Stretch
@@ -277,7 +276,7 @@ See [ADR 0004](adr/0004-toolchain.md) for the toolchain and [docs/plan.md](plan.
 | 5–6 | Project resolution, blocks, gaps, heuristic summaries, `--md` / `--json` output |
 | 7–8 | AI backend interface (Claude Code, Codex, Ollama, API key), summaries, edit operations, undo |
 | 9–10 | Ink TUI review screen, "say it" bar, Wispr testing across terminals |
-| 11 | Exports, `command` / `jsonl` sources, `--demo` |
+| 11 | Exports, `command` / `jsonl` sources |
 | 12 | Publish to npm; run on own two weeks → **real result** |
 | 13–14 | README, VHS GIF, demo video, submission. Stretch items if time allows. |
 

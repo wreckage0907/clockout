@@ -76,7 +76,7 @@ export async function openDay(
     ctx?: Partial<Omit<SourceContext, "config">>;
     /** Writes better summaries when given; failures fall back to the heuristic ones. */
     ai?: LlmBackend | null;
-    /** Overrides which implementation runs for a source type (used by --demo). */
+    /** Overrides which implementation runs for a source type (test and prototype hook). */
     sources?: SourceLookup;
   } = {},
 ): Promise<OpenedDay> {

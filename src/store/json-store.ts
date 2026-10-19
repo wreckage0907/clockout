@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Activity, Day, EditOp } from "../core/types";
 
@@ -43,6 +43,21 @@ export class DayStore {
     }
     const parsed = JSON.parse(text, reviveDates) as StoredDay;
     return parsed.version === 1 ? parsed : null;
+  }
+
+  /** Dates with a saved day, sorted ascending; empty when nothing is saved yet. */
+  async dates(): Promise<string[]> {
+    let names: string[];
+    try {
+      names = await readdir(join(this.dataDir, "days"));
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw err;
+    }
+    return names
+      .filter((n) => /^\d{4}-\d{2}-\d{2}\.json$/.test(n))
+      .map((n) => n.slice(0, 10))
+      .sort();
   }
 
   async save(stored: StoredDay): Promise<void> {

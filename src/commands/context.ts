@@ -3,37 +3,19 @@ import { loadConfig } from "../config/load";
 import { resolvePaths, tildify } from "../config/paths";
 import type { Config } from "../config/schema";
 import { addDays, isDate, localDate } from "../core/time";
-import { setupDemo } from "../demo";
-import type { SourceContext } from "../sources/types";
 import { DayStore } from "../store/json-store";
 
 export interface AppContext {
   config: Config;
   store: DayStore;
-  /** Set in --demo: bundled sources, a fixed date and a throwaway store. */
-  demo?: {
-    date: string;
-    sources: SourceLookup;
-    ctx: Partial<Omit<SourceContext, "config">>;
-  };
 }
 
 /** Loads config and store, or explains how to create the config. */
-export async function appContext(opts: { demo?: boolean } = {}): Promise<AppContext> {
-  if (opts.demo) {
-    const d = await setupDemo();
-    return {
-      config: d.config,
-      store: d.store,
-      demo: { date: d.date, sources: d.sources, ctx: d.ctx },
-    };
-  }
+export async function appContext(): Promise<AppContext> {
   const paths = resolvePaths();
   const config = await loadConfig(paths.configFile);
   if (!config) {
-    throw new Error(
-      `No config at ${tildify(paths.configFile)}. Run \`clockout init\` first (or \`clockout --demo\` to try it).`,
-    );
+    throw new Error(`No config at ${tildify(paths.configFile)}. Run \`clockout init\` first.`);
   }
   return { config, store: new DayStore(paths.dataDir) };
 }

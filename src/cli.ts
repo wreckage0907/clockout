@@ -3,6 +3,7 @@ import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
 import { runConnect, runDisconnect } from "./commands/connect";
 import { runDay } from "./commands/day";
+import { runDesign } from "./commands/design";
 import { runEdit, runUndo } from "./commands/edit";
 import { runExport } from "./commands/export";
 import { runInit } from "./commands/init";
@@ -43,9 +44,6 @@ program
   .option("--no-ai", "use session and PR titles instead of AI summaries")
   .action((date, opts) => runExport(date, opts));
 
-dayOptions(
-  program.command("demo").description("Try Clockout on a made-up day, without any setup"),
-).action((opts) => runDay(undefined, { ...opts, demo: true }));
 program
   .command("edit")
   .argument("<text...>", "what to change, in plain words")
@@ -71,6 +69,12 @@ program
   .argument("<service>", "google")
   .description("Revoke access and forget the sign-in")
   .action((service: string) => runDisconnect(service));
+
+program
+  .command("design", { hidden: true })
+  .argument("[name]", "home, today, sources or chat")
+  .description("UI design prototypes on the demo day; ←/→ or tab to flip between them")
+  .action((name) => runDesign(name));
 
 program
   .command("init")

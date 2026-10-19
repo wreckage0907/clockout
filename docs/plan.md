@@ -68,6 +68,7 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 ## Day 9–10 — Review screen (milestone)
 
 - [x] Ink TUI: timeline, block table, questions, evidence, "say it" bar
+- [x] Calm review screen (2025 redesign): no timeline strip or shortcut dump — block list, questions/evidence under their rows, `/` command menu and khal-style day picker in the input
 - [x] Bracketed paste (`usePaste`); newlines never auto-submit
 - [x] Proposed changes shown as a diff; `y` / `n` / `u`
 - [ ] Wispr tested in Terminal, iTerm2, Ghostty, VS Code terminal (needs a human: manual test)
@@ -75,7 +76,7 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 ## Day 11 — Export and demo
 
 - [x] Clipboard, Markdown, CSV, TSV, JSON: date, project, task, hours, description (same work merged into one row)
-- [x] `--demo` on bundled fixtures
+- [x] ~~`--demo` on bundled fixtures~~ (removed — not needed in the app)
 - [x] README: install, quick start, config, privacy
 
 ## Day 12 — Publish (milestone)
