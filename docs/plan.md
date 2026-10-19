@@ -40,7 +40,7 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Fixture tests
 
 - [x] Google Calendar API: `clockout connect google` (sign in once, read-only, loopback + PKCE), RSVP from the `self` attendee; Workspace accounts often block the secret ICS address
-- [ ] Create Clockout's Google OAuth client (needs the owner's Google account: docs/google-setup.md)
+- [x] Create Clockout's Google OAuth client (needs the owner's Google account: docs/google-setup.md)
 
 ## Day 5–6 — First real draft (milestone)
 

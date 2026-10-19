@@ -13,3 +13,7 @@ CLAUDE.md
 
 # Scratch
 .firecrawl/
+
+# Prototypes and stray agent artifacts
+*.html
+prototypes/
