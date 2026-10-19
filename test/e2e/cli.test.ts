@@ -31,16 +31,9 @@ describe("built cli", () => {
     expect(run("--version").out.trim()).toBe(pkg.version);
   });
 
-  it("drafts the demo day with no setup", () => {
-    const { out, code } = run("demo", "--plain", "--no-ai");
-    expect(code).toBe(0);
-    expect(out).toContain("5.75h · 5 questions");
-    expect(out).toContain("Fix auth token refresh (PR #87)");
-  });
-
   it("explains how to start when there's no config", () => {
     const { out, code } = run("today", "--plain");
     expect(code).toBe(1);
-    expect(out).toContain("Run `clockout init` first (or `clockout --demo` to try it).");
+    expect(out).toContain("Run `clockout init` first.");
   });
 });

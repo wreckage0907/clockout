@@ -14,14 +14,12 @@ export interface DayOptions {
   ai?: boolean;
   /** Print the table instead of opening the review screen. */
   plain?: boolean;
-  /** Use bundled sample data instead of your own. */
-  demo?: boolean;
 }
 
 export async function runDay(dateInput: string | undefined, opts: DayOptions, app?: AppContext) {
-  const ctx = app ?? (await appContext({ demo: opts.demo }));
-  const { config, store, demo } = ctx;
-  const date = demo?.date ?? resolveDate(dateInput, config.me.timezone);
+  const ctx = app ?? (await appContext());
+  const { config, store } = ctx;
+  const date = resolveDate(dateInput, config.me.timezone);
   const ai = opts.ai === false ? null : await chooseBackend(config);
   const interactive = !opts.md && !opts.csv && !opts.json && !opts.plain;
   if (interactive && process.stdin.isTTY && process.stdout.isTTY) {
@@ -32,10 +30,7 @@ export async function runDay(dateInput: string | undefined, opts: DayOptions, ap
   const { stored, warnings, kept } = await openDay(date, config, store, {
     refresh: opts.refresh,
     ai,
-    ...(demo ? { sources: demo.sources, ctx: demo.ctx } : {}),
   });
-  if (demo)
-    console.error("Demo: a made-up day (Fri 16 Oct 2026). Run `clockout init` to use your own.\n");
   const day = stored.day;
 
   for (const w of warnings) console.error(`warning: ${w}`);
