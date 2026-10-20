@@ -3,7 +3,6 @@ import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
 import { runConnect, runDisconnect } from "./commands/connect";
 import { runDay } from "./commands/day";
-import { runDesign } from "./commands/design";
 import { runEdit, runUndo } from "./commands/edit";
 import { runExport } from "./commands/export";
 import { runInit } from "./commands/init";
@@ -69,11 +68,6 @@ program
   .argument("<service>", "google")
   .description("Revoke access and forget the sign-in")
   .action((service: string) => runDisconnect(service));
-
-program
-  .command("design", { hidden: true })
-  .description("The next review UI, as a prototype on the demo day")
-  .action(() => runDesign());
 
 program
   .command("init")
