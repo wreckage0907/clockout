@@ -23,7 +23,7 @@ Existing trackers don't solve this for developers. They see *which app* was open
 
 ## 3. Hackathon constraints
 
-- Judges try it with their own data after `clockout init` (the bundled-fixtures `--demo` day was removed; fixtures live on in the tests and the hidden `design` prototypes).
+- Judges try it with their own data after `clockout init` (the bundled-fixtures `--demo` day was removed; fixtures live on in the tests).
 - Submission needs **one real result**: Clockout generates the timesheet for its own two-week build.
 - Bonuses: weekly Wispr usage card (words dictated); build in public with `#NoHandsChallenge`, tag WeMakeDevs + Wispr Flow.
 
