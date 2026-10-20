@@ -1,6 +1,4 @@
-import type { Config } from "../config/schema";
-import { applyEdits, BREAK_PROJECT } from "../core/edits";
-import { atLocalTime, localTime, MINUTE, minutesBetween } from "../core/time";
+import { BREAK_PROJECT } from "../core/edits";
 import type { Block, Day, EditOp, Question } from "../core/types";
 
 /** A one-key answer to a question, and the edits it stands for. */
@@ -45,12 +43,6 @@ export function choicesFor(b: Block, q: Question): Choice[] {
   ];
 }
 
-/** Applies a choice; returns the new day, or the reasons it couldn't. */
-export function answer(day: Day, choice: Choice, config: Config): { day: Day; error?: string } {
-  const r = applyEdits(day, choice.ops, config);
-  return r.errors.length ? { day, error: r.errors.join(" ") } : { day: r.day };
-}
-
 /** Long "owner/repo" names lose the owner ("dev-example/clockout" → "clockout"); short ones stay. */
 export function short(project: string): string {
   if (project.length <= 14 || !project.includes("/")) return project;
@@ -85,47 +77,4 @@ export function evidenceLine(b: Block): string {
   }
   if (b.project === BREAK_PROJECT) parts.push("not counted");
   return parts.length ? parts.join(" · ") : "added by you";
-}
-
-// ── Durations ───────────────────────────────────────────────────────────────
-
-/**
- * A duration typed by hand: "1h", "1h 15m", "1h15", "45m", "1:15", "1.5", "1.5h", "90".
- * A decimal is hours; a whole number up to 12 is hours, bigger is minutes. Minutes past an
- * hour must be under 60. Null when it isn't a duration.
- */
-export function parseDuration(text: string): number | null {
-  const t = text.trim().toLowerCase();
-  let m = /^(\d+(?:\.\d+)?)\s*h(?:ours?|rs?)?(?:\s*(\d+)\s*m?(?:in(?:ute)?s?)?)?$/.exec(t);
-  if (m) return Number(m[2] ?? 0) < 60 ? Math.round(Number(m[1]) * 60 + Number(m[2] ?? 0)) : null;
-  m = /^(\d+)\s*m(?:in(?:ute)?s?)?$/.exec(t);
-  if (m) return Number(m[1]);
-  m = /^(\d+):(\d{2})$/.exec(t);
-  if (m) return Number(m[2]) < 60 ? Number(m[1]) * 60 + Number(m[2]) : null;
-  m = /^\d+\.\d+$/.exec(t);
-  if (m) return Math.round(Number(t) * 60);
-  m = /^\d+$/.exec(t);
-  if (m) return Number(t) <= 12 ? Number(t) * 60 : Number(t);
-  return null;
-}
-
-/**
- * Edits that add `minutes` of work for `project`: in the first untracked stretch long enough,
- * or right after the last thing you did.
- */
-export function addTimeOps(day: Day, project: string, minutes: number, summary: string): EditOp[] {
-  const tz = day.timezone;
-  const gap = day.gaps.find((g) => minutesBetween(g.start, g.end) >= minutes);
-  const last = [...day.blocks].sort((a, b) => b.end.getTime() - a.end.getTime())[0];
-  const start = gap?.start ?? last?.end ?? atLocalTime(day.date, "09:00", tz);
-  const end = new Date(start.getTime() + minutes * MINUTE);
-  return [
-    {
-      op: "add",
-      start: localTime(start, tz),
-      end: localTime(end, tz),
-      project,
-      summary: summary || `Work on ${short(project)}`,
-    },
-  ];
 }

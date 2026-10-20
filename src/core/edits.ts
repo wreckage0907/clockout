@@ -1,6 +1,7 @@
 import type { Config } from "../config/schema";
 import { ASK_GAP_MINUTES, computeGaps, gapQuestionText } from "./blocks";
 import { addDays, atLocalTime, formatDuration, localTime, MINUTE, minutesBetween } from "./time";
+import { blockMinutes } from "./timesheet";
 import type { Block, Day, EditOp, Question } from "./types";
 
 const MIN_LEFTOVER = 5 * MINUTE;
@@ -21,6 +22,33 @@ export interface EditResult {
  * blocks (they're trimmed or split); unconfirmed meetings are left alone. Gaps and questions are
  * recalculated afterwards. Pure.
  */
+/**
+ * Edits that add `minutes` of work for `project` without asking for a clock time: in the first
+ * untracked stretch long enough, otherwise right after the last thing you did.
+ */
+export function placeTimeOps(
+  day: Day,
+  project: string,
+  minutes: number,
+  summary: string,
+): EditOp[] {
+  const tz = day.timezone;
+  const gap = day.gaps.find((g) => minutesBetween(g.start, g.end) >= minutes);
+  const last = [...day.blocks].sort((a, b) => b.end.getTime() - a.end.getTime())[0];
+  const start = gap?.start ?? last?.end ?? atLocalTime(day.date, "09:00", tz);
+  const endsAt = new Date(start.getTime() + minutes * MINUTE);
+  const midnight = atLocalTime(addDays(day.date, 1), "00:00", tz);
+  return [
+    {
+      op: "add",
+      start: localTime(start, tz),
+      end: endsAt >= midnight ? "24:00" : localTime(endsAt, tz),
+      project,
+      summary: summary || `Work on ${project}`,
+    },
+  ];
+}
+
 export function applyEdits(day: Day, ops: readonly EditOp[], config: Config): EditResult {
   const tz = day.timezone;
   const errors: string[] = [];
@@ -60,7 +88,12 @@ export function applyEdits(day: Day, ops: readonly EditOp[], config: Config): Ed
         continue;
       }
       if (bs < ws) out.push({ ...b, end: winner.start });
-      if (be > we) out.push({ ...b, id: bs < ws ? newId() : b.id, start: winner.end });
+      if (be > we) {
+        const after: Block = { ...b, id: bs < ws ? newId() : b.id, start: winner.end };
+        // A length you set counts once: it stays with the first piece.
+        if (bs < ws) delete after.minutes;
+        out.push(after);
+      }
     }
     // Leftovers this short would bill a full rounding step for almost nothing.
     blocks = out.filter((b) => b.end.getTime() - b.start.getTime() >= MIN_LEFTOVER);
@@ -110,6 +143,7 @@ export function applyEdits(day: Day, ops: readonly EditOp[], config: Config): Ed
           billable: op.billable ?? b.billable,
           confirmed: op.confirmed ?? b.confirmed,
         });
+        if (op.minutes !== undefined) b.minutes = op.minutes;
         touched.add(b.id);
         claim(b);
         break;
@@ -139,6 +173,9 @@ export function applyEdits(day: Day, ops: readonly EditOp[], config: Config): Ed
         };
         b.evidence = b.evidence.filter((e) => e.start < t);
         b.end = t;
+        // A length you set was for the whole block; each half goes back to its times.
+        delete b.minutes;
+        delete second.minutes;
         blocks.push(second);
         touched.add(b.id).add(second.id);
         break;
@@ -153,6 +190,9 @@ export function applyEdits(day: Day, ops: readonly EditOp[], config: Config): Ed
         if (found.length !== ids.length) break;
         found.sort((a, b) => a.start.getTime() - b.start.getTime());
         const [first, ...rest] = found as [Block, ...Block[]];
+        // Lengths you set carry over: the merged block counts what its parts counted.
+        if (found.some((b) => b.minutes !== undefined))
+          first.minutes = found.reduce((sum, b) => sum + blockMinutes(b), 0);
         first.end = new Date(Math.max(...found.map((b) => b.end.getTime())));
         first.evidence = found.flatMap((b) => b.evidence);
         blocks = blocks.filter((b) => !rest.includes(b));
@@ -260,6 +300,7 @@ export function describeEdits(day: Day, ops: readonly EditOp[]): string[] {
         if (op.billable === false) parts.push("not billed");
         if (op.billable === true) parts.push("billed");
         if (op.confirmed === true) parts.push("attended");
+        if (op.minutes !== undefined) parts.push(`length → ${formatDuration(op.minutes)}`);
         return `${name(op.id)}: ${parts.join(", ") || "no change"}`;
       }
       case "delete":

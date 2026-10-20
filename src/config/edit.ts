@@ -1,0 +1,52 @@
+import type { Config, SourceConfig } from "./schema";
+
+// Small pure changes to a config, for the setup screen. Each returns a new config; saving it
+// (and validating) is the caller's job.
+
+/** Turns a kind of source on (adding `source` if none of its type is there) or off (all of it). */
+export function withSource(config: Config, source: SourceConfig, on: boolean): Config {
+  const others = config.sources.filter((s) => s.type !== source.type);
+  const existing = config.sources.filter((s) => s.type === source.type);
+  return {
+    ...config,
+    sources: on ? [...others, ...(existing.length ? existing : [source])] : others,
+  };
+}
+
+/** Claude Code project folders to leave out. An empty list removes the key (TOML has no undefined). */
+export function withClaudeExclude(config: Config, exclude: string[]): Config {
+  return {
+    ...config,
+    sources: config.sources.map((s) => {
+      if (s.type !== "claude-code") return s;
+      const { exclude: _old, ...rest } = s;
+      return exclude.length ? { ...rest, exclude } : rest;
+    }),
+  };
+}
+
+export function withDay(config: Config, day: Partial<Config["day"]>): Config {
+  return { ...config, day: { ...config.day, ...day } };
+}
+
+export function withAi(config: Config, backend: Config["ai"]["backend"]): Config {
+  return { ...config, ai: { ...config.ai, backend } };
+}
+
+/** 450 → "7h30m", the duration format config.toml uses. */
+export function durationText(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h ? `${h}h` : ""}${m ? `${m}m` : ""}` || "0m";
+}
+
+/** "09:30" ↔ minutes since midnight. */
+export function clockMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+export function clockText(minutes: number): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+}

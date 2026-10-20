@@ -46,25 +46,27 @@ node dist/cli.js               # review today
 
 ## The review screen
 
-One line per block — time, project, one sentence, hours. Questions are a `?` and a yellow line under their row; select a row to see the evidence behind it. Gaps read as a question, not a wall of shading.
+`clockout` opens on today: the logo standing on the day's hours (each project fills its share of the band towards your daily target), the total (`5h 45m of 8h`), and the chat bar. Press **Enter** to open the day as cards, one per timesheet row: what it was, the project and task, where the time came from, and how long, in a big box you can click and type over. Meetings you haven't confirmed come as cards with **Attended** / **Skipped**; a dashed card adds time nothing recorded. Everything is clickable; the keyboard does it all too.
 
 | Key | Does |
 |---|---|
-| type or dictate, then **Enter** | Send a correction in plain words |
-| **/** | Open the command menu: pick a day, copy sheet, copy as markdown, undo, previous/next day |
-| **y** / **n** | Apply or discard the proposed changes |
-| **↑ ↓** | Select a block or gap; its evidence shows underneath |
-| **PgUp** / **PgDn** | Previous / next day |
-| **Esc** | Clear the input |
-| **Ctrl+C** | Quit |
+| type or dictate, then **Enter** | Send a correction in plain words; review the proposed change, then **Enter** applies, **Esc** goes back to your words |
+| **↑ ↓** | Select a card |
+| **Enter** on a card | Type its length: `1h 45`, `1:45`, `1.75`, `45m` (or type it into the chat bar) |
+| **-** / **+** | Shorten or lengthen the selected card by your rounding step |
+| **Ctrl+Y** (or **Copy sheet**) | Copy the timesheet, tab-separated, once no meeting is waiting |
+| **Ctrl+Z** | Undo |
+| **Ctrl+P** (or **Setup**) | Setup: tick sources (Google Calendar, Claude Code and which of its projects, GitHub), daily target, AI helper, working hours, rounding |
+| click the date | Pick another day; **PgUp** / **PgDn** step a day |
+| **Esc** | Back home · **Ctrl+C** quits |
 
-The command menu and the day picker (a mini month; bright days have a draft) live in the input, so the screen itself stays quiet. Dictated text arrives as one paste, so a line break never sends it early.
+A length you set counts exactly that on the timesheet; nothing else moves. Dictated text arrives as one paste, so a line break never sends it early.
 
 Things you can say:
 
 - "the gap after lunch was lunch"
 - "I skipped the design sync, but I was at the Acme call"
-- "block 2 was two hours"
+- "the standup ran to 45 minutes"
 - "add 30 minutes reviewing Sam's PR on acme"
 - "put the standup under Acme API, task Meetings"
 
@@ -95,6 +97,7 @@ timezone = "Asia/Kolkata"
 working_hours = "09:30-18:30"        # gaps are only flagged inside these
 idle_cutoff = "20m"                  # a pause longer than this ends a block
 round_to = "15m"
+target = "8h"                        # the hours you aim to log; the bar fills towards it
 
 [tasks]                              # task names for your timesheet
 work = "Development"
@@ -107,6 +110,7 @@ model = "haiku"
 
 [[sources]]
 type = "claude-code"
+# exclude = ["-Users-ada-personal"]   # project folders to leave out (Setup writes this)
 
 [[sources]]
 type = "github"

@@ -56,6 +56,11 @@ export interface Block {
   billable: boolean;
   /** False for meetings you haven't confirmed attending; they're left out until you do. */
   confirmed: boolean;
+  /**
+   * Minutes you set by hand ("standup ran to 45 minutes"). Replaces end − start on the
+   * timesheet; the times themselves stay as they were.
+   */
+  minutes?: number;
   evidence: Activity[];
 }
 
@@ -113,6 +118,8 @@ export type EditOp =
       summary?: string;
       billable?: boolean;
       confirmed?: boolean;
+      /** Minutes to count for the block, regardless of its times. */
+      minutes?: number;
     }
   | { op: "delete"; id: string }
   | { op: "split"; id: string; at: LocalTime }

@@ -33,7 +33,7 @@ One npm package, `clockout-cli` (bin: `clockout`), Node ≥ 22. The bare `clocko
 
 | Surface | Role |
 |---|---|
-| **TUI** (`clockout`, built with Ink) | Main surface. A calm block list (no timeline strip): one line per block — time, project, one sentence, hours — with questions and evidence shown as quiet lines under their row. Corrections go through the always-focused input bar (`/` opens commands, including a day picker for filling previous days). |
+| **TUI** (`clockout`, built with Ink) | Main surface, clickable ([ADR 0005](adr/0005-clickable-tui.md)). Home: the logo on the day's hours against a daily target, and the chat bar. The day: one card per timesheet row with an editable duration. Setup (ctrl+p) ticks sources and sets the target. |
 | **Plain CLI** (`clockout today --md`, `--json`) | Scripting and piping; no interactive UI. |
 | **MCP server + skill** (`clockout mcp`) | Run Clockout from inside your agent: "fill in yesterday's timesheet". The agent's own model does the AI work. |
 | `clockout serve` *(stretch)* | Small local web view of the same data. |
@@ -44,25 +44,32 @@ Voice in the terminal: Wispr Flow pastes into Terminal, iTerm2, Ghostty, Warp, k
 
 ### Review screen
 
+What counts on a timesheet is how long each thing took, not when, so the screen leads with hours.
+
 ```
-  ◷ clockout · Fri, Oct 16 · draft · 5.75h · 5 questions · AI: Claude Code (haiku)
-  ▍  09:30–10:00 Meetings            Daily standup                          0h30
-      calendar: Daily standup
-      10:00–12:15 Acme API            Fix auth token refresh race (PR #87)   2h15
-      12:15–14:00 Nothing recorded 12:15–14:00. Lunch, a break, or work?
-      14:00–16:33 dev-example/clockout Build CSV export command (PR #48)     2h33
-    ? 15:00–15:30 Meetings            Design sync                            0h30
-      Did you attend "Design sync" (15:00–15:30)? You replied maybe.
-      16:40–17:00 Acme API            Review login rate-limiting (PR #212)   0h20
-  ▏ Say it, or / for commands
-  ▏ enter to send
+            ▐ c l ◷ c k o u t ▌      ← the band behind the logo fills by project towards the target
+                5h 45m of 8h
+  ┃ Tell me about your day…  "standup ran to 45 minutes"
+  ┃ Today · Fri, Oct 16 ▾                                   Setup
+
+  ← Fri, Oct 16                                           5h 45m of 8h
+  ╭──────────────────────────────────────────────────────────────────╮
+  │ Fix auth token refresh (PR #87)                     ╭────────╮   │
+  │ ● Acme API · Development                          − │ 2h 15m │ + │
+  │ Claude Code + GitHub · 17 prompts in 1 session      ╰────────╯   │
+  ╰──────────────────────────────────────────────────────────────────╯
+  ╭──────────────────────────────────────────────────────────────────╮
+  │ ? Design sync                                       ╭────────╮   │
+  │ Did you attend “Design sync”? You replied maybe.    │  30m   │   │
+  │  Attended   Skipped                                 ╰────────╯   │
+  ╰──────────────────────────────────────────────────────────────────╯
+  ╭┄ + Add time · 2h 15m untracked on this day ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮
 ```
 
-One line per block: time, project, one sentence, hours. Questions are a `?` and a
-yellow line under their row; evidence shows when a row is selected. Gaps read as a
-question, not a wall of shading. Type or dictate to correct; `/` opens the command
-menu (pick a day, copy sheet, copy as markdown, undo, previous/next day); the day
-picker is a mini month where days with a saved draft are bright.
+- **Home**: the logo on the hours bar, the total, the chat bar. Its date opens a month picker (days with a draft are dotted; Yesterday / Today); its Setup button and ctrl+p open setup.
+- **Day**: Enter opens one card per timesheet row (same grouping as the export), in the order the work started. The duration box takes a typed length (`1h 45`, `1:45`, `1.75`); − / + nudge by `round_to`. A length you set is stored on the block (`minutes`) and counts exactly that on the timesheet; times don't move. Meetings you haven't confirmed are cards with one-key answers. Gap questions get no card: untracked time only matters if you want hours there, which is what **Add time** is for (project, how long, what; Clockout places it).
+- **Corrections**: anything typed that isn't a length goes to the AI, which returns edit operations; they're shown as a proposal and applied on Enter. Ctrl+Z undoes.
+- **Setup**: a block per source to tick (Google Calendar signs in; Claude Code opens a searchable list of its projects, each tickable; GitHub), daily target, AI helper; working hours and rounding under More. Saved to config.toml as you go.
 
 ## 5. Sources
 
@@ -176,12 +183,14 @@ timezone = "Asia/Kolkata"
 working_hours = "09:30-18:30"
 idle_cutoff = "20m"
 round_to = "15m"
+target = "8h"        # hours you aim to log; the review screen fills towards it
 
 [ai]
 backend = "auto"     # auto | claude-code | codex | copilot | opencode | pi | antigravity | ollama | api | none
 
 [[sources]]
 type = "claude-code"
+exclude = []         # Claude Code project folders to leave out
 
 [[sources]]
 type = "github"

@@ -3,11 +3,11 @@ import { PassThrough } from "node:stream";
 import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
-import { buildDay } from "../../src/core/blocks";
-import { Clockout } from "../../src/prototypes/Clockout";
+import { App } from "../../src/tui/App";
 import { Clickable, MouseProvider, Overlay } from "../../src/tui/clickable";
 import { type MouseEvent, splitMouse, withMouse } from "../../src/tui/mouse";
-import { FIXTURE_DATE, fixtureActivities, fixtureConfig } from "../helpers/fixture-day";
+import { config, fakeActions } from "../helpers/fake-app";
+import { FIXTURE_DATE } from "../helpers/fixture-day";
 
 const tick = () => new Promise((r) => setTimeout(r, 30));
 
@@ -119,52 +119,66 @@ describe("mouse input", () => {
   });
 
   it("clicks: Setup opens setup, Claude Code opens its project search", async () => {
-    const config = fixtureConfig();
-    const day = buildDay(FIXTURE_DATE, await fixtureActivities(), config);
     const events = new EventEmitter();
     const { lastFrame } = render(
       <MouseProvider events={events}>
-        <Clockout day={day} config={config} width={120} height={40} />
+        <App
+          initialDate={FIXTURE_DATE}
+          today={FIXTURE_DATE}
+          config={config}
+          actions={fakeActions().actions}
+          width={120}
+          height={40}
+        />
       </MouseProvider>,
     );
-    await tick();
+    await until(lastFrame, "5h 45m of 8h");
     click(events, find(lastFrame() ?? "", "Setup"));
     await until(lastFrame, "Tick what Clockout reads");
     expect(lastFrame()).toContain("Tick what Clockout reads");
     click(events, find(lastFrame() ?? "", "Claude Code"));
     await until(lastFrame, "Search Claude Code projects");
     expect(lastFrame()).toContain("Search Claude Code projects");
-    expect(lastFrame()).toContain("acme/api");
+    expect(lastFrame()).toContain("acme-api");
   });
 
   it("clicks: the date opens the picker, and Yesterday switches the day", async () => {
-    const config = fixtureConfig();
-    const day = buildDay(FIXTURE_DATE, await fixtureActivities(), config);
     const events = new EventEmitter();
     const { lastFrame } = render(
       <MouseProvider events={events}>
-        <Clockout day={day} config={config} width={120} height={40} />
+        <App
+          initialDate={FIXTURE_DATE}
+          today={FIXTURE_DATE}
+          config={config}
+          actions={fakeActions().actions}
+          width={120}
+          height={40}
+        />
       </MouseProvider>,
     );
-    await tick();
+    await until(lastFrame, "5h 45m of 8h");
     click(events, find(lastFrame() ?? "", "Fri, Oct 16 ▾"));
     await until(lastFrame, "Oct 2026");
     expect(lastFrame()).toContain("Oct 2026");
     click(events, find(lastFrame() ?? "", "Yesterday"));
-    await until(lastFrame, "Nothing logged yet");
+    await until(lastFrame, "Yesterday · Thu, Oct 15");
     expect(lastFrame()).toContain("Yesterday · Thu, Oct 15");
-    expect(lastFrame()).toContain("Nothing logged yet");
   });
   it("ctrl+p doesn't open setup on top of the date picker", async () => {
-    const config = fixtureConfig();
-    const day = buildDay(FIXTURE_DATE, await fixtureActivities(), config);
     const events = new EventEmitter();
     const { lastFrame, stdin } = render(
       <MouseProvider events={events}>
-        <Clockout day={day} config={config} width={120} height={40} />
+        <App
+          initialDate={FIXTURE_DATE}
+          today={FIXTURE_DATE}
+          config={config}
+          actions={fakeActions().actions}
+          width={120}
+          height={40}
+        />
       </MouseProvider>,
     );
-    await tick();
+    await until(lastFrame, "5h 45m of 8h");
     click(events, find(lastFrame() ?? "", "Fri, Oct 16 ▾"));
     await until(lastFrame, "Oct 2026");
     stdin.write("\u0010"); // ctrl+p

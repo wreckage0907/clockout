@@ -29,6 +29,8 @@ const claudeCodeSource = z.object({
   type: z.literal("claude-code"),
   /** Defaults to $CLAUDE_CONFIG_DIR/projects or ~/.claude/projects. */
   projects_dir: z.string().optional(),
+  /** Project folders (names inside projects_dir) to leave out, e.g. personal ones. */
+  exclude: z.array(z.string().min(1)).optional(),
 });
 
 const githubSource = z.object({
@@ -91,6 +93,8 @@ export const configSchema = z.object({
       working_hours: workingHours.default("09:30-18:30"),
       idle_cutoff: duration.default("20m"),
       round_to: duration.default("15m"),
+      /** Hours you aim to log in a day; the review screen fills towards it. */
+      target: duration.default("8h"),
     })
     .prefault({}),
   /** Task names by kind of block; a project's own `task` wins for work blocks. */

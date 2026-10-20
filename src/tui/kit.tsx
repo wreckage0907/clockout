@@ -1,9 +1,9 @@
 import { Box, type Key, Text, useInput, usePaste } from "ink";
 import { type ReactNode, useEffect, useState } from "react";
-import { addDays } from "../core/time";
-import { Clickable, Overlay } from "../tui/clickable";
-import { hm, T } from "../tui/theme";
-import { parseDuration } from "./answers";
+import { addDays, parseDuration } from "../core/time";
+import type { Segment } from "./cards";
+import { Clickable, Overlay } from "./clickable";
+import { hm, T } from "./theme";
 
 // ── Colour ──────────────────────────────────────────────────────────────────
 
@@ -47,12 +47,6 @@ function wordmarkRows(): { ch: string; bright: boolean }[][] {
     { ch: " ", bright: false },
     ...[...(right[r] ?? "")].map((ch) => ({ ch, bright: true })),
   ]);
-}
-
-export interface Segment {
-  label: string;
-  color: string;
-  minutes: number;
 }
 
 /**
@@ -363,6 +357,7 @@ export function ChatBar({
   today,
   onDate,
   actions,
+  busy,
 }: {
   value: string;
   placeholder: string;
@@ -371,6 +366,8 @@ export function ChatBar({
   today: string;
   onDate: () => void;
   actions: ReactNode;
+  /** Shown instead of the text while something's running, e.g. "Asking Claude Code…". */
+  busy?: string | null;
 }) {
   return (
     <Box
@@ -387,7 +384,13 @@ export function ChatBar({
       paddingY={1}
     >
       <Text wrap="truncate-start">
-        <Typed value={value} placeholder={placeholder} />
+        {busy ? (
+          <Text color={T.muted}>
+            <Spinner /> {busy}
+          </Text>
+        ) : (
+          <Typed value={value} placeholder={placeholder} />
+        )}
       </Text>
       <Box height={1} />
       <Box justifyContent="space-between">

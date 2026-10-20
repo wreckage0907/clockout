@@ -11,6 +11,7 @@ import { detectClaudeCode, projectsDir } from "./paths";
 export interface ClaudeCodeConfig {
   type: "claude-code";
   projects_dir?: string | undefined;
+  exclude?: string[] | undefined;
 }
 
 // Only the fields Clockout uses; everything else in a line is ignored.
@@ -47,7 +48,8 @@ export const claudeCode: Source<ClaudeCodeConfig> = {
   detect: detectClaudeCode,
   async *collect(range, cfg, ctx) {
     const resolveRepo = ctx.resolveRepo ?? repoForDir;
-    for await (const file of sessionFiles(projectsDir(ctx, cfg.projects_dir), range)) {
+    const skip = new Set(cfg.exclude ?? []);
+    for await (const file of sessionFiles(projectsDir(ctx, cfg.projects_dir), range, skip)) {
       const session = await readSession(file);
       yield* toActivities(session, range, resolveRepo);
     }
@@ -55,7 +57,11 @@ export const claudeCode: Source<ClaudeCodeConfig> = {
 };
 
 /** Session files that could contain events in `range` (modified on or after its start). */
-async function* sessionFiles(dir: string, range: DateRange): AsyncGenerator<string> {
+async function* sessionFiles(
+  dir: string,
+  range: DateRange,
+  skip: Set<string>,
+): AsyncGenerator<string> {
   let projects: string[];
   try {
     projects = await readdir(dir);
@@ -63,6 +69,7 @@ async function* sessionFiles(dir: string, range: DateRange): AsyncGenerator<stri
     return;
   }
   for (const project of projects) {
+    if (skip.has(project)) continue;
     let files: string[];
     try {
       files = await readdir(join(dir, project));
