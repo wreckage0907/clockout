@@ -1,5 +1,5 @@
 import { Box, Text, useInput } from "ink";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Clickable } from "../tui/clickable";
 import { hm, T } from "../tui/theme";
 import { Button, Dialog, Spinner, useDraft } from "./kit";
@@ -75,13 +75,16 @@ export function Setup({
   const [end, setEnd] = useState(18 * 60 + 30);
   const [round, setRound] = useState(15);
   const search = useDraft(open !== null);
+  // The pretend sign-in; closing setup cancels it.
+  const signIn = useRef<NodeJS.Timeout | undefined>(undefined);
+  useEffect(() => () => clearTimeout(signIn.current), []);
 
   const tick = (s: Source) => {
     if (s.state === "missing" || s.state === "soon" || busy) return;
     if (on.includes(s.id)) return setOn((ids) => ids.filter((id) => id !== s.id));
     if (!s.signIn) return setOn((ids) => [...ids, s.id]);
     setBusy(s.id);
-    setTimeout(() => {
+    signIn.current = setTimeout(() => {
       setBusy(null);
       setOn((ids) => [...ids, s.id]);
     }, 1200);

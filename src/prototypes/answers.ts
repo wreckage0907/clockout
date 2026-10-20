@@ -1,7 +1,7 @@
 import type { Config } from "../config/schema";
 import { applyEdits, BREAK_PROJECT } from "../core/edits";
 import { atLocalTime, localTime, MINUTE, minutesBetween } from "../core/time";
-import type { Block, Day, EditOp, Gap, Question } from "../core/types";
+import type { Block, Day, EditOp, Question } from "../core/types";
 
 /** A one-key answer to a question, and the edits it stands for. */
 export interface Choice {
@@ -9,32 +9,21 @@ export interface Choice {
   ops: EditOp[];
 }
 
-/** What a question is about, for display: the block or gap, its times and length. */
-interface Subject {
-  start: Date;
-  end: Date;
-  minutes: number;
-  block?: Block;
-  gap?: Gap;
+// Only questions about a meeting get an answer card. Gap questions are left to the "Add time"
+// card: an untracked stretch only matters if you want hours there, and lunch never goes on the
+// sheet, so there's nothing to ask.
+
+/** The meeting a question is about, if it is about one. */
+export function meetingOf(day: Day, q: Question): Block | undefined {
+  return q.blockId ? day.blocks.find((b) => b.id === q.blockId) : undefined;
 }
 
-function subjectOf(day: Day, q: Question): Subject | null {
-  const block = q.blockId ? day.blocks.find((b) => b.id === q.blockId) : undefined;
-  const gap = q.gapId ? day.gaps.find((g) => g.id === q.gapId) : undefined;
-  const at = block ?? gap;
-  if (!at) return null;
-  return { start: at.start, end: at.end, minutes: minutesBetween(at.start, at.end), block, gap };
-}
-
-/** The question in plain words, without the times (the screen shows those). */
-export function headline(day: Day, q: Question): string {
-  const s = subjectOf(day, q);
-  if (s?.gap) return "Nothing recorded here. What were you doing?";
-  const title = s?.block?.summary ?? "this meeting";
-  if (q.kind === "overlap") return `“${title}” overlaps another meeting. Were you in it?`;
+/** The question in plain words, without the times (the card shows those). */
+export function headline(b: Block, q: Question): string {
+  if (q.kind === "overlap") return `“${b.summary}” overlaps another meeting. Were you in it?`;
   if (q.text.includes("own calendar"))
-    return `“${title}” is a block on your own calendar. Was it work?`;
-  return `Did you attend “${title}”?`;
+    return `“${b.summary}” is a block on your own calendar. Was it work?`;
+  return `Did you attend “${b.summary}”?`;
 }
 
 /** Extra context under the headline, from the original question. */
@@ -42,60 +31,10 @@ export function why(q: Question): string | null {
   if (q.text.includes("replied maybe")) return "You replied maybe.";
   if (q.text.includes("didn't reply")) return "You didn't reply to the invite.";
   const working = /You were (?:working on|active in) ([^\s.]+)/.exec(q.text)?.[1];
-  if (working) return `You were also working on ${working} then.`;
-  const agent = /an agent was working in (\S+) for (\d+) min/.exec(q.text);
-  if (agent) return `An agent was working in ${agent[1]} for ${agent[2]} min.`;
-  return null;
+  return working ? `You were also working on ${working} then.` : null;
 }
 
-/** The block just before a gap, so "kept working" can name the project. */
-function before(day: Day, gap: Gap): Block | undefined {
-  return day.blocks
-    .filter((b) => b.end.getTime() <= gap.start.getTime() && b.kind !== "meeting")
-    .sort((a, b) => b.end.getTime() - a.end.getTime())[0];
-}
-
-export function choicesFor(day: Day, q: Question): Choice[] {
-  const s = subjectOf(day, q);
-  if (!s) return [];
-  if (s.gap) {
-    const g = s.gap;
-    const prev = before(day, g);
-    const out: Choice[] = [
-      {
-        label: "Lunch",
-        ops: [
-          {
-            op: "fill_gap",
-            gapId: g.id,
-            project: BREAK_PROJECT,
-            summary: "Lunch",
-            billable: false,
-          },
-        ],
-      },
-      {
-        label: "Break",
-        ops: [
-          {
-            op: "fill_gap",
-            gapId: g.id,
-            project: BREAK_PROJECT,
-            summary: "Break",
-            billable: false,
-          },
-        ],
-      },
-    ];
-    if (prev)
-      out.push({
-        label: `Kept on ${short(prev.project)}`,
-        ops: [{ op: "fill_gap", gapId: g.id, project: prev.project, summary: prev.summary }],
-      });
-    return out;
-  }
-  const b = s.block;
-  if (!b) return [];
+export function choicesFor(b: Block, q: Question): Choice[] {
   const ownBlock = q.text.includes("own calendar");
   return [
     {
@@ -152,18 +91,21 @@ export function evidenceLine(b: Block): string {
 
 /**
  * A duration typed by hand: "1h", "1h 15m", "1h15", "45m", "1:15", "1.5", "1.5h", "90".
- * A bare number up to 12 is hours, anything bigger is minutes. Null when it isn't one.
+ * A decimal is hours; a whole number up to 12 is hours, bigger is minutes. Minutes past an
+ * hour must be under 60. Null when it isn't a duration.
  */
 export function parseDuration(text: string): number | null {
   const t = text.trim().toLowerCase();
   let m = /^(\d+(?:\.\d+)?)\s*h(?:ours?|rs?)?(?:\s*(\d+)\s*m?(?:in(?:ute)?s?)?)?$/.exec(t);
-  if (m) return Math.round(Number(m[1]) * 60 + Number(m[2] ?? 0));
+  if (m) return Number(m[2] ?? 0) < 60 ? Math.round(Number(m[1]) * 60 + Number(m[2] ?? 0)) : null;
   m = /^(\d+)\s*m(?:in(?:ute)?s?)?$/.exec(t);
   if (m) return Number(m[1]);
   m = /^(\d+):(\d{2})$/.exec(t);
-  if (m) return Number(m[1]) * 60 + Number(m[2]);
-  m = /^(\d+(?:\.\d+)?)$/.exec(t);
-  if (m) return Number(m[1]) <= 12 ? Math.round(Number(m[1]) * 60) : Number(m[1]);
+  if (m) return Number(m[2]) < 60 ? Number(m[1]) * 60 + Number(m[2]) : null;
+  m = /^\d+\.\d+$/.exec(t);
+  if (m) return Math.round(Number(t) * 60);
+  m = /^\d+$/.exec(t);
+  if (m) return Number(t) <= 12 ? Number(t) * 60 : Number(t);
   return null;
 }
 

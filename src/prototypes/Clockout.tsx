@@ -67,13 +67,6 @@ export function Clockout({
   const [setup, setSetup] = useState(false);
   const [target, setTarget] = useState(8 * 60);
 
-  useInput(
-    (ch, key) => {
-      if (key.ctrl && ch === "p") setSetup(true);
-    },
-    { isActive: !setup },
-  );
-
   const shown: Day =
     date === day.date
       ? day
@@ -187,7 +180,8 @@ function Flow({
 
   useInput(
     (ch, key) => {
-      if (overlay) return; // the overlay owns the keys
+      if (overlay) return; // the open picker or dialog owns the keys, ctrl+p included
+      if (key.ctrl && ch === "p") return onSetup();
       if (editing) {
         if (key.escape) return setEditing(null);
         if (key.return) return commitEdit();

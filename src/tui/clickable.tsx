@@ -11,14 +11,19 @@ import {
 } from "react";
 import type { MouseEvent } from "./mouse";
 
-interface Target {
-  ref: RefObject<DOMElement | null>;
-  layer: number;
+interface Handlers {
   click?: () => void;
   wheel?: (dir: 1 | -1) => void;
   setHover?: (on: boolean) => void;
   /** Set on an overlay's own box: called for clicks that land outside it. */
   outside?: () => void;
+}
+
+interface Target {
+  ref: RefObject<DOMElement | null>;
+  layer: number;
+  /** Read at event time, so a box that gains or loses `onClick` after mounting is current. */
+  on: RefObject<Handlers>;
 }
 
 const Registry = createContext<{ add: (t: Target) => () => void } | null>(null);
@@ -77,22 +82,26 @@ export function MouseProvider({
     };
     const onMouse = (e: MouseEvent) => {
       if (e.kind === "move") {
-        const { best } = pick(e.x, e.y, (t) => Boolean(t.click));
+        const { best } = pick(e.x, e.y, (t) => Boolean(t.on.current.click));
         if (best !== hovered.current) {
-          hovered.current?.setHover?.(false);
-          best?.setHover?.(true);
+          hovered.current?.on.current.setHover?.(false);
+          best?.on.current.setHover?.(true);
           hovered.current = best;
         }
         return;
       }
       if (e.kind === "wheelUp" || e.kind === "wheelDown") {
-        pick(e.x, e.y, (t) => Boolean(t.wheel)).best?.wheel?.(e.kind === "wheelUp" ? -1 : 1);
+        const { best } = pick(e.x, e.y, (t) => Boolean(t.on.current.wheel));
+        best?.on.current.wheel?.(e.kind === "wheelUp" ? -1 : 1);
         return;
       }
       if (e.kind !== "press" || e.button !== "left") return;
-      const { best, top, all } = pick(e.x, e.y, (t) => Boolean(t.click || t.outside));
-      if (best?.click) return best.click();
-      if (!best && top > 0) for (const t of all) if (t.layer === top) t.outside?.();
+      const { best, top, all } = pick(e.x, e.y, (t) =>
+        Boolean(t.on.current.click || t.on.current.outside),
+      );
+      const click = best?.on.current.click;
+      if (click) return click();
+      if (!best && top > 0) for (const t of all) if (t.layer === top) t.on.current.outside?.();
     };
     events.on("mouse", onMouse);
     return () => {
@@ -103,24 +112,13 @@ export function MouseProvider({
   return <Registry value={registry}>{children}</Registry>;
 }
 
-function useTarget(t: Omit<Target, "ref" | "layer">) {
+function useTarget(handlers: Handlers) {
   const ref = useRef<DOMElement>(null);
   const registry = useContext(Registry);
   const layer = useContext(Layer);
-  const latest = useRef(t);
-  latest.current = t;
-  useEffect(
-    () =>
-      registry?.add({
-        ref,
-        layer,
-        click: latest.current.click ? () => latest.current.click?.() : undefined,
-        wheel: latest.current.wheel ? (d) => latest.current.wheel?.(d) : undefined,
-        outside: latest.current.outside ? () => latest.current.outside?.() : undefined,
-        setHover: latest.current.setHover,
-      }),
-    [registry, layer],
-  );
+  const on = useRef(handlers);
+  on.current = handlers;
+  useEffect(() => registry?.add({ ref, layer, on }), [registry, layer]);
   return ref;
 }
 

@@ -1,11 +1,12 @@
 import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
 import { buildDay } from "../../src/core/blocks";
 import { Clockout } from "../../src/prototypes/Clockout";
 import { Clickable, MouseProvider, Overlay } from "../../src/tui/clickable";
-import { type MouseEvent, splitMouse } from "../../src/tui/mouse";
+import { type MouseEvent, splitMouse, withMouse } from "../../src/tui/mouse";
 import { FIXTURE_DATE, fixtureActivities, fixtureConfig } from "../helpers/fixture-day";
 
 const tick = () => new Promise((r) => setTimeout(r, 30));
@@ -40,12 +41,48 @@ describe("mouse input", () => {
     ]);
   });
 
-  it("holds a report split across chunks, but never a lone Escape", () => {
-    const first = splitMouse("", "x\u001b[<0;1");
-    expect(first).toMatchObject({ rest: "x", events: [], pending: "\u001b[<0;1" });
-    const second = splitMouse(first.pending, ";2M");
-    expect(second.events).toHaveLength(1);
-    expect(splitMouse("", "\u001b").rest).toBe("\u001b");
+  it("holds a report split across chunks, wherever the split falls", () => {
+    for (const [a, b] of [
+      ["x\u001b[<0;1", ";2M"],
+      ["x\u001b[", "<0;1;2M"],
+      ["x\u001b", "[<0;1;2M"],
+    ] as const) {
+      const first = splitMouse("", a);
+      expect(first.rest).toBe("x");
+      const second = splitMouse(first.pending, b);
+      expect(second).toMatchObject({ rest: "", pending: "" });
+      expect(second.events).toEqual([{ x: 0, y: 1, kind: "press", button: "left" }]);
+    }
+  });
+
+  it("a held Escape still reaches the app when nothing follows it", async () => {
+    const input = new PassThrough();
+    const { stdin, stop } = withMouse(input as unknown as NodeJS.ReadStream);
+    const got: string[] = [];
+    stdin.on("data", (d: Buffer) => got.push(d.toString()));
+    input.write("\u001b");
+    await tick();
+    stop();
+    expect(got.join("")).toBe("\u001b");
+  });
+
+  it("a box that gets an onClick after mounting becomes clickable", async () => {
+    const events = new EventEmitter();
+    const hits: string[] = [];
+    const view = (on: boolean) => (
+      <MouseProvider events={events}>
+        <Clickable onClick={on ? () => hits.push("hit") : undefined}>
+          <Text>target</Text>
+        </Clickable>
+      </MouseProvider>
+    );
+    const { lastFrame, rerender } = render(view(false));
+    await tick();
+    click(events, find(lastFrame() ?? "", "target"));
+    rerender(view(true));
+    await tick();
+    click(events, find(lastFrame() ?? "", "target"));
+    expect(hits).toEqual(["hit"]);
   });
 
   it("clicks the innermost target, and an overlay swallows clicks under it", async () => {
@@ -117,5 +154,26 @@ describe("mouse input", () => {
     await until(lastFrame, "Nothing logged yet");
     expect(lastFrame()).toContain("Yesterday · Thu, Oct 15");
     expect(lastFrame()).toContain("Nothing logged yet");
+  });
+  it("ctrl+p doesn't open setup on top of the date picker", async () => {
+    const config = fixtureConfig();
+    const day = buildDay(FIXTURE_DATE, await fixtureActivities(), config);
+    const events = new EventEmitter();
+    const { lastFrame, stdin } = render(
+      <MouseProvider events={events}>
+        <Clockout day={day} config={config} width={120} height={40} />
+      </MouseProvider>,
+    );
+    await tick();
+    click(events, find(lastFrame() ?? "", "Fri, Oct 16 ▾"));
+    await until(lastFrame, "Oct 2026");
+    stdin.write("\u0010"); // ctrl+p
+    await tick();
+    expect(lastFrame()).not.toContain("Tick what Clockout reads");
+    stdin.write("\u001b"); // esc closes the picker…
+    await until(lastFrame, "Setup");
+    stdin.write("\u0010"); // …and now ctrl+p opens setup
+    await until(lastFrame, "Tick what Clockout reads");
+    expect(lastFrame()).toContain("Tick what Clockout reads");
   });
 });

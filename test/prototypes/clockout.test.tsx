@@ -2,7 +2,7 @@ import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
 import { buildDay } from "../../src/core/blocks";
 import type { Day } from "../../src/core/types";
-import { choicesFor, parseDuration } from "../../src/prototypes/answers";
+import { choicesFor, meetingOf, parseDuration } from "../../src/prototypes/answers";
 import { Clockout } from "../../src/prototypes/Clockout";
 import { buildCards } from "../../src/prototypes/model";
 import { hm } from "../../src/tui/theme";
@@ -43,10 +43,30 @@ describe("prototype helpers", () => {
     expect(parseDuration("lunch")).toBeNull();
   });
 
+  it("reads any decimal as hours, and rejects minutes past 59", () => {
+    expect(parseDuration("12")).toBe(720);
+    expect(parseDuration("13")).toBe(13);
+    expect(parseDuration("12.5")).toBe(750);
+    expect(parseDuration("13.5")).toBe(810);
+    expect(parseDuration("1:60")).toBeNull();
+    expect(parseDuration("1h 75m")).toBeNull();
+  });
+
   it("offers one-key answers for meetings", () => {
-    const meeting = day.questions.find((q) => q.text.includes("Design sync"));
-    if (!meeting) throw new Error("fixture day changed");
-    expect(choicesFor(day, meeting).map((c) => c.label)).toEqual(["Attended", "Skipped"]);
+    const q = day.questions.find((x) => x.text.includes("Design sync"));
+    const meeting = q && meetingOf(day, q);
+    if (!q || !meeting) throw new Error("fixture day changed");
+    expect(choicesFor(meeting, q).map((c) => c.label)).toEqual(["Attended", "Skipped"]);
+  });
+
+  it("asks only about meetings: untracked time goes through the Add time card", () => {
+    const asks = buildCards(day, config, {}).filter((c) => c.kind === "ask");
+    expect(asks.map((c) => c.title)).toEqual([
+      "Design sync",
+      "Focus: write release notes",
+      "Acme weekly sync",
+    ]);
+    expect(day.questions.filter((q) => q.kind === "gap")).toHaveLength(2);
   });
 
   it("makes one card per timesheet row, in the order the work started, and meetings to answer", () => {

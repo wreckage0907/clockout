@@ -11,6 +11,7 @@ import {
   choicesFor,
   evidenceLine,
   headline,
+  meetingOf,
   short,
   why,
 } from "./answers";
@@ -83,8 +84,8 @@ export function buildCards(day: Day, config: Config, overrides: Record<string, n
     };
   });
   const asks: Card[] = day.questions.flatMap((q: Question) => {
-    const b = q.blockId ? day.blocks.find((x) => x.id === q.blockId) : undefined;
-    if (!b) return [];
+    const b = meetingOf(day, q);
+    if (!b) return []; // gap questions: see the note in answers.ts
     return [
       {
         key: `ask:${b.id}`,
@@ -95,9 +96,9 @@ export function buildCards(day: Day, config: Config, overrides: Record<string, n
         from: fromLine([b]),
         minutes: minutesBetween(b.start, b.end),
         edited: false,
-        question: headline(day, q),
+        question: headline(b, q),
         reason: why(q),
-        choices: choicesFor(day, q),
+        choices: choicesFor(b, q),
         first: b.start.getTime(),
       },
     ];

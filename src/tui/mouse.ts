@@ -26,7 +26,8 @@ function parseSgr(code: number, col: number, row: number, final: string): MouseE
 
 /**
  * Splits terminal input into mouse events and everything else. A trailing piece that could be
- * the start of a mouse report is held back until the next chunk. Pure.
+ * the start of a mouse report (ESC, ESC [, ESC [ < …) is held back as `pending` for the next
+ * chunk; `withMouse` hands it on as typed input if nothing follows. Pure.
  */
 export function splitMouse(pending: string, chunk: string) {
   const text = pending + chunk;
@@ -36,10 +37,11 @@ export function splitMouse(pending: string, chunk: string) {
     return "";
   });
   const held = PARTIAL.exec(rest)?.[0] ?? "";
-  // A lone ESC is the Escape key; only hold sequences that have started a mouse report.
-  const keep = held.startsWith("\u001b[<") ? held : "";
-  return { events, rest: keep ? rest.slice(0, -keep.length) : rest, pending: keep };
+  return { events, rest: held ? rest.slice(0, -held.length) : rest, pending: held };
 }
+
+/** How long a possible start of a mouse report waits for the rest before it counts as keys. */
+const HOLD_MS = 10;
 
 /** Escape codes that turn click, drag and motion reporting on (SGR encoding) and off. */
 export const MOUSE_ON = "\u001b[?1000h\u001b[?1003h\u001b[?1006h";
@@ -68,16 +70,28 @@ export function withMouse(input: NodeJS.ReadStream) {
     },
   });
   let pending = "";
+  let timer: NodeJS.Timeout | undefined;
   const onData = (data: Buffer | string) => {
+    clearTimeout(timer);
     const r = splitMouse(pending, data.toString());
     pending = r.pending;
     for (const e of r.events) mouse.emit("mouse", e);
     if (r.rest) proxy.write(r.rest);
+    // Terminals send a report in one write, so a piece still pending after a moment was a key
+    // (usually Escape): pass it on.
+    if (pending)
+      timer = setTimeout(() => {
+        proxy.write(pending);
+        pending = "";
+      }, HOLD_MS);
   };
   input.on("data", onData);
   return {
     stdin: proxy as unknown as NodeJS.ReadStream,
     mouse,
-    stop: () => input.off("data", onData),
+    stop: () => {
+      clearTimeout(timer);
+      input.off("data", onData);
+    },
   };
 }
