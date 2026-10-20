@@ -1,6 +1,6 @@
 {
   "name": "clockout-cli",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Turn your coding-agent sessions, GitHub activity and calendar into a ready-to-paste timesheet, corrected by voice.",
   "keywords": [
     "timesheet",
