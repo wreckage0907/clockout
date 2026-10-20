@@ -6,6 +6,7 @@ import {
   formatDuration,
   localDate,
   localTime,
+  parseDuration,
   roundedHours,
 } from "../../src/core/time";
 
@@ -44,5 +45,25 @@ describe("time helpers", () => {
   it("formats durations", () => {
     expect(formatDuration(95)).toBe("1h35");
     expect(formatDuration(50)).toBe("0h50");
+  });
+
+  it("reads durations the way people type them", () => {
+    expect(parseDuration("1h")).toBe(60);
+    expect(parseDuration("1h 45")).toBe(105);
+    expect(parseDuration("1h15")).toBe(75);
+    expect(parseDuration("45m")).toBe(45);
+    expect(parseDuration("45 minutes")).toBe(45);
+    expect(parseDuration("1:30")).toBe(90);
+    expect(parseDuration("1.75")).toBe(105);
+    expect(parseDuration("90")).toBe(90);
+    expect(parseDuration("lunch")).toBeNull();
+  });
+
+  it("reads any decimal as hours, and rejects minutes past 59", () => {
+    expect(parseDuration("12")).toBe(720);
+    expect(parseDuration("13")).toBe(13);
+    expect(parseDuration("12.5")).toBe(750);
+    expect(parseDuration("1:60")).toBeNull();
+    expect(parseDuration("1h 75m")).toBeNull();
   });
 });

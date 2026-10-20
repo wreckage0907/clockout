@@ -169,7 +169,7 @@ describe("buildDay rules", () => {
 
   it("mentions a running agent when asking about a gap", () => {
     const short = fixtureConfig({
-      day: { working_hours: "10:00-11:00", idle_cutoff: "20m", round_to: "15m" },
+      day: { working_hours: "10:00-11:00", idle_cutoff: "20m", round_to: "15m", target: "8h" },
     });
     const turn: Activity = {
       source: "test",

@@ -75,10 +75,10 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 ## Redesign — home, day cards, setup
 
-- [x] Prototype in `src/prototypes/`, tested on the fixture day: logo on the hours bar, chat bar with a clickable date picker, one card per timesheet row with a big editable duration, setup dialog (ctrl+p) with tickable sources
+- [x] Prototype on the fixture day: logo on the hours bar, chat bar with a clickable date picker, one card per timesheet row with a big editable duration, setup dialog (ctrl+p) with tickable sources
 - [x] Mouse support ([ADR 0005](adr/0005-clickable-tui.md))
-- [ ] Port into the real review screen (then delete `src/prototypes/`): hours you set override computed hours (core + export), daily target in config, setup writes the config
-- [ ] Update the spec's review screen section
+- [x] Port into the real review screen: hours you set override computed hours (core + export), daily target in config, setup writes the config; `src/prototypes/` deleted
+- [x] Update the spec's review screen section
 
 ## Day 11 — Export and demo
 

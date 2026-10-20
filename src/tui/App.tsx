@@ -1,35 +1,51 @@
-import { Box, Text, useApp, useInput, usePaste, useWindowSize } from "ink";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Box, Text, useInput } from "ink";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Correction } from "../ai/edits";
 import type { OpenedDay } from "../collect";
-import type { Config } from "../config/schema";
-import { describeEdits } from "../core/edits";
-import { addDays, formatDuration, localTime, minutesBetween } from "../core/time";
-import { dayTotals, type Row, tableRows, timesheetRows } from "../core/timesheet";
-import type { Day, EditOp, Question } from "../core/types";
-import { formatHours, toMarkdown, toTsv } from "../export/formats";
+import { type Config, durationMinutes } from "../config/schema";
+import { describeEdits, placeTimeOps } from "../core/edits";
+import { addDays, parseDuration } from "../core/time";
+import { setRowMinutesOps, timesheetRows } from "../core/timesheet";
+import type { Day, EditOp } from "../core/types";
+import { toTsv } from "../export/formats";
 import type { StoredDay } from "../store/json-store";
-import { DayPicker } from "./DayPicker";
-import { InputBar } from "./shared";
-
-function isoDay(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-}
+import { buildCards, type Card, segments, untracked } from "./cards";
+import { Clickable } from "./clickable";
+import {
+  AddTimeDialog,
+  BarWordmark,
+  Button,
+  ChatBar,
+  DatePicker,
+  HoursBar,
+  longDate,
+  mix,
+  Pill,
+  Spinner,
+  Toast,
+  useDraft,
+  useToast,
+} from "./kit";
+import type { Choice } from "./questions";
+import { short } from "./questions";
+import { Setup, type SetupActions } from "./Setup";
+import { hm, projectColor, T } from "./theme";
 
 export interface AppActions {
   load(date: string): Promise<OpenedDay>;
-  /** null when no AI backend is configured. */
-  parse: ((text: string, day: Day) => Promise<Correction>) | null;
+  /** Whether typed corrections can go to an AI right now. */
+  hasAI(): boolean;
+  parse(text: string, day: Day): Promise<Correction>;
   commit(
     stored: StoredDay,
     ops: EditOp[],
-    text: string,
+    text?: string,
   ): Promise<{ stored: StoredDay; errors: string[] }>;
   undo(stored: StoredDay): Promise<StoredDay | null>;
   copy(text: string): Promise<void>;
-  /** Dates with a saved day, for the picker; null when unknown. */
-  savedDates: (() => Promise<string[]>) | null;
+  /** Dates with a saved day, for the date picker. */
+  savedDates(): Promise<string[]>;
+  setup: SetupActions;
 }
 
 interface Proposal {
@@ -39,474 +55,712 @@ interface Proposal {
   reply: string;
 }
 
-interface Command {
-  name: string;
-  hint: string;
-  run: () => void;
-}
-
-function weekday(date: string): string {
-  return new Date(`${date}T12:00:00Z`).toLocaleDateString("en", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  });
-}
-
-function evidenceLines(row: Row | undefined): string[] {
-  if (row?.kind !== "block") return [];
-  const ev = row.block.evidence;
-  const lines: string[] = [];
-  const sessions = new Set(ev.filter((a) => a.sessionId).map((a) => a.sessionId));
-  const prompts = ev.filter((a) => a.kind === "prompt").length;
-  if (prompts)
-    lines.push(
-      `${prompts} prompt${prompts === 1 ? "" : "s"} in ${sessions.size} session${sessions.size === 1 ? "" : "s"}`,
-    );
-  for (const a of ev.filter((x) => x.kind === "pr")) lines.push(`opened ${a.refs?.join(" ")}`);
-  for (const a of ev.filter((x) => x.kind === "review" || x.kind === "review_comment"))
-    lines.push(`reviewed ${a.refs?.join(" ")}`);
-  const meeting = ev.find((a) => a.kind === "meeting");
-  if (meeting) lines.push(`calendar: ${meeting.title}`);
-  if (lines.length === 0) lines.push("added by you");
-  return lines;
-}
-
-/** Questions grouped by the row they belong to. */
-function questionsByRow(day: Day): Map<string, Question[]> {
-  const map = new Map<string, Question[]>();
-  for (const q of day.questions) {
-    const id = q.blockId ?? q.gapId;
-    if (!id) continue;
-    const list = map.get(id) ?? [];
-    list.push(q);
-    map.set(id, list);
-  }
-  return map;
-}
-
+/**
+ * The review app. Home: the logo standing on the day's hours, the total, and the chat bar.
+ * Enter opens the day: one roomy card per timesheet row with a big duration you click and type
+ * over, meetings to answer, and a card to add untracked time. Setup opens over either with
+ * ctrl+p or the chat bar's button.
+ */
 export function App({
   initialDate,
-  config,
+  today,
+  config: initialConfig,
   actions,
-  aiLabel,
+  width,
+  height,
 }: {
   initialDate: string;
+  /** The user's local today, for "Today" / "Yesterday". */
+  today: string;
   config: Config;
   actions: AppActions;
-  aiLabel: string | null;
+  width: number;
+  height: number;
 }) {
-  const { exit } = useApp();
-  const { columns } = useWindowSize();
-  const width = Math.max(60, Math.min(columns, 120));
-
+  const [config, setConfig] = useState(initialConfig);
   const [date, setDate] = useState(initialDate);
+  const [view, setView] = useState<"home" | "day">("home");
+  const [setup, setSetup] = useState(false);
+  const [configChanged, setConfigChanged] = useState(false);
+  const [reload, setReload] = useState(0);
   const [stored, setStored] = useState<StoredDay | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [busy, setBusy] = useState<string | null>("Drafting your day…");
-  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string[]>([]);
+  const [overlay, setOverlay] = useState<"date" | "add" | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [selected, setSelected] = useState(0);
-  const [picker, setPicker] = useState(false);
-  const [cmdSel, setCmdSel] = useState(0);
-  const [savedDates, setSavedDates] = useState<string[]>([]);
+  const [sel, setSel] = useState(-1);
+  const [chip, setChip] = useState(0);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [toast, showToast] = useToast();
+  const draft = useDraft(!setup && !overlay && !editing && !busy && !proposal);
+  const pill = useDraft(!setup && editing !== null);
+  const offset = useRef(0);
 
   useEffect(() => {
-    if (!picker) return;
-    actions
-      .savedDates?.()
-      .then((ds) => setSavedDates(ds))
-      .catch(() => setSavedDates([]));
-  }, [picker, actions]);
-
-  useEffect(() => {
+    void reload;
     let live = true;
-    setBusy(aiLabel ? `Drafting ${date} (summaries by ${aiLabel})…` : `Drafting ${date}…`);
+    setLoading(true);
     actions
       .load(date)
       .then((opened) => {
         if (!live) return;
         setStored(opened.stored);
         setWarnings(opened.warnings);
-        setSelected(0);
-        setStatus(opened.kept ? "Showing your corrected day." : null);
       })
-      .catch((err: Error) => live && setStatus(`Couldn't load ${date}: ${err.message}`))
-      .finally(() => live && setBusy(null));
+      .catch((err: Error) => {
+        if (!live) return;
+        setStored(null);
+        setWarnings([`Couldn't load ${date}: ${err.message}`]);
+      })
+      .finally(() => live && setLoading(false));
     return () => {
       live = false;
     };
-  }, [date, actions, aiLabel]);
+  }, [date, actions, reload]);
 
-  const day = stored?.day;
-  const rows = useMemo(() => (day ? tableRows(day) : []), [day]);
+  useEffect(() => {
+    if (overlay !== "date") return;
+    actions
+      .savedDates()
+      .then(setSaved)
+      .catch(() => setSaved([]));
+  }, [overlay, actions]);
 
-  const send = useCallback(
-    async (text: string) => {
-      if (!stored || !day) return;
-      if (!actions.parse) {
-        setStatus("Plain-word corrections need Claude Code. Set ai.backend in your config.");
-        return;
-      }
-      setInput("");
-      setBusy(
-        `Thinking about “${text.length > 60 ? `${text.slice(0, 59)}…` : text}” (${aiLabel})…`,
-      );
+  const day = stored?.day ?? null;
+  const cards = useMemo(() => (day ? buildCards(day, config) : []), [day, config]);
+  const minutes = cards.reduce((s, c) => s + (c.kind === "row" ? c.minutes : 0), 0);
+  const asks = cards.filter((c) => c.kind === "ask").length;
+  const target = durationMinutes(config.day.target);
+  const step = durationMinutes(config.day.round_to);
+  const bars = segments(cards);
+
+  const items: (Card | "add")[] = [...cards, "add"];
+  const current = sel >= 0 ? items[Math.min(sel, items.length - 1)] : undefined;
+  const card = current && current !== "add" ? current : undefined;
+
+  const goTo = (d: string) => {
+    setDate(d);
+    setSel(-1);
+    setEditing(null);
+    setProposal(null);
+  };
+
+  const commit = useCallback(
+    async (ops: EditOp[], done: string, text?: string) => {
+      if (!stored) return;
+      setBusy("Saving…");
       try {
-        const { ops, reply } = await actions.parse(text, day);
-        const changes = ops.filter((o) => o.op !== "clarify");
-        if (changes.length === 0) {
-          setStatus(describeEdits(day, ops).join(" ") || reply || "No changes.");
-        } else {
-          setProposal({ text, ops, lines: describeEdits(day, ops), reply });
+        const r = await actions.commit(stored, ops, text);
+        if (r.errors.length) showToast(`Couldn't apply that: ${r.errors.join(" ")}`);
+        else {
+          setStored(r.stored);
+          showToast(`${done} · ctrl+z undoes`);
         }
       } catch (err) {
-        setStatus((err as Error).message);
-        setInput(text);
+        showToast(`Couldn't save: ${(err as Error).message}`);
       } finally {
         setBusy(null);
       }
     },
-    [stored, day, actions, aiLabel],
+    [stored, actions, showToast],
   );
 
-  const accept = useCallback(async () => {
-    if (!stored || !proposal) return;
-    setBusy("Saving…");
+  const setMinutes = (c: Card, m: number) => {
+    if (!day) return;
+    void commit(
+      setRowMinutesOps(day, c.key, m),
+      `✓ ${c.title} → ${hm(m)} · day ${hm(minutes - c.minutes + m)}`,
+    );
+  };
+  const choose = (c: Choice) => void commit(c.ops, `✓ ${c.label}`);
+  const undo = async () => {
+    if (!stored) return;
+    const prev = await actions.undo(stored).catch(() => null);
+    if (prev) {
+      setStored(prev);
+      showToast("↶ Undone");
+    } else showToast("Nothing to undo");
+  };
+  const copy = async () => {
+    if (!day) return;
+    if (asks) return showToast(`Answer the ${asks} meeting${asks === 1 ? "" : "s"} first`);
+    const rows = timesheetRows(day, config);
+    if (rows.length === 0) return showToast("Nothing to copy yet");
     try {
-      const result = await actions.commit(stored, proposal.ops, proposal.text);
-      if (result.errors.length) {
-        setStatus(`Couldn't apply that: ${result.errors.join(" ")}`);
-        setInput(proposal.text);
-      } else {
-        setStored(result.stored);
-        setStatus(`Saved. ${proposal.reply} /undo to undo.`.replace(/\s+/g, " ").trim());
-      }
+      await actions.copy(toTsv(rows));
+      showToast(`✓ Copied ${rows.length} row${rows.length === 1 ? "" : "s"} · ${hm(minutes)}`);
+    } catch {
+      showToast("Couldn't reach the clipboard. Use `clockout export` instead.");
+    }
+  };
+  const startEdit = (i: number) => {
+    const c = items[i];
+    if (!c || c === "add" || c.kind !== "row") return;
+    setSel(i);
+    setEditing(c.key);
+    pill.setValue("");
+  };
+  const commitEdit = () => {
+    const c = cards.find((x) => x.key === editing);
+    const m = parseDuration(pill.value);
+    setEditing(null);
+    if (c && m !== null) setMinutes(c, m);
+  };
+
+  /** Typed or dictated words: a length for the selected card, or a correction for the AI. */
+  const send = async (text: string) => {
+    if (!day) return;
+    draft.setValue("");
+    const typed = parseDuration(text);
+    if (typed !== null && card?.kind === "row") return setMinutes(card, typed);
+    if (!actions.hasAI()) {
+      draft.setValue(text);
+      return showToast("Typed corrections need the AI helper. Turn it on in Setup (ctrl+p).");
+    }
+    setBusy(`Thinking about “${text.length > 50 ? `${text.slice(0, 49)}…` : text}”`);
+    try {
+      const { ops, reply } = await actions.parse(text, day);
+      const changes = ops.filter((o) => o.op !== "clarify");
+      if (changes.length === 0)
+        showToast(describeEdits(day, ops).join(" ") || reply || "No changes.");
+      else setProposal({ text, ops, lines: describeEdits(day, ops), reply });
     } catch (err) {
-      setStatus(`Couldn't save: ${(err as Error).message}`);
-      setInput(proposal.text);
+      draft.setValue(text);
+      showToast((err as Error).message);
     } finally {
-      setProposal(null);
       setBusy(null);
     }
-  }, [stored, proposal, actions]);
+  };
+  const apply = () => {
+    if (!proposal) return;
+    const p = proposal;
+    setProposal(null);
+    void commit(p.ops, `✓ ${p.reply || "Changed"}`, p.text);
+  };
+  const discard = () => {
+    if (!proposal) return;
+    draft.setValue(proposal.text);
+    setProposal(null);
+  };
 
-  const undo = useCallback(async () => {
-    if (!stored) return;
-    try {
-      const s = await actions.undo(stored);
-      if (s) {
-        setStored(s);
-        setStatus("Undone.");
-      } else setStatus("Nothing to undo.");
-    } catch (err) {
-      setStatus(`Couldn't undo: ${(err as Error).message}`);
-    }
-  }, [stored, actions]);
-
-  const copy = useCallback(
-    async (format: "tsv" | "md") => {
-      if (!day) return;
-      const sheet = timesheetRows(day, config);
-      if (sheet.length === 0) {
-        setStatus("Nothing to copy yet.");
+  useInput(
+    (ch, key) => {
+      if (overlay || busy) return; // an open picker or dialog owns the keys, ctrl+p included
+      if (key.ctrl && ch === "p") return setSetup(true);
+      if (editing) {
+        if (key.escape) return setEditing(null);
+        if (key.return) return commitEdit();
+        pill.edit(ch, key);
         return;
       }
-      try {
-        await actions.copy(format === "tsv" ? toTsv(sheet) : toMarkdown(sheet));
-        setStatus(
-          `Copied ${sheet.length} row${sheet.length === 1 ? "" : "s"} (${format === "tsv" ? "tab-separated" : "Markdown"}).`,
-        );
-      } catch {
-        setStatus("Couldn't reach the clipboard. Use `clockout export` instead.");
-      }
-    },
-    [day, config, actions],
-  );
-
-  const commands: Command[] = useMemo(() => {
-    const move = (days: number) => () => setDate((d) => addDays(d, days));
-    return [
-      { name: "pick a day", hint: "fill in a previous day", run: () => setPicker(true) },
-      { name: "copy sheet", hint: "tab-separated, ready to paste", run: () => void copy("tsv") },
-      { name: "copy as markdown", hint: "for notes and docs", run: () => void copy("md") },
-      { name: "undo", hint: "the last correction", run: () => void undo() },
-      { name: "previous day", hint: "", run: move(-1) },
-      { name: "next day", hint: "", run: move(1) },
-    ];
-  }, [copy, undo]);
-
-  usePaste(
-    (text) => {
-      // Dictation arrives as one paste; newlines never submit.
-      if (picker) return;
-      setInput(
-        (v) =>
-          `${v}${v && !v.endsWith(" ") ? " " : ""}${text.replace(/\s*[\r\n]+\s*/g, " ").trim()}`,
-      );
-      setStatus(null);
-    },
-    { isActive: !busy && !proposal },
-  );
-
-  const menu = input.startsWith("/") && !picker && !proposal && !busy;
-  const query = input.slice(1).trim().toLowerCase();
-  const filtered = commands.filter((c) => c.name.startsWith(query));
-  const selIndex = Math.min(cmdSel, Math.max(0, filtered.length - 1));
-
-  useInput((ch, key) => {
-    if (picker) return; // the picker owns the keys
-    if (busy) return;
-    if (proposal) {
-      if (ch === "y" || key.return) void accept();
-      else if (ch === "n" || key.escape) {
-        setProposal(null);
-        setInput(proposal.text);
-        setStatus("Discarded. Edit your words and press Enter, or Esc to clear.");
-      }
-      return;
-    }
-    if (key.upArrow && menu) return setCmdSel((s) => Math.max(0, s - 1));
-    if (key.downArrow && menu) return setCmdSel((s) => Math.min(filtered.length - 1, s + 1));
-    if (key.escape) return setInput("");
-    if (key.return) {
-      if (menu && filtered[selIndex]) {
-        const cmd = filtered[selIndex];
-        setInput("");
-        setCmdSel(0);
-        cmd.run();
+      if (proposal) {
+        if (key.return) return apply();
+        if (key.escape) return discard();
         return;
       }
-      const text = input.trim();
-      if (text) void send(text);
-      return;
-    }
-    if (menu) {
-      if (key.backspace || key.delete) return setInput((v) => v.slice(0, -1));
-      if (ch && !key.ctrl && !key.meta && !key.tab)
-        return setInput((v) => v + ch.replace(/[\r\n]/g, " "));
-      return;
-    }
-    if (key.upArrow) return setSelected((s) => Math.max(0, s - 1));
-    if (key.downArrow) return setSelected((s) => Math.max(0, Math.min(rows.length - 1, s + 1)));
-    if (key.pageUp) return setDate((d) => addDays(d, -1));
-    if (key.pageDown) return setDate((d) => addDays(d, 1));
-    if (key.backspace || key.delete) return setInput((v) => v.slice(0, -1));
-    // Shortcuts use Ctrl so typed text never triggers them.
-    if (key.ctrl) {
-      if (ch === "u") return setInput("");
-      if (ch === "y") return void copy("tsv");
-      if (ch === "t") return void copy("md");
-      if (ch === "z") return void undo();
-      if (ch === "d") return exit();
-      return;
-    }
-    if (ch && !key.meta && !key.tab) {
-      setInput((v) => v + ch.replace(/[\r\n]/g, " "));
-      setStatus(null);
-    }
-  });
-
-  // Keep the selection on a real row when edits or undo shrink the list.
-  useEffect(() => {
-    setSelected((s) => Math.max(0, Math.min(s, rows.length - 1)));
-  }, [rows.length]);
-
-  const totals = day ? dayTotals(day, config) : null;
-  const questions = useMemo(
-    () => (day ? questionsByRow(day) : new Map<string, Question[]>()),
-    [day],
+      if (key.ctrl && ch === "y") return void copy();
+      if (key.ctrl && ch === "z") return void undo();
+      if (key.pageUp) return goTo(addDays(date, -1));
+      if (key.pageDown) return goTo(addDays(date, 1));
+      if (view === "home") {
+        if (key.escape) return draft.setValue("");
+        if (key.return) {
+          setView("day");
+          const text = draft.value.trim();
+          if (text) void send(text);
+          return;
+        }
+        draft.edit(ch, key);
+        return;
+      }
+      if (key.upArrow || key.downArrow) {
+        const d = key.upArrow ? -1 : 1;
+        setSel((s) => Math.max(0, Math.min(items.length - 1, s + d)));
+        setChip(0);
+        return;
+      }
+      if (draft.value === "" && card?.kind === "row") {
+        if (ch === "+" || ch === "=") return setMinutes(card, card.minutes + step);
+        if (ch === "-" || ch === "_") return setMinutes(card, Math.max(step, card.minutes - step));
+      }
+      if (draft.value === "" && card?.kind === "ask") {
+        if (key.leftArrow) return setChip((c) => Math.max(0, c - 1));
+        if (key.rightArrow) return setChip((c) => Math.min((card.choices?.length ?? 1) - 1, c + 1));
+      }
+      if (key.escape) {
+        if (draft.value) return draft.setValue("");
+        if (sel >= 0) return setSel(-1);
+        return setView("home");
+      }
+      if (key.return) {
+        const text = draft.value.trim();
+        if (text) return void send(text);
+        if (current === "add") return setOverlay("add");
+        if (card?.kind === "row") return startEdit(sel);
+        if (card?.kind === "ask") {
+          const c = card.choices?.[chip];
+          if (c) choose(c);
+          return;
+        }
+        return void copy();
+      }
+      draft.edit(ch, key);
+    },
+    { isActive: !setup },
   );
+
+  const box = Math.min(84, Math.max(48, width - 10));
+  // Home sits a little above centre so the date picker can drop below the chat bar.
+  const HOME = 14;
+  const PICKER = 13;
+  const homeTop = Math.max(1, Math.floor((height - HOME - PICKER) / 2));
+  const dropDown = view === "home" && height - homeTop - HOME >= PICKER;
+  const screen = { width, height };
+
+  const bar = (
+    <ChatBar
+      width={view === "home" ? box : Math.min(width - 4, 104)}
+      value={draft.value}
+      busy={busy}
+      placeholder={
+        view === "home"
+          ? 'Tell me about your day…  "standup ran to 45 minutes"'
+          : card?.kind === "row"
+            ? `How long was “${card.title}”?  type 1h 45m, or say what changed`
+            : 'Say what changed…  "standup ran to 45 minutes"'
+      }
+      date={date}
+      today={today}
+      onDate={() => setOverlay("date")}
+      actions={
+        <>
+          {view === "day" ? (
+            <Button label="Copy sheet" tone="quiet" onClick={() => void copy()} />
+          ) : null}
+          <Button label="Setup" tone="quiet" onClick={() => setSetup(true)} />
+        </>
+      }
+    />
+  );
+  const picker =
+    overlay === "date" ? (
+      <DatePicker
+        date={date}
+        today={today}
+        hasDraft={(d) => saved.includes(d)}
+        left={1}
+        top={dropDown ? 5 : undefined}
+        bottom={dropDown ? undefined : 5}
+        onPick={(d) => {
+          setOverlay(null);
+          goTo(d);
+        }}
+        onClose={() => setOverlay(null)}
+      />
+    ) : null;
+  const dialogs = (
+    <>
+      {overlay === "add" && day ? (
+        <AddTimeDialog
+          projects={[
+            ...new Set([
+              ...day.blocks.filter((b) => b.billable).map((b) => b.project),
+              ...config.projects.map((p) => p.name),
+            ]),
+          ].concat(day.blocks.length || config.projects.length ? [] : ["General"])}
+          step={step}
+          screen={screen}
+          onClose={() => setOverlay(null)}
+          onAdd={(p, m, s) => {
+            setOverlay(null);
+            void commit(placeTimeOps(day, p, m, s), `✓ Added ${hm(m)} to ${short(p)}`);
+          }}
+        />
+      ) : null}
+      {setup ? (
+        <Setup
+          actions={actions.setup}
+          screen={screen}
+          onConfig={(c) => {
+            setConfig(c);
+            setConfigChanged(true);
+          }}
+          onClose={() => {
+            setSetup(false);
+            if (configChanged) {
+              setConfigChanged(false);
+              setReload((n) => n + 1);
+            }
+          }}
+        />
+      ) : null}
+    </>
+  );
+  const warning = warnings.length ? (
+    <Text color={T.ask} wrap="truncate-end">
+      ⚠ {warnings.join(" · ")}
+    </Text>
+  ) : null;
+
+  if (view === "home")
+    return (
+      <Box
+        width={width}
+        height={height}
+        flexDirection="column"
+        alignItems="center"
+        paddingTop={homeTop}
+        backgroundColor={T.bg}
+      >
+        <BarWordmark segments={bars} target={target} />
+        <Box height={1} flexShrink={0} />
+        <Text>
+          {loading ? (
+            <Text color={T.muted}>
+              <Spinner /> Drafting {longDate(date)}…
+            </Text>
+          ) : minutes ? (
+            <>
+              <Text color={T.text} bold>
+                {hm(minutes)}
+              </Text>
+              <Text color={T.muted}> of {hm(target)}</Text>
+            </>
+          ) : (
+            <Text color={T.muted}>Nothing logged yet</Text>
+          )}
+        </Text>
+        <Box height={1} flexShrink={0} width={box}>
+          {warning}
+        </Box>
+        <Box flexDirection="column">
+          {bar}
+          {picker}
+        </Box>
+        {dialogs}
+        {toast ? <Toast text={toast} bottom={2} /> : null}
+      </Box>
+    );
+
+  // Day view: cards with room to breathe, the chat bar at the bottom.
+  const listW = Math.min(width - 4, 104);
+  // Rows left for cards: minus padding, header, bar, gap, chat bar (5), its margin and the
+  // "↑ more" / "↓ more" lines. Each card is 5 rows plus a blank line.
+  const avail = height - 1 - 1 - 1 - 1 - 5 - 1 - 2 - (proposal ? proposal.lines.length + 4 : 0);
+  const cap = Math.max(1, Math.floor((avail + 1) / 6));
+  const focus = Math.max(0, sel);
+  if (focus < offset.current) offset.current = focus;
+  if (focus >= offset.current + cap) offset.current = focus - cap + 1;
+  offset.current = Math.max(0, Math.min(offset.current, Math.max(0, items.length - cap)));
+  const visible = items.slice(offset.current, offset.current + cap);
 
   return (
-    <Box flexDirection="column" width={width}>
-      <Box paddingLeft={2} paddingTop={1} flexShrink={0}>
-        <Text dimColor>
-          <Text color="blue">◷ </Text>
-          <Text bold>clockout</Text>
-          <Text dimColor>
-            {" · "}
-            {weekday(date)} · {stored?.edits.length ? "corrected" : "draft"}
-            {totals ? ` · ${formatHours(totals.hours)}h` : ""}
-            {totals?.questions ? ` · ${totals.questions} questions` : ""}
-            {aiLabel ? ` · AI: ${aiLabel}` : ""}
+    <Box
+      width={width}
+      height={height}
+      flexDirection="column"
+      alignItems="center"
+      paddingTop={1}
+      backgroundColor={T.bg}
+    >
+      <Box width={listW} justifyContent="space-between" flexShrink={0}>
+        <Clickable onClick={() => setView("home")}>
+          {(hover) => (
+            <Text>
+              <Text color={hover ? T.text : T.muted}>← </Text>
+              <Text color={T.text} bold>
+                {longDate(date)}
+              </Text>
+            </Text>
+          )}
+        </Clickable>
+        <Text>
+          <Text color={T.text} bold>
+            {hm(minutes)}
           </Text>
+          <Text color={T.muted}> of {hm(target)}</Text>
+          {minutes >= target ? <Text color={T.primary}> ✓</Text> : null}
         </Text>
       </Box>
-
-      {day ? (
-        <Box flexDirection="column" paddingLeft={2} flexShrink={0}>
-          {rows.map((row, i) => {
-            const isSel = i === selected;
-            if (row.kind === "gap") {
-              const gapQ = questions.get(row.gap.id)?.[0]?.text;
-              return (
-                <Box key={row.gap.id} flexDirection="column">
-                  <Box width={width - 4} paddingLeft={isSel ? 0 : 1}>
-                    <Box width={1}>
-                      <Text color={isSel ? "blue" : undefined}>{isSel ? "▍" : " "}</Text>
-                    </Box>
-                    <Box width={2}>
-                      <Text> </Text>
-                    </Box>
-                    <Box width={12}>
-                      <Text dimColor>
-                        {localTime(row.gap.start, day.timezone)}–
-                        {localTime(row.gap.end, day.timezone)}
-                      </Text>
-                    </Box>
-                    <Box width={width - 21}>
-                      <Text dimColor wrap="truncate-end">
-                        {gapQ ?? "gap · what filled it?"}
-                      </Text>
-                    </Box>
-                  </Box>
-                  {isSel ? (
-                    <Box paddingLeft={4} width={width - 4}>
-                      <Text dimColor wrap="truncate-end">
-                        no activity here — say “{row.gap.id} was lunch”
-                      </Text>
-                    </Box>
-                  ) : null}
-                </Box>
-              );
-            }
-            const b = row.block;
-            const qs = questions.get(b.id) ?? [];
-            return (
-              <Box key={b.id} flexDirection="column">
-                <Box width={width - 4} paddingLeft={isSel ? 0 : 1}>
-                  <Box width={1}>
-                    <Text color={isSel ? "blue" : undefined}>{isSel ? "▍" : " "}</Text>
-                  </Box>
-                  <Box width={2}>
-                    <Text color="yellow">{qs.length ? "? " : "  "}</Text>
-                  </Box>
-                  <Box width={12}>
-                    <Text>
-                      {localTime(b.start, day.timezone)}–{localTime(b.end, day.timezone)}
-                    </Text>
-                  </Box>
-                  <Box width={19}>
-                    <Text color={b.kind === "meeting" ? "magenta" : undefined} wrap="truncate-end">
-                      {b.project}
-                    </Text>
-                  </Box>
-                  <Box width={1} flexShrink={0}>
-                    <Text> </Text>
-                  </Box>
-                  <Box width={width - 50}>
-                    <Text dimColor={!b.confirmed} wrap="truncate-end">
-                      {b.summary}
-                    </Text>
-                  </Box>
-                  <Box width={1}>
-                    <Text> </Text>
-                  </Box>
-                  <Box width={5}>
-                    <Text bold={isSel}>
-                      {formatDuration(minutesBetween(b.start, b.end)).padStart(5)}
-                    </Text>
-                  </Box>
-                </Box>
-                {isSel || qs.length ? (
-                  <Box flexDirection="column" paddingLeft={4} width={width - 4}>
-                    {qs.slice(0, 2).map((q) => (
-                      <Text key={q.id} color="yellow" wrap="truncate-end">
-                        {q.text}
-                      </Text>
-                    ))}
-                    {isSel
-                      ? evidenceLines(row)
-                          .slice(0, 2)
-                          .map((line) => (
-                            <Text key={line} dimColor wrap="truncate-end">
-                              {line}
-                            </Text>
-                          ))
-                      : null}
-                  </Box>
-                ) : null}
-              </Box>
-            );
-          })}
-        </Box>
-      ) : (
-        <Box height={6} />
-      )}
-
-      <Box flexGrow={1} flexShrink={0} />
-
-      {proposal ? (
-        <Box
-          flexDirection="column"
-          borderStyle="round"
-          borderColor="green"
-          paddingX={1}
-          marginLeft={2}
-          flexShrink={0}
-        >
-          <Text color="green" bold>
-            Proposed changes
+      <Box flexShrink={0}>
+        <HoursBar segments={bars} target={target} width={listW} />
+      </Box>
+      <Box width={listW} flexShrink={0}>
+        {warning}
+      </Box>
+      <Clickable
+        flexDirection="column"
+        flexGrow={1}
+        width={listW}
+        overflow="hidden"
+        marginTop={1}
+        onWheel={(d) => setSel((s) => Math.max(0, Math.min(items.length - 1, Math.max(0, s) + d)))}
+      >
+        {loading ? (
+          <Text color={T.muted}>
+            <Spinner /> Drafting {longDate(date)}…
           </Text>
-          {proposal.lines.map((l) => (
-            <Text key={l}>• {l}</Text>
-          ))}
-          <Text dimColor>y / Enter to apply · n / Esc to discard</Text>
-        </Box>
+        ) : (
+          <>
+            {offset.current > 0 ? <Text color={T.faint}> ↑ {offset.current} more</Text> : null}
+            {visible.map((it, k) => {
+              const i = offset.current + k;
+              if (it === "add")
+                return (
+                  <AddCard
+                    key="add"
+                    width={listW}
+                    untracked={day ? untracked(day) : 0}
+                    notes={day?.notes ?? []}
+                    selected={i === sel}
+                    onClick={() => setOverlay("add")}
+                  />
+                );
+              return (
+                <CardView
+                  key={it.key}
+                  c={it}
+                  width={listW}
+                  step={step}
+                  selected={i === sel}
+                  chip={i === sel ? chip : -1}
+                  editing={editing === it.key}
+                  typed={pill.value}
+                  onSelect={() => setSel(i)}
+                  onEdit={() => startEdit(i)}
+                  onMinutes={(m) => setMinutes(it, m)}
+                  onChoose={(n) => {
+                    const c = it.choices?.[n];
+                    if (c) choose(c);
+                  }}
+                />
+              );
+            })}
+            {offset.current + cap < items.length ? (
+              <Text color={T.faint}> ↓ {items.length - offset.current - cap} more</Text>
+            ) : null}
+          </>
+        )}
+      </Clickable>
+      {proposal ? (
+        <ProposalPanel width={listW} proposal={proposal} onApply={apply} onDiscard={discard} />
       ) : null}
+      <Box flexDirection="column" marginBottom={1}>
+        {bar}
+        {picker}
+      </Box>
+      {dialogs}
+      {toast ? <Toast text={toast} bottom={7} /> : null}
+    </Box>
+  );
+}
 
-      {menu ? (
-        <Box flexDirection="column" paddingLeft={3} flexShrink={0}>
-          {filtered.map((c, i) => (
-            <Text key={c.name}>
-              <Text color={i === selIndex ? "blue" : undefined}>
-                {i === selIndex ? "● " : "  "}
-              </Text>
-              <Text bold={i === selIndex}>{c.name}</Text>
-              {c.hint ? <Text dimColor> — {c.hint}</Text> : null}
-            </Text>
+function ProposalPanel({
+  width,
+  proposal,
+  onApply,
+  onDiscard,
+}: {
+  width: number;
+  proposal: Proposal;
+  onApply: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <Box
+      width={width}
+      flexDirection="column"
+      flexShrink={0}
+      backgroundColor={T.panel}
+      borderStyle="bold"
+      borderTop={false}
+      borderRight={false}
+      borderBottom={false}
+      borderLeftColor={T.primary}
+      paddingX={2}
+      paddingY={1}
+      marginBottom={1}
+    >
+      <Text color={T.primary} bold>
+        {proposal.reply || "Proposed change"}
+      </Text>
+      {proposal.lines.map((l) => (
+        <Text key={l} color={T.text} wrap="truncate-end">
+          • {l}
+        </Text>
+      ))}
+      <Box gap={1} marginTop={1}>
+        <Button label="Apply ↵" tone="primary" onClick={onApply} />
+        <Button label="Edit my words · esc" onClick={onDiscard} />
+      </Box>
+    </Box>
+  );
+}
+
+function CardView({
+  c,
+  width,
+  step,
+  selected,
+  chip,
+  editing,
+  typed,
+  onSelect,
+  onEdit,
+  onMinutes,
+  onChoose,
+}: {
+  c: Card;
+  width: number;
+  step: number;
+  selected: boolean;
+  chip: number;
+  editing: boolean;
+  typed: string;
+  onSelect: () => void;
+  onEdit: () => void;
+  onMinutes: (m: number) => void;
+  onChoose: (n: number) => void;
+}) {
+  const ask = c.kind === "ask";
+  let body: ReactNode;
+  if (ask)
+    body = (
+      <>
+        <Text color={T.text} bold wrap="truncate-end">
+          <Text color={T.ask}>? </Text>
+          {c.title}
+        </Text>
+        <Text color={T.ask} wrap="truncate-end">
+          {c.question}
+          {c.reason ? <Text color={T.muted}> {c.reason}</Text> : null}
+        </Text>
+        <Box gap={1}>
+          {(c.choices ?? []).map((ch, n) => (
+            <Button
+              key={ch.label}
+              label={ch.label}
+              tone={n === chip ? "ask" : "neutral"}
+              onClick={() => onChoose(n)}
+            />
           ))}
-          {filtered.length === 0 ? <Text dimColor>no such command</Text> : null}
         </Box>
-      ) : null}
-
-      {picker && day ? (
-        <Box marginLeft={2} flexShrink={0}>
-          <DayPicker
-            anchor={new Date(`${date}T12:00:00Z`)}
-            hasData={(d) => savedDates.includes(isoDay(d))}
-            onPick={(picked) => {
-              setPicker(false);
-              setDate(picked);
-            }}
-            onClose={() => setPicker(false)}
+      </>
+    );
+  else
+    body = (
+      <>
+        <Text color={T.text} bold wrap="truncate-end">
+          {c.title}
+        </Text>
+        <Text wrap="truncate-end">
+          <Text color={projectColor(c.project)}>● </Text>
+          <Text color={T.text}>{short(c.project)}</Text>
+          <Text color={T.muted}> · {c.task}</Text>
+          {c.edited ? <Text color={T.primary}> · set by you</Text> : null}
+        </Text>
+        <Text color={T.faint} wrap="truncate-end">
+          {c.from}
+        </Text>
+      </>
+    );
+  return (
+    <Clickable onClick={onSelect} marginBottom={1} flexShrink={0}>
+      {(hover) => (
+        <Box
+          width={width}
+          borderStyle="round"
+          borderColor={
+            selected
+              ? ask
+                ? T.ask
+                : T.text
+              : ask
+                ? mix(T.bg, T.ask, 0.5)
+                : hover
+                  ? T.muted
+                  : T.border
+          }
+          paddingX={2}
+        >
+          <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+            {body}
+          </Box>
+          <Pill
+            minutes={c.minutes}
+            step={step}
+            editing={editing}
+            text={typed}
+            edited={c.edited}
+            dim={ask}
+            onEdit={ask ? undefined : onEdit}
+            onChange={ask ? undefined : onMinutes}
           />
         </Box>
-      ) : null}
+      )}
+    </Clickable>
+  );
+}
 
-      <Box marginLeft={2} marginBottom={picker ? 0 : 1} flexShrink={0}>
-        <InputBar
-          value={busy ? "" : input}
-          width={Math.min(76, width - 4)}
-          placeholder={busy ?? (menu ? "" : "Say it, or / for commands")}
-          meta={busy ?? (menu ? "↑↓ choose · enter" : "enter to send")}
-        />
-      </Box>
-      {status && !picker ? (
-        <Box paddingLeft={3} marginBottom={1}>
-          <Text dimColor wrap="truncate-end">
-            {status}
-          </Text>
-        </Box>
-      ) : null}
-      {warnings.length ? (
-        <Box paddingLeft={3}>
-          <Text color="yellow">⚠ {warnings.join(" · ")}</Text>
-        </Box>
-      ) : null}
+const DASHED = {
+  topLeft: "╭",
+  top: "┄",
+  topRight: "╮",
+  left: "┆",
+  bottomLeft: "╰",
+  bottom: "┄",
+  bottomRight: "╯",
+  right: "┆",
+};
+
+function AddCard({
+  width,
+  untracked,
+  notes,
+  selected,
+  onClick,
+}: {
+  width: number;
+  untracked: number;
+  notes: string[];
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Box flexDirection="column" flexShrink={0}>
+      <Clickable onClick={onClick} flexShrink={0}>
+        {(hover) => (
+          <Box
+            width={width}
+            borderStyle={DASHED}
+            borderColor={selected || hover ? T.text : T.border}
+            paddingX={2}
+            justifyContent="space-between"
+            alignItems="center"
+            height={5}
+          >
+            <Box flexDirection="column">
+              <Text color={T.text} bold>
+                + Add time
+              </Text>
+              <Text color={T.muted}>
+                {untracked
+                  ? `${hm(untracked)} untracked on this day`
+                  : "for anything nothing recorded"}
+              </Text>
+            </Box>
+            <Text color={T.faint}>project · how long · what</Text>
+          </Box>
+        )}
+      </Clickable>
+      {notes.map((n) => (
+        <Text key={n} color={T.faint} wrap="truncate-end">
+          {"  "}
+          {n}
+        </Text>
+      ))}
     </Box>
   );
 }

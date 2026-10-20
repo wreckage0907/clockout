@@ -11,7 +11,8 @@ Return edit operations on the day you're given, plus a one-sentence reply saying
 
 Rules:
 - Use block ids (b1, b2…) and gap ids (g1, g2…) exactly as given. Never invent ids.
-- Times are 24-hour local "HH:MM" on that day; "24:00" is midnight at the end of the day. "X was 2 hours" means set end = start + 2h.
+- Times are 24-hour local "HH:MM" on that day; "24:00" is midnight at the end of the day.
+- A length without times ("standup ran to 45 minutes", "X was 2 hours"): update that block's minutes and leave its times alone. What counts on a timesheet is how long, not when.
 - Lunch, breaks, personal time: fill_gap (or add) with billable false and project "Break".
 - "I attended / was at <meeting>": update that meeting with confirmed true. "I skipped / missed <meeting>": delete it.
 - Work without a time: put it in the earliest gap that fits, otherwise right after the last block of the day.
@@ -55,7 +56,7 @@ export function correctionContext(day: Day, config: Config, now = new Date()) {
       id: b.id,
       start: t(b.start),
       end: tEnd(b.end),
-      minutes: Math.round(minutesBetween(b.start, b.end)),
+      minutes: Math.round(b.minutes ?? minutesBetween(b.start, b.end)),
       kind: b.kind,
       project: b.project,
       task: b.task,

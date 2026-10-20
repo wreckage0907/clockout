@@ -37,6 +37,15 @@ export const editOpSchema = z.discriminatedUnion("op", [
       summary: z.string().min(1).optional(),
       billable: z.boolean().optional(),
       confirmed: z.boolean().optional().describe("true when the user says they attended a meeting"),
+      minutes: z
+        .number()
+        .int()
+        .min(0)
+        .max(24 * 60)
+        .optional()
+        .describe(
+          'How long it took, in minutes, when the user gives a length ("ran to 45 minutes")',
+        ),
     })
     .describe("Change fields of an existing block"),
   z

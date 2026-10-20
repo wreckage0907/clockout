@@ -13,7 +13,12 @@ function issues(input: unknown): string[] {
 describe("configSchema", () => {
   it("fills defaults for a minimal config", () => {
     const c = configSchema.parse(minimal);
-    expect(c.day).toEqual({ working_hours: "09:30-18:30", idle_cutoff: "20m", round_to: "15m" });
+    expect(c.day).toEqual({
+      working_hours: "09:30-18:30",
+      idle_cutoff: "20m",
+      round_to: "15m",
+      target: "8h",
+    });
     expect(c.tasks).toEqual({ work: "Development", review: "Code Review", meeting: "Meetings" });
     expect(c.ai.backend).toBe("auto");
     expect(c.sources).toEqual([]);

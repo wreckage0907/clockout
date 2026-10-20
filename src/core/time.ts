@@ -66,3 +66,21 @@ function parseDate(date: string): [number, number, number] {
 function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
+
+/**
+ * A duration typed by hand: "1h", "1h 15m", "1h15", "45m", "1:15", "1.5", "1.5h", "90".
+ * A decimal is hours; a whole number up to 12 is hours, bigger is minutes. Minutes past an
+ * hour must be under 60. Null when it isn't a duration.
+ */
+export function parseDuration(text: string): number | null {
+  const t = text.trim().toLowerCase();
+  let m = /^(\d+(?:\.\d+)?)\s*h(?:ours?|rs?)?(?:\s*(\d+)\s*m?(?:in(?:ute)?s?)?)?$/.exec(t);
+  if (m) return Number(m[2] ?? 0) < 60 ? Math.round(Number(m[1]) * 60 + Number(m[2] ?? 0)) : null;
+  m = /^(\d+)\s*m(?:in(?:ute)?s?)?$/.exec(t);
+  if (m) return Number(m[1]);
+  m = /^(\d+):(\d{2})$/.exec(t);
+  if (m) return Number(m[2]) < 60 ? Number(m[1]) * 60 + Number(m[2]) : null;
+  if (/^\d+\.\d+$/.test(t)) return Math.round(Number(t) * 60);
+  if (/^\d+$/.test(t)) return Number(t) <= 12 ? Number(t) * 60 : Number(t);
+  return null;
+}
