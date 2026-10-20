@@ -1,4 +1,3 @@
-import type { SourceLookup } from "../collect";
 import { loadConfig } from "../config/load";
 import { resolvePaths, tildify } from "../config/paths";
 import type { Config } from "../config/schema";
