@@ -72,9 +72,8 @@ program
 
 program
   .command("design", { hidden: true })
-  .argument("[name]", "home, today, sources or chat")
-  .description("UI design prototypes on the demo day; ←/→ or tab to flip between them")
-  .action((name) => runDesign(name));
+  .description("The next review UI, as a prototype on the demo day")
+  .action(() => runDesign());
 
 program
   .command("init")

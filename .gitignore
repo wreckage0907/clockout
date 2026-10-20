@@ -16,4 +16,4 @@ CLAUDE.md
 
 # Prototypes and stray agent artifacts
 *.html
-prototypes/
+/prototypes/

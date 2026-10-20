@@ -1,12 +1,32 @@
-import { render } from "ink";
+import { render, useWindowSize } from "ink";
 import type { Config } from "../config/schema";
 import type { Day } from "../core/types";
-import { Designs } from "./Designs";
+import { MouseProvider } from "../tui/clickable";
+import { MOUSE_OFF, MOUSE_ON, withMouse } from "../tui/mouse";
+import { Clockout } from "./Clockout";
 
-/** Runs the UI design prototypes on a drafted day. Flip designs with ←/→ or tab. */
-export function runDesigns(initial: string | undefined, day: Day, config: Config, date: string) {
-  const ui = render(<Designs day={day} config={config} date={date} initial={initial} />, {
-    exitOnCtrlC: true,
-  });
-  return ui.waitUntilExit();
+/** The prototype at the terminal's current size. */
+function Screen({ day, config }: { day: Day; config: Config }) {
+  const { columns, rows } = useWindowSize();
+  return <Clockout day={day} config={config} width={columns} height={rows} />;
+}
+
+/** Runs the design prototype on a drafted day: full screen, clickable. */
+export async function runPrototype(day: Day, config: Config) {
+  const { stdin, mouse, stop } = withMouse(process.stdin);
+  const off = () => process.stdout.write(MOUSE_OFF);
+  process.stdout.write(MOUSE_ON);
+  process.once("exit", off);
+  const ui = render(
+    <MouseProvider events={mouse}>
+      <Screen day={day} config={config} />
+    </MouseProvider>,
+    { stdin, exitOnCtrlC: true, alternateScreen: true },
+  );
+  try {
+    await ui.waitUntilExit();
+  } finally {
+    off();
+    stop();
+  }
 }
