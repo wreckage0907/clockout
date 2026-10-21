@@ -125,6 +125,9 @@ export async function openDay(
     history,
     edits: corrected?.edits ?? [],
     summaryCache,
+    // What was sent to the timesheet system stays known, even when the day is rebuilt.
+    ...(existing?.pushed ? { pushed: existing.pushed } : {}),
+    ...(existing?.pushedAt ? { pushedAt: existing.pushedAt } : {}),
   };
   await store.save(stored);
   return { stored, warnings, kept: !!corrected };

@@ -6,6 +6,7 @@ import { runDay } from "./commands/day";
 import { runEdit, runUndo } from "./commands/edit";
 import { runExport } from "./commands/export";
 import { runInit } from "./commands/init";
+import { runPush } from "./commands/push";
 
 const program = new Command().name("clockout").description(pkg.description).version(pkg.version);
 
@@ -58,14 +59,24 @@ program
   .action((opts) => runUndo(opts));
 
 program
+  .command("push")
+  .argument("[date]", "today, yesterday, -N or YYYY-MM-DD (default: today)")
+  .description("Send the day to your ERP timesheet, after showing what would change")
+  .option("-n, --dry-run", "show what would change without sending")
+  .option("-y, --yes", "send without asking")
+  .option("--no-ai", "use session and PR titles instead of AI summaries")
+  .action((date, opts) => runPush(date, opts));
+
+program
   .command("connect")
-  .argument("<service>", "google")
-  .description("Sign in once so Clockout can read your Google Calendar")
-  .action((service: string) => runConnect(service));
+  .argument("<service>", "google or erp")
+  .argument("[url]", "for erp: your ERP's address, e.g. https://erp.example.com")
+  .description("Sign in once: google reads your calendar, erp lets Clockout fill your timesheet")
+  .action((service: string, url?: string) => runConnect(service, url));
 
 program
   .command("disconnect")
-  .argument("<service>", "google")
+  .argument("<service>", "google or erp")
   .description("Revoke access and forget the sign-in")
   .action((service: string) => runDisconnect(service));
 

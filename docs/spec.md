@@ -69,6 +69,7 @@ What counts on a timesheet is how long each thing took, not when, so the screen 
 - **Home**: the logo on the hours bar, the total, the chat bar. Its date opens a month picker (days with a draft are dotted; Yesterday / Today); its Setup button and ctrl+p open setup.
 - **Day**: Enter opens one card per timesheet row (same grouping as the export), in the order the work started. The duration box takes a typed length (`1h 45`, `1:45`, `1.75`); − / + nudge by `round_to`. A length you set is stored on the block (`minutes`) and counts exactly that on the timesheet; times don't move. Meetings you haven't confirmed are cards with one-key answers. Gap questions get no card: untracked time only matters if you want hours there, which is what **Add time** is for (project, how long, what; Clockout places it).
 - **Corrections**: anything typed that isn't a length goes to the AI, which returns edit operations; they're shown as a proposal and applied on Enter. Ctrl+Z undoes.
+- **Send**: ctrl+s (or **Send to ERP**) sends the day to the timesheet system; see "Sending the day" below.
 - **Setup**: a block per source to tick (Google Calendar signs in; Claude Code opens a searchable list of its projects, each tickable; GitHub), daily target, AI helper; working hours and rounding under More. Saved to config.toml as you go.
 
 ## 5. Sources
@@ -213,7 +214,7 @@ match = { repo = "acme/api", title = "(?i)acme", attendee_domain = "acme.com" }
 ## 8. How it works
 
 ```
-collect → store → resolve projects → blocks → attendance → summarize → review (voice) → export
+collect → store → resolve projects → blocks → attendance → summarize → review (voice) → export / send
 ```
 
 1. **Collect** from each configured source for the date range.
@@ -225,6 +226,18 @@ collect → store → resolve projects → blocks → attendance → summarize �
 7. **Gaps**: unaccounted time inside working hours.
 8. **Review**: type or dictate. The AI returns operations (`add`, `update`, `delete`, `split`, `merge`, `fill_gap`, `clarify`), never a rewritten sheet. Clockout validates them, shows the diff, applies on `y`, and supports undo.
 9. **Export**: one row per block with **date, project, task, hours, description** — the fields most timesheet forms ask for. Clipboard, Markdown, CSV, JSON. Task comes from config rules (by activity kind, e.g. meeting → "Meetings", review → "Code Review", or a default per project) and can be changed by voice. After the MVP: user-defined export templates (own columns and formats) and documented presets for common timesheet tools.
+10. **Send** *(when a timesheet system is set up)*: see below.
+
+### Sending the day
+
+Copy-paste is the step people skip, so Clockout can write the day into the timesheet system itself ([ADR 0006](adr/0006-send-to-timesheet-system.md)).
+
+- **Targets** (`src/targets/`): read the day's entries, search tasks, create / update / delete. First: **next-pms** on Frappe/ERPNext, through the methods its own web app calls (`timesheet.save`, `update_timesheet_detail`, `delete`, `get_timesheet_data`, `task.get_task_list`), so its rules apply. Later: Harvest, Toggl, Clockify, Jira/Tempo, a `command` target.
+- **Sign-in**: `clockout connect erp <url>`: OAuth 2 with PKCE as a public client registered for the loopback redirect (RFC 7591/8252), refresh token in `credentials.json`. Frappe rotates refresh tokens; the new one is saved on every refresh.
+- **Mapping**: next-pms needs a task per entry. `[[timesheet.map]]` maps a Clockout project (optionally only one of its tasks) to an ERP task, picked once from a searchable list in the review screen or `clockout push`.
+- **Plan, then apply** (`core/push`, pure): each row finds its ERP entry by (1) what was sent for that row before, (2) what was sent on the same ERP task for a row that's gone (the description changed), (3) an untracked entry with the same task and description (a send whose record was lost). Then: create / update / same / delete (sent before, row gone or set to zero) / blocked (approved, rejected, approved week) / unmapped / theirs (added in the ERP by hand; never touched). Shown before anything is written; Enter or `--yes` applies.
+- **Record**: the day's JSON keeps `pushed` (row key → ERP entry id) and `pushedAt`, and keeps them when the day is rebuilt. A create returns no id, so the day is re-read after sending and entries matched by task, hours and description. One failed entry doesn't stop the rest.
+- **What leaves the machine**: date, task id, hours and description per row, to your own ERP, only when you confirm.
 
 ## 9. MVP (must ship)
 
@@ -256,7 +269,7 @@ collect → store → resolve projects → blocks → attendance → summarize �
 ## 11. Out of scope
 
 - Hosted/cloud version, accounts, sync
-- Pushing directly into any timesheet system's API (export only)
+- ~~Pushing directly into any timesheet system's API~~ (now in: [ADR 0006](adr/0006-send-to-timesheet-system.md), next-pms first)
 - OS-level window/app tracking
 - Reading or storing any vendor's login tokens
 - Verified Google/Microsoft OAuth apps

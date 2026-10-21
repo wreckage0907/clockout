@@ -1,0 +1,5 @@
+{
+  "exception": "frappe.exceptions.ValidationError: Backdated time entries are not allowed. The earliest date you can log time for is 01-10-2026.",
+  "exc_type": "ValidationError",
+  "_server_messages": "[\"{\\\"message\\\": \\\"Backdated time entries are not allowed. The earliest date you can log time for is <strong>01-10-2026</strong>.\\\", \\\"title\\\": \\\"Message\\\", \\\"indicator\\\": \\\"red\\\", \\\"raise_exception\\\": 1}\"]"
+}

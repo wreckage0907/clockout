@@ -2,13 +2,16 @@ import { Box, Text, useInput } from "ink";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Correction } from "../ai/edits";
 import type { OpenedDay } from "../collect";
-import { type Config, durationMinutes } from "../config/schema";
+import { type Config, durationMinutes, type TaskMapping } from "../config/schema";
 import { describeEdits, placeTimeOps } from "../core/edits";
+import { changes, type PushPlan, type PushRow } from "../core/push";
 import { addDays, parseDuration } from "../core/time";
 import { setRowMinutesOps, timesheetRows } from "../core/timesheet";
 import type { Day, EditOp } from "../core/types";
 import { toTsv } from "../export/formats";
+import type { PushResult } from "../push";
 import type { StoredDay } from "../store/json-store";
+import type { RemoteTask } from "../targets/types";
 import { buildCards, type Card, segments, untracked } from "./cards";
 import { Clickable } from "./clickable";
 import {
@@ -28,6 +31,7 @@ import {
 } from "./kit";
 import type { Choice } from "./questions";
 import { short } from "./questions";
+import { SendPanel, TaskPicker } from "./Send";
 import { Setup, type SetupActions } from "./Setup";
 import { hm, projectColor, T } from "./theme";
 
@@ -46,6 +50,18 @@ export interface AppActions {
   /** Dates with a saved day, for the date picker. */
   savedDates(): Promise<string[]>;
   setup: SetupActions;
+  /** Sending the day to the ERP; absent when none is set up. */
+  send?: SendActions;
+}
+
+export interface SendActions {
+  /** The ERP's host, for display. */
+  site: string;
+  plan(stored: StoredDay): Promise<PushPlan>;
+  apply(stored: StoredDay, plan: PushPlan): Promise<PushResult>;
+  searchTasks(query: string): Promise<RemoteTask[]>;
+  /** Saves which ERP task a project goes to; returns the new config. */
+  map(mapping: TaskMapping): Promise<Config>;
 }
 
 interface Proposal {
@@ -88,13 +104,15 @@ export function App({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState<string[]>([]);
-  const [overlay, setOverlay] = useState<"date" | "add" | null>(null);
+  const [overlay, setOverlay] = useState<"date" | "add" | "task" | null>(null);
+  const [sending, setSending] = useState<PushPlan | null>(null);
+  const [unmapped, setUnmapped] = useState<PushRow | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [sel, setSel] = useState(-1);
   const [chip, setChip] = useState(0);
   const [editing, setEditing] = useState<string | null>(null);
   const [toast, showToast] = useToast();
-  const draft = useDraft(!setup && !overlay && !editing && !busy && !proposal);
+  const draft = useDraft(!setup && !overlay && !editing && !busy && !proposal && !sending);
   const pill = useDraft(!setup && editing !== null);
   const offset = useRef(0);
 
@@ -145,6 +163,7 @@ export function App({
     setSel(-1);
     setEditing(null);
     setProposal(null);
+    setSending(null);
   };
 
   const commit = useCallback(
@@ -195,6 +214,57 @@ export function App({
       showToast("Couldn't reach the clipboard. Use `clockout export` instead.");
     }
   };
+  /** Checks the ERP and shows what sending would change; asks for a task first where needed. */
+  const erp = actions.send;
+  const startSend = async (current = stored) => {
+    if (!erp || !current) return;
+    setView("day");
+    if (asks) return showToast(`Answer the ${asks} meeting${asks === 1 ? "" : "s"} first`);
+    setBusy(`Checking ${erp.site}…`);
+    try {
+      const plan = await erp.plan(current);
+      const first = plan.items.find((i) => i.action === "unmapped");
+      if (first?.action === "unmapped") {
+        setUnmapped(first.row);
+        setOverlay("task");
+      } else setSending(plan);
+    } catch (err) {
+      showToast(`Couldn't reach the ERP: ${(err as Error).message}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const pickTask = async (row: PushRow, task: RemoteTask) => {
+    if (!erp) return;
+    setOverlay(null);
+    setUnmapped(null);
+    try {
+      setConfig(await erp.map({ project: row.project, erp_task: task.id, label: task.subject }));
+    } catch (err) {
+      return showToast(`Couldn't save that: ${(err as Error).message}`);
+    }
+    await startSend();
+  };
+  const confirmSend = async () => {
+    if (!erp || !sending || !stored) return;
+    const plan = sending;
+    setSending(null);
+    if (changes(plan).length === 0) return;
+    setBusy(`Sending to ${erp.site}…`);
+    try {
+      const r = await erp.apply(stored, plan);
+      setStored(r.stored);
+      if (r.failed.length) {
+        setWarnings(r.failed.map((f) => f.error));
+        showToast(`Sent ${r.done}, ${r.failed.length} failed (see above)`);
+      } else showToast(`✓ Sent ${r.done} change${r.done === 1 ? "" : "s"} to ${erp.site}`);
+    } catch (err) {
+      showToast(`Couldn't send: ${(err as Error).message}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const startEdit = (i: number) => {
     const c = items[i];
     if (!c || c === "add" || c.kind !== "row") return;
@@ -260,6 +330,12 @@ export function App({
         if (key.escape) return discard();
         return;
       }
+      if (sending) {
+        if (key.return) return void confirmSend();
+        if (key.escape) return setSending(null);
+        return;
+      }
+      if (key.ctrl && ch === "s") return void startSend();
       if (key.ctrl && ch === "y") return void copy();
       if (key.ctrl && ch === "z") return void undo();
       if (key.pageUp) return goTo(addDays(date, -1));
@@ -339,6 +415,9 @@ export function App({
           {view === "day" ? (
             <Button label="Copy sheet" tone="quiet" onClick={() => void copy()} />
           ) : null}
+          {view === "day" && erp ? (
+            <Button label="Send to ERP" tone="quiet" onClick={() => void startSend()} />
+          ) : null}
           <Button label="Setup" tone="quiet" onClick={() => setSetup(true)} />
         </>
       }
@@ -376,6 +455,18 @@ export function App({
           onAdd={(p, m, s) => {
             setOverlay(null);
             void commit(placeTimeOps(day, p, m, s), `✓ Added ${hm(m)} to ${short(p)}`);
+          }}
+        />
+      ) : null}
+      {overlay === "task" && unmapped && erp ? (
+        <TaskPicker
+          row={unmapped}
+          search={erp.searchTasks}
+          screen={screen}
+          onPick={(t) => void pickTask(unmapped, t)}
+          onClose={() => {
+            setOverlay(null);
+            setUnmapped(null);
           }}
         />
       ) : null}
@@ -448,7 +539,17 @@ export function App({
   const listW = Math.min(width - 4, 104);
   // Rows left for cards: minus padding, header, bar, gap, chat bar (5), its margin and the
   // "↑ more" / "↓ more" lines. Each card is 5 rows plus a blank line.
-  const avail = height - 1 - 1 - 1 - 1 - 5 - 1 - 2 - (proposal ? proposal.lines.length + 4 : 0);
+  const avail =
+    height -
+    1 -
+    1 -
+    1 -
+    1 -
+    5 -
+    1 -
+    2 -
+    (proposal ? proposal.lines.length + 4 : 0) -
+    (sending ? sending.items.length + 5 : 0);
   const cap = Math.max(1, Math.floor((avail + 1) / 6));
   const focus = Math.max(0, sel);
   if (focus < offset.current) offset.current = focus;
@@ -546,6 +647,15 @@ export function App({
       </Clickable>
       {proposal ? (
         <ProposalPanel width={listW} proposal={proposal} onApply={apply} onDiscard={discard} />
+      ) : null}
+      {sending && erp ? (
+        <SendPanel
+          width={listW}
+          plan={sending}
+          site={erp.site}
+          onSend={() => void confirmSend()}
+          onCancel={() => setSending(null)}
+        />
       ) : null}
       <Box flexDirection="column" marginBottom={1}>
         {bar}

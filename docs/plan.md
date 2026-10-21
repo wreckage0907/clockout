@@ -80,6 +80,19 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Port into the real review screen: hours you set override computed hours (core + export), daily target in config, setup writes the config; `src/prototypes/` deleted
 - [x] Update the spec's review screen section
 
+## Send to the ERP
+
+- [x] ADR 0006: next-pms's REST methods over OAuth, not MCP
+- [x] `clockout connect erp <url>` / `disconnect erp`: Frappe OAuth (discovery, dynamic registration, PKCE, loopback, refresh-token rotation)
+- [x] next-pms target: read a day's entries (locks for approved / rejected / approved week), search tasks, create / update / delete; readable Frappe errors
+- [x] `core/push`: plan (create / update / same / delete / blocked / unmapped / theirs), record of sent entries kept with the day
+- [x] `clockout push [date] --dry-run --yes`, task picker in the terminal
+- [x] Review screen: ctrl+s / **Send to ERP**, task picker, plan panel, Enter sends
+- [x] Tested live against a local next-pms site (sign-in, send, update, hand-added entries, disconnect)
+- [ ] Try it on rtCamp's ERP (staging first)
+- [ ] Remove a card by hand (✕ / `d`) and an `ignore` project rule (from the review of the personal-project case)
+- [ ] Description style settings (format, length, instructions, examples)
+
 ## Day 11 — Export and demo
 
 - [x] Clipboard, Markdown, CSV, TSV, JSON: date, project, task, hours, description (same work merged into one row)

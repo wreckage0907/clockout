@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { PushedEntry } from "../core/push";
 import type { Activity, Day, EditOp } from "../core/types";
 
 export interface EditRecord {
@@ -21,6 +22,10 @@ export interface StoredDay {
   edits: EditRecord[];
   /** AI summaries by block signature, so unchanged blocks aren't summarized again. */
   summaryCache: Record<string, string>;
+  /** Which timesheet-system entry each row became when the day was last sent. */
+  pushed?: PushedEntry[];
+  /** When the day was last sent, ISO. */
+  pushedAt?: string;
 }
 
 const HISTORY_LIMIT = 50;

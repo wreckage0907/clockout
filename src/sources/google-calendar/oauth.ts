@@ -1,8 +1,8 @@
-import { createHash, randomBytes } from "node:crypto";
-import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { z } from "zod";
 import type { Config } from "../../config/schema";
+import { loopback, pkcePair, randomState } from "../../oauth";
+
+export { pkcePair };
 
 /** Read-only access to events; nothing else. */
 export const GOOGLE_SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly";
@@ -48,15 +48,6 @@ const tokenResponse = z.object({
   id_token: z.string().optional(),
 });
 
-function base64url(buf: Buffer): string {
-  return buf.toString("base64url");
-}
-
-export function pkcePair(): { verifier: string; challenge: string } {
-  const verifier = base64url(randomBytes(32));
-  return { verifier, challenge: base64url(createHash("sha256").update(verifier).digest()) };
-}
-
 export function authUrl(
   client: GoogleClient,
   redirectUri: string,
@@ -93,38 +84,19 @@ export async function connectGoogle(
 ): Promise<Connected> {
   const doFetch = opts.fetch ?? fetch;
   const { verifier, challenge } = pkcePair();
-  const state = base64url(randomBytes(16));
-
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const redirectUri = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const state = randomState();
+  const server = await loopback();
+  const redirectUri = server.redirectUri;
 
   try {
-    const code = await new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error("Sign-in timed out. Run `clockout connect google` again.")),
-        opts.timeoutMs ?? 5 * 60_000,
-      );
-      server.on("request", (req, res) => {
-        const url = new URL(req.url ?? "/", redirectUri);
-        if (url.pathname !== "/") {
-          res.writeHead(404).end();
-          return;
-        }
-        const error = url.searchParams.get("error");
-        const ok =
-          !error && url.searchParams.get("state") === state && url.searchParams.get("code");
-        res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-        res.end(
-          ok
-            ? "<h1>Clockout is connected to Google Calendar.</h1><p>You can close this tab.</p>"
-            : `<h1>Sign-in didn't finish.</h1><p>${error ?? "Unexpected response"}. Go back to the terminal.</p>`,
-        );
-        clearTimeout(timer);
-        if (ok) resolve(url.searchParams.get("code") as string);
-        else reject(new Error(googleError(error)));
-      });
-      void open(authUrl(client, redirectUri, challenge, state)).catch(reject);
+    const code = await server.code({
+      authUrl: authUrl(client, redirectUri, challenge, state),
+      state,
+      open,
+      service: "Google Calendar",
+      describeError: googleError,
+      timedOut: "Sign-in timed out. Run `clockout connect google` again.",
+      ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}),
     });
 
     const res = await doFetch(TOKEN_URL, {

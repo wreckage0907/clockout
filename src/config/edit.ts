@@ -1,4 +1,4 @@
-import type { Config, SourceConfig } from "./schema";
+import type { Config, SourceConfig, TaskMapping } from "./schema";
 
 // Small pure changes to a config, for the setup screen. Each returns a new config; saving it
 // (and validating) is the caller's job.
@@ -49,4 +49,12 @@ export function clockMinutes(hhmm: string): number {
 export function clockText(minutes: number): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+}
+
+/** Sends a project's rows (or only its `task` rows) to an ERP task; replaces an older choice. */
+export function withTaskMapping(config: Config, mapping: TaskMapping): Config {
+  const t = config.timesheet;
+  if (!t) return config;
+  const map = t.map.filter((m) => !(m.project === mapping.project && m.task === mapping.task));
+  return { ...config, timesheet: { ...t, map: [...map, mapping] } };
 }

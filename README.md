@@ -55,6 +55,7 @@ node dist/cli.js               # review today
 | **Enter** on a card | Type its length: `1h 45`, `1:45`, `1.75`, `45m` (or type it into the chat bar) |
 | **-** / **+** | Shorten or lengthen the selected card by your rounding step |
 | **Ctrl+Y** (or **Copy sheet**) | Copy the timesheet, tab-separated, once no meeting is waiting |
+| **Ctrl+S** (or **Send to ERP**) | Send the day to your ERP: shows what would be added, updated or removed first; **Enter** sends |
 | **Ctrl+Z** | Undo |
 | **Ctrl+P** (or **Setup**) | Setup: tick sources (Google Calendar, Claude Code and which of its projects, GitHub), daily target, AI helper, working hours, rounding |
 | click the date | Pick another day; **PgUp** / **PgDn** step a day |
@@ -78,7 +79,9 @@ clockout today --plain         # print instead of opening the review screen
 clockout edit "the gap was lunch" [--date yesterday] [--dry-run]
 clockout undo [--date yesterday]
 clockout export [date] --format csv|md|tsv|json [--out file] [--from DATE --to DATE]
+clockout push [date] [--dry-run] [--yes]   # send the day to your ERP timesheet
 clockout connect google        # sign in once; disconnect google to revoke
+clockout connect erp https://erp.example.com   # sign in to your ERP; disconnect erp to revoke
 ```
 
 `--no-ai` uses session, PR and meeting titles instead of AI summaries.
@@ -127,7 +130,27 @@ client_secret = "GOCSPX-…"
 name = "Acme API"
 task = "Backend"
 match = { repo = "acme/api", title = "(?i)acme", attendee_domain = "acme.com" }
+
+[timesheet]                          # where `push` / ctrl+s sends the day; added by `clockout connect erp`
+type = "next-pms"                    # Frappe/ERPNext with rtCamp's next-pms
+url = "https://erp.example.com"
+
+[[timesheet.map]]                    # which ERP task a project's rows go to (picked once in the app)
+project = "Acme API"
+# task = "Code Review"               # only rows with this task; leave out for the whole project
+erp_task = "TASK-2026-00088"
+label = "API maintenance"
 ```
+
+## Sending to your ERP
+
+Instead of pasting rows, send the day straight into your timesheet. Supported now: Frappe/ERPNext sites running [next-pms](https://github.com/rtCamp/next-pms).
+
+1. `clockout connect erp https://erp.example.com` signs you in through the browser (OAuth; no password or API key is stored). The site's OAuth Settings must allow dynamic client registration.
+2. In the review screen press **Ctrl+S**. The first time a project is sent, pick its ERP task from a searchable list; it's remembered.
+3. Clockout reads what's already logged for that day and shows the plan: `+` add, `~` update, `−` remove, `=` already sent, `!` can't (approved week, rejected entry), `·` added in the ERP by hand. **Enter** sends.
+
+Sending again only changes what changed. Entries you added in the ERP yourself are never touched, and approval stays in the ERP. From scripts: `clockout push yesterday --dry-run`, then `--yes`.
 
 ## How time is counted
 
@@ -141,7 +164,8 @@ match = { repo = "acme/api", title = "(?i)acme", attendee_domain = "acme.com" }
 - Everything is read and stored on your machine (`~/.local/share/clockout`). No telemetry.
 - The AI sees session titles, branch names, PR titles and meeting names, never your prompts or code.
 - Clockout runs your own `claude` binary with tools off and never reads your credentials.
-- The config and the Google sign-in (`credentials.json`) are readable only by you. Calendar access is read-only.
+- The config and the sign-ins (`credentials.json`: Google, ERP) are readable only by you. Calendar access is read-only.
+- Your ERP gets only what you send: date, task, hours and description per row, when you confirm.
 
 ## Development
 
