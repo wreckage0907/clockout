@@ -1,0 +1,10 @@
+{
+  "message": {
+    "task": [
+      { "name": "TASK-0001", "subject": "API maintenance", "status": "Working", "project": "PROJ-0001", "project_name": "Acme API", "custom_is_billable": 1 },
+      { "name": "TASK-0003", "subject": "Clockout development", "status": "Open", "project": "PROJ-0003", "project_name": null, "custom_is_billable": 0 }
+    ],
+    "total_count": 2,
+    "has_more": false
+  }
+}

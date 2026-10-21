@@ -176,7 +176,7 @@ export function useDraft(active: boolean) {
   return { value, setValue, edit };
 }
 
-function Typed({ value, placeholder }: { value: string; placeholder: string }) {
+export function Typed({ value, placeholder }: { value: string; placeholder: string }) {
   return value === "" ? (
     <Text>
       <Text inverse color={T.muted}>

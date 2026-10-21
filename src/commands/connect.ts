@@ -2,8 +2,11 @@ import { homedir } from "node:os";
 import { execa } from "execa";
 import {
   credentialsPath,
+  loadErpCredentials,
   loadGoogleCredentials,
+  removeErpCredentials,
   removeGoogleCredentials,
+  saveErpCredentials,
   saveGoogleCredentials,
 } from "../config/credentials";
 import { loadConfig, saveConfig } from "../config/load";
@@ -12,10 +15,13 @@ import type { Config } from "../config/schema";
 import { dayRange, localDate } from "../core/time";
 import { googleCalendar } from "../sources/google-calendar";
 import { connectGoogle, googleClient, revoke } from "../sources/google-calendar/oauth";
+import { connectErp, revokeErp, siteOrigin } from "../targets/next-pms/oauth";
 
 /** Opens a URL in the default browser; the URL is printed too, in case that fails. */
-async function openInBrowser(url: string): Promise<void> {
-  console.log(`\nOpening Google sign-in in your browser. If it doesn't open, visit:\n\n  ${url}\n`);
+const openInBrowser = (what: string) => async (url: string) => {
+  console.log(
+    `\nOpening ${what} sign-in in your browser. If it doesn't open, visit:\n\n  ${url}\n`,
+  );
   const [cmd, args] =
     process.platform === "darwin"
       ? ["open", [url]]
@@ -23,21 +29,26 @@ async function openInBrowser(url: string): Promise<void> {
         ? ["cmd", ["/c", "start", "", url]]
         : ["xdg-open", [url]];
   await execa(cmd, args as string[]).catch(() => undefined);
+};
+
+function check(service: string): "google" | "erp" {
+  if (service !== "google" && service !== "erp")
+    throw new Error(`Connect "google" (your calendar) or "erp" (where your timesheet goes).`);
+  return service;
 }
 
-function check(service: string) {
-  if (service !== "google") throw new Error(`Only "google" can be connected so far.`);
-}
-
-/** `clockout connect google`: sign in once; Clockout reads your calendar from then on. */
-export async function runConnect(service: string) {
-  check(service);
+/**
+ * `clockout connect google`: sign in once; Clockout reads your calendar from then on.
+ * `clockout connect erp <url>`: sign in to your ERP so `clockout push` can fill your timesheet.
+ */
+export async function runConnect(service: string, url?: string) {
+  if (check(service) === "erp") return connectErpSite(url);
   const { configFile } = resolvePaths();
   const config = await loadConfig(configFile);
   const client = googleClient(config);
 
   console.log("Clockout asks for read-only access to your calendar events, nothing else.");
-  const { refreshToken, scope } = await connectGoogle(client, openInBrowser);
+  const { refreshToken, scope } = await connectGoogle(client, openInBrowser("Google"));
   await saveGoogleCredentials({
     refresh_token: refreshToken,
     client_id: client.client_id,
@@ -84,9 +95,60 @@ async function showToday(config: Config) {
   );
 }
 
-/** `clockout disconnect google`: revokes access and forgets the sign-in. */
+async function connectErpSite(url: string | undefined) {
+  const { configFile } = resolvePaths();
+  const config = await loadConfig(configFile);
+  const site = url ?? config?.timesheet?.url;
+  if (!site)
+    throw new Error("Give your ERP's address: clockout connect erp https://erp.example.com");
+  let origin: string;
+  try {
+    origin = siteOrigin(site.includes("://") ? site : `https://${site}`);
+  } catch {
+    throw new Error(`"${site}" isn't a web address. Use e.g. https://erp.example.com`);
+  }
+  console.log(
+    `Clockout signs in to ${origin} as you. It only reads and writes your own timesheet entries, and only when you send a day.`,
+  );
+  const connected = await connectErp(origin, openInBrowser("ERP"));
+  await saveErpCredentials({
+    url: connected.url,
+    client_id: connected.clientId,
+    refresh_token: connected.refreshToken,
+    ...(connected.user ? { user: connected.user } : {}),
+    connected_at: new Date().toISOString(),
+  });
+  console.log(
+    `Connected${connected.user ? ` as ${connected.user}` : ""}. The sign-in is kept in ${tildify(credentialsPath(), homedir())} (only you can read it).`,
+  );
+  if (!config) {
+    console.log("Run `clockout init` to finish setting up.");
+    return;
+  }
+  const same = config.timesheet && siteOrigin(config.timesheet.url) === connected.url;
+  await saveConfig(configFile, {
+    ...config,
+    timesheet:
+      same && config.timesheet
+        ? config.timesheet
+        : { type: "next-pms", url: connected.url, map: [] },
+  });
+  console.log("Review a day with `clockout`, then send it with ctrl+s (or `clockout push`).");
+}
+
+/** `clockout disconnect google|erp`: revokes access and forgets the sign-in. */
 export async function runDisconnect(service: string) {
-  check(service);
+  if (check(service) === "erp") {
+    const creds = await loadErpCredentials();
+    if (creds) await revokeErp(creds);
+    await removeErpCredentials();
+    console.log(
+      creds
+        ? `Disconnected from ${creds.url}. Your task mappings stay in the config.`
+        : "No ERP was connected.",
+    );
+    return;
+  }
   const creds = await loadGoogleCredentials();
   if (creds) await revoke(creds.refresh_token);
   await removeGoogleCredentials();

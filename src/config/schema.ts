@@ -79,6 +79,38 @@ const projectRule = z.object({
     ),
 });
 
+/** Which ERP task a Clockout project (and optionally task) goes to. */
+const taskMapping = z.object({
+  project: z.string().min(1),
+  /** Only rows with this task; leave out to match every row of the project. */
+  task: z.string().min(1).optional(),
+  /** The ERP's task id, e.g. "TASK-2026-00088". */
+  erp_task: z.string().min(1),
+  /** The ERP task's name, for display. */
+  label: z.string().optional(),
+});
+
+/** https, or plain http only on this machine (a local test site). */
+const siteUrl = z
+  .url({ protocol: /^https?$/, error: "use the site's address, e.g. https://erp.example.com" })
+  .refine((u) => {
+    const { protocol, hostname } = new URL(u);
+    return (
+      protocol === "https:" ||
+      hostname === "localhost" ||
+      hostname.endsWith(".localhost") ||
+      hostname === "127.0.0.1"
+    );
+  }, "use https:// (plain http only works for a site on this machine)");
+
+const nextPmsTarget = z.object({
+  type: z.literal("next-pms"),
+  url: siteUrl,
+  map: z.array(taskMapping).default([]),
+});
+
+export const timesheetTarget = z.discriminatedUnion("type", [nextPmsTarget]);
+
 export const configSchema = z.object({
   me: z.object({
     name: z.string().min(1),
@@ -121,6 +153,8 @@ export const configSchema = z.object({
     .prefault({}),
   sources: z.array(sourceConfig).default([]),
   projects: z.array(projectRule).default([]),
+  /** Where `clockout push` sends the day. Connect with `clockout connect erp <url>`. */
+  timesheet: timesheetTarget.optional(),
 });
 
 /** Config as written in config.toml (defaults optional). */
@@ -128,6 +162,8 @@ export type ConfigInput = z.input<typeof configSchema>;
 /** Config after validation, with defaults filled in. */
 export type Config = z.output<typeof configSchema>;
 export type SourceConfig = z.output<typeof sourceConfig>;
+export type TimesheetTarget = z.output<typeof timesheetTarget>;
+export type TaskMapping = z.output<typeof taskMapping>;
 
 export function durationMinutes(s: string): number {
   const m = durationPattern.exec(s);

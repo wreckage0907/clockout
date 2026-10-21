@@ -1,8 +1,12 @@
 import type { Correction } from "../../src/ai/edits";
+import { withTaskMapping } from "../../src/config/edit";
+import type { Config, TaskMapping } from "../../src/config/schema";
 import { buildDay } from "../../src/core/blocks";
 import { applyEdits } from "../../src/core/edits";
 import type { Day, EditOp } from "../../src/core/types";
-import type { StoredDay } from "../../src/store/json-store";
+import { applyPush, preparePush } from "../../src/push";
+import type { DayStore, StoredDay } from "../../src/store/json-store";
+import type { Target } from "../../src/targets/types";
 import type { AppActions } from "../../src/tui/App";
 import type { SetupState } from "../../src/tui/Setup";
 import { FIXTURE_DATE, fixtureActivities, fixtureConfig } from "./fixture-day";
@@ -32,6 +36,8 @@ export function fakeActions(
     setup?: Partial<SetupState>;
     /** The day to load; the fixture day by default. */
     day?: Day;
+    /** An ERP to send to; no "Send to ERP" without one. */
+    erp?: { target: Target; map?: TaskMapping[] };
   } = {},
 ) {
   const start: StoredDay = opts.day ? { ...stored, day: opts.day } : stored;
@@ -40,7 +46,20 @@ export function fakeActions(
     commits: [] as { ops: EditOp[]; text?: string }[],
     copied: [] as string[],
     saved: [] as unknown[],
+    mapped: [] as TaskMapping[],
   };
+  let erpConfig: Config = opts.erp
+    ? {
+        ...config,
+        timesheet: {
+          type: "next-pms" as const,
+          url: "https://erp.example.com",
+          map: opts.erp.map ?? [],
+        },
+      }
+    : config;
+  const memoryStore = { save: async () => {} } as unknown as DayStore;
+  const erp = opts.erp?.target;
   const actions: AppActions = {
     load: async (date) => {
       calls.loads.push(date);
@@ -74,6 +93,21 @@ export function fakeActions(
       calls.copied.push(t);
     },
     savedDates: async () => [FIXTURE_DATE],
+    ...(erp
+      ? {
+          send: {
+            site: "erp.example.com",
+            plan: (s) => preparePush(s, erpConfig, erp),
+            apply: (s, plan) => applyPush(s, plan, erp, memoryStore),
+            searchTasks: (q) => erp.searchTasks(q),
+            map: async (m) => {
+              calls.mapped.push(m);
+              erpConfig = withTaskMapping(erpConfig, m);
+              return erpConfig;
+            },
+          } satisfies NonNullable<AppActions["send"]>,
+        }
+      : {}),
     setup: {
       state: async () => ({
         config,

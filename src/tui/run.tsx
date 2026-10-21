@@ -9,15 +9,19 @@ import type { LlmBackend } from "../ai/types";
 import { openDay } from "../collect";
 import type { AppContext } from "../commands/context";
 import { loadGoogleCredentials, saveGoogleCredentials } from "../config/credentials";
+import { withTaskMapping } from "../config/edit";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths } from "../config/paths";
 import type { Config } from "../config/schema";
 import { localDate } from "../core/time";
 import { commitEdits, undoEdit } from "../corrections";
+import { applyPush, preparePush } from "../push";
 import { listClaudeProjects } from "../sources/claude-code/paths";
 import { detectGitHub } from "../sources/github/token";
 import { connectGoogle, googleClient } from "../sources/google-calendar/oauth";
-import { App, type AppActions } from "./App";
+import { openTarget } from "../targets";
+import type { Target } from "../targets/types";
+import { App, type AppActions, type SendActions } from "./App";
 import { MouseProvider } from "./clickable";
 import { MOUSE_OFF, MOUSE_ON, withMouse } from "./mouse";
 
@@ -49,6 +53,34 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
   const { configFile } = resolvePaths();
   const ctx = { homeDir: homedir(), env: process.env };
 
+  // The ERP connection, opened on first use and again if its address changes.
+  let target: { url: string; t: Promise<Target | null> } | null = null;
+  const erp = (): Promise<Target> => {
+    const url = config.timesheet?.url ?? "";
+    if (!target || target.url !== url) target = { url, t: openTarget(config) };
+    const t = target.t;
+    t.catch(() => {
+      target = null;
+    });
+    return t.then((x) => {
+      if (!x) throw new Error("No ERP is set up.");
+      return x;
+    });
+  };
+  const send: SendActions = {
+    get site() {
+      return config.timesheet ? new URL(config.timesheet.url).host : "";
+    },
+    plan: async (s) => preparePush(s, config, await erp()),
+    apply: async (s, plan) => applyPush(s, plan, await erp(), store),
+    searchTasks: async (q) => (await erp()).searchTasks(q),
+    async map(mapping) {
+      await saveConfig(configFile, withTaskMapping(config, mapping));
+      config = (await loadConfig(configFile)) ?? config;
+      return config;
+    },
+  };
+
   const actions: AppActions = {
     load: (d) => openDay(d, config, store, { ai }),
     hasAI: () => ai !== null,
@@ -60,6 +92,9 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
     undo: (stored) => undoEdit(stored, store),
     copy: (text) => clipboard.write(text),
     savedDates: () => store.dates(),
+    get send() {
+      return config.timesheet ? send : undefined;
+    },
     setup: {
       async state() {
         const claude = config.sources.find((s) => s.type === "claude-code");
