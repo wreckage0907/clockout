@@ -59,6 +59,14 @@ export function withTaskMapping(config: Config, mapping: TaskMapping): Config {
   return { ...config, timesheet: { ...t, map: [...map, mapping] } };
 }
 
+/** Forgets which ERP task a project (and task) goes to; it's asked again on the next send. */
+export function withoutTaskMapping(config: Config, mapping: Pick<TaskMapping, "project" | "task">) {
+  const t = config.timesheet;
+  if (!t) return config;
+  const map = t.map.filter((m) => !(m.project === mapping.project && m.task === mapping.task));
+  return { ...config, timesheet: { ...t, map } };
+}
+
 /** Sends days to the ERP at `origin`; keeps the task mappings if it's the same site. */
 export function withErpSite(config: Config, origin: string): Config {
   const t = config.timesheet;

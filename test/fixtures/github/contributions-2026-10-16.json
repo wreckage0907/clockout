@@ -50,7 +50,8 @@
                 },
                 "repository": {
                   "nameWithOwner": "acme/api"
-                }
+                },
+                "headRefName": "feat/login-rate-limit"
               },
               "pullRequestReview": {
                 "state": "CHANGES_REQUESTED",
@@ -98,6 +99,52 @@
                   "commitCount": 5
                 }
               ]
+            }
+          }
+        ],
+        "issueContributions": {
+          "nodes": []
+        }
+      },
+      "issueComments": {
+        "nodes": [
+          {
+            "createdAt": "2026-10-15T09:00:00Z",
+            "issue": {
+              "number": 80,
+              "title": "Deploys fail on cold start",
+              "repository": {
+                "nameWithOwner": "acme/api"
+              }
+            },
+            "pullRequest": null
+          },
+          {
+            "createdAt": "2026-10-16T05:20:00Z",
+            "issue": {
+              "number": 90,
+              "title": "Token refresh logs users out",
+              "repository": {
+                "nameWithOwner": "acme/api"
+              }
+            },
+            "pullRequest": null
+          },
+          {
+            "createdAt": "2026-10-16T11:24:00Z",
+            "issue": {
+              "number": 212,
+              "title": "Rate-limit login attempts",
+              "repository": {
+                "nameWithOwner": "acme/api"
+              }
+            },
+            "pullRequest": {
+              "number": 212,
+              "headRefName": "feat/login-rate-limit",
+              "author": {
+                "login": "sam-example"
+              }
             }
           }
         ]

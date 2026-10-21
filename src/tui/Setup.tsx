@@ -7,12 +7,13 @@ import {
   withAi,
   withClaudeExclude,
   withDay,
+  withoutTaskMapping,
   withSource,
 } from "../config/edit";
-import { type Config, durationMinutes } from "../config/schema";
+import { type Config, durationMinutes, type TaskMapping } from "../config/schema";
 import type { ClaudeProject } from "../sources/claude-code/paths";
 import { Clickable } from "./clickable";
-import { Button, Dialog, Spinner, useDraft } from "./kit";
+import { Button, Dialog, Spinner, Typed, useDraft } from "./kit";
 import { hm, T } from "./theme";
 
 /** What setup shows: the config, plus what's on this machine. */
@@ -23,6 +24,8 @@ export interface SetupState {
   github: { found: boolean };
   /** The `claude` CLI is installed, so the AI helper can work. */
   aiFound: boolean;
+  /** Signed in to the ERP in `config.timesheet`, and as whom. */
+  erp: { connected: boolean; user?: string };
 }
 
 export interface SetupActions {
@@ -31,6 +34,10 @@ export interface SetupActions {
   save(config: Config): Promise<Config>;
   /** Signs in to Google in the browser and keeps the sign-in. */
   connectGoogle(): Promise<void>;
+  /** Signs in to the ERP at an address in the browser; returns the saved config and who you are. */
+  connectErp(site: string): Promise<{ config: Config; user?: string }>;
+  /** Signs out of the ERP; the site and task mappings stay in the config. */
+  disconnectErp(): Promise<void>;
 }
 
 interface Block {
@@ -42,8 +49,8 @@ interface Block {
   line: string;
   /** Can't be ticked here. */
   dead?: boolean;
-  /** Opens a searchable project list. */
-  projects?: boolean;
+  /** Opens a panel under the blocks: Claude Code's projects, or the ERP's address and tasks. */
+  panel?: "claude" | "erp";
   tick?: () => void;
 }
 
@@ -52,6 +59,7 @@ const ROUNDING = [5, 15, 30];
 /**
  * Setup, over whatever screen you're on (ctrl+p or the chat bar's Setup button). Every source
  * is a block you tick; Claude Code opens into a searchable list of its projects, each tickable.
+ * The ERP opens into its address, or where days go and which task each project goes to.
  * Then your daily target and the AI helper; working hours and rounding wait under "More".
  * Every change is saved to config.toml straight away.
  */
@@ -70,9 +78,12 @@ export function Setup({
   const [state, setState] = useState<SetupState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
+  const [panel, setPanel] = useState<"claude" | "erp" | null>(null);
   const [more, setMore] = useState(false);
+  const open = panel === "claude";
+  const typingSite = panel === "erp" && !state?.erp.connected && busy !== "erp";
   const search = useDraft(open);
+  const site = useDraft(typingSite);
 
   useEffect(() => {
     let live = true;
@@ -97,13 +108,18 @@ export function Setup({
   };
 
   useInput((ch, key) => {
+    if (busy === "erp") return; // signing in: the browser has it
     if (key.escape) {
-      if (search.value) return search.setValue("");
-      if (open) return setOpen(false);
+      if (open && search.value) return search.setValue("");
+      if (panel) return setPanel(null);
       return onClose();
     }
     if (key.ctrl && ch === "p") return onClose();
     if (open) search.edit(ch, key);
+    if (typingSite) {
+      if (key.return) return void connectErp();
+      site.edit(ch, key);
+    }
   });
 
   const width = Math.min(96, screen.width - 4);
@@ -127,6 +143,45 @@ export function Setup({
   const excluded = claude?.exclude ?? [];
   const projects = state.claude.projects;
   const included = projects.filter((p) => !excluded.includes(p.folder)).length;
+
+  const erpHost = config.timesheet ? new URL(config.timesheet.url).host : null;
+  const erpOn = state.erp.connected && !!config.timesheet;
+  const connectErp = async () => {
+    const address = site.value.trim() || erpHost;
+    if (!address) return setError("Type your ERP's address, e.g. erp.example.com");
+    setBusy("erp");
+    setError(null);
+    try {
+      const r = await actions.connectErp(address);
+      setState((s) =>
+        s
+          ? {
+              ...s,
+              config: r.config,
+              erp: { connected: true, ...(r.user ? { user: r.user } : {}) },
+            }
+          : s,
+      );
+      onConfig(r.config);
+      site.setValue("");
+    } catch (err) {
+      setError(`ERP sign-in didn't finish: ${(err as Error).message}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const disconnectErp = async () => {
+    setBusy("erp");
+    setError(null);
+    try {
+      await actions.disconnectErp();
+      setState((s) => (s ? { ...s, erp: { connected: false } } : s));
+    } catch (err) {
+      setError(`Couldn't sign out of the ERP: ${(err as Error).message}`);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const connectGoogle = async () => {
     setBusy("google");
@@ -181,7 +236,7 @@ export function Setup({
       title: "Claude Code",
       on: has("claude-code"),
       dead: !state.claude.found && !has("claude-code"),
-      projects: state.claude.found,
+      ...(state.claude.found ? { panel: "claude" as const } : {}),
       line: !state.claude.found
         ? "no sessions found"
         : has("claude-code")
@@ -218,6 +273,22 @@ export function Setup({
           : "tick to read PRs",
       tick: () => void save(withSource(config, { type: "github" }, !has("github"))),
     },
+    {
+      id: "erp",
+      group: "timesheet",
+      title: "ERP (next-pms)",
+      on: erpOn,
+      panel: "erp",
+      line:
+        busy === "erp"
+          ? "finish in your browser…"
+          : erpOn
+            ? (erpHost ?? "")
+            : erpHost
+              ? `signed out · ${erpHost}`
+              : "tick to connect",
+      tick: () => (erpOn ? void disconnectErp() : setPanel("erp")),
+    },
   ];
 
   const q = search.value.toLowerCase();
@@ -240,8 +311,12 @@ export function Setup({
             key={b.id}
             b={b}
             busy={busy === b.id}
-            expanded={open && !!b.projects}
-            onPress={() => (b.projects && b.on ? setOpen((o) => !o) : b.tick?.())}
+            expanded={!!b.panel && panel === b.panel}
+            onPress={() =>
+              b.panel && (b.on || b.panel === "erp")
+                ? setPanel((p) => (p === b.panel ? null : (b.panel ?? null)))
+                : b.tick?.()
+            }
           />
         ))}
       </Box>
@@ -296,6 +371,20 @@ export function Setup({
             <Text color={T.muted}> No project matches “{search.value}”.</Text>
           ) : null}
         </Box>
+      ) : null}
+
+      {panel === "erp" ? (
+        <ErpPanel
+          width={inner}
+          config={config}
+          connected={erpOn}
+          {...(state.erp.user ? { user: state.erp.user } : {})}
+          busy={busy === "erp"}
+          typed={site.value}
+          onConnect={() => void connectErp()}
+          onDisconnect={() => void disconnectErp()}
+          onForget={(m) => void save(withoutTaskMapping(config, m))}
+        />
       ) : null}
 
       <Box height={1} />
@@ -416,7 +505,7 @@ function SourceBlock({
         >
           <Text color={T.faint}>
             {b.group}
-            {b.projects && b.on ? (expanded ? "  ▴" : "  ▾") : ""}
+            {b.panel && (b.on || b.panel === "erp") ? (expanded ? "  ▴" : "  ▾") : ""}
           </Text>
           <Box>
             <Clickable onClick={b.dead ? undefined : b.tick}>
@@ -441,5 +530,88 @@ function SourceBlock({
         </Box>
       )}
     </Clickable>
+  );
+}
+
+/**
+ * The ERP under its block: the address to sign in to, or where days go and which task each
+ * project's rows are sent to. Tasks are picked when you send a day, or by saying so.
+ */
+function ErpPanel({
+  width,
+  config,
+  connected,
+  user,
+  busy,
+  typed,
+  onConnect,
+  onDisconnect,
+  onForget,
+}: {
+  width: number;
+  config: Config;
+  connected: boolean;
+  user?: string;
+  busy: boolean;
+  typed: string;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  onForget: (m: TaskMapping) => void;
+}) {
+  const host = config.timesheet ? new URL(config.timesheet.url).host : null;
+  const map = config.timesheet?.map ?? [];
+  if (!connected)
+    return (
+      <Box flexDirection="column" marginTop={1} width={width}>
+        <Box backgroundColor={T.element} paddingX={1}>
+          <Text color={T.faint}>ERP address </Text>
+          {busy ? (
+            <Text color={T.muted}>
+              <Spinner /> finish signing in in your browser…
+            </Text>
+          ) : (
+            <Typed value={typed} placeholder={host ?? "erp.example.com"} />
+          )}
+        </Box>
+        <Box gap={1} marginTop={1}>
+          <Button label="Sign in ↵" tone="primary" onClick={busy ? undefined : onConnect} />
+          <Text color={T.faint}>
+            opens your browser · Clockout only reads and writes your own timesheet entries
+          </Text>
+        </Box>
+      </Box>
+    );
+  return (
+    <Box flexDirection="column" marginTop={1} width={width}>
+      <Box gap={1}>
+        <Text color={T.text}>
+          Days go to <Text bold>{host}</Text>
+          {user ? <Text color={T.muted}> as {user}</Text> : null}
+        </Text>
+        <Box flexGrow={1} />
+        <Button label="Sign out" onClick={busy ? undefined : onDisconnect} />
+      </Box>
+      {map.length === 0 ? (
+        <Text color={T.muted}>
+          No tasks picked yet. You pick one per project the first time you send a day (ctrl+s).
+        </Text>
+      ) : (
+        map.map((m) => (
+          <Box key={`${m.project}|${m.task ?? ""}`} paddingX={1} width={width}>
+            <Box flexGrow={1} flexShrink={1}>
+              <Text color={T.text} wrap="truncate-end">
+                {m.project}
+                <Text color={T.muted}>{m.task ? ` · ${m.task}` : " · every task"}</Text>
+                <Text color={T.faint}> → </Text>
+                {m.label ?? m.erp_task}
+              </Text>
+            </Box>
+            <Clickable onClick={() => onForget(m)}>
+              {(h) => <Text color={h ? T.danger : T.faint}> ✕ forget</Text>}
+            </Clickable>
+          </Box>
+        ))
+      )}
+    </Box>
   );
 }

@@ -35,6 +35,7 @@ export const CONTRIBUTIONS_QUERY = /* GraphQL */ `
               number
               title
               url
+              headRefName
               author { login }
               repository { nameWithOwner }
             }
@@ -46,12 +47,38 @@ export const CONTRIBUTIONS_QUERY = /* GraphQL */ `
             }
           }
         }
+        issueContributions(first: 100) {
+          nodes {
+            issue {
+              number
+              title
+              createdAt
+              repository { nameWithOwner }
+            }
+          }
+        }
+      }
+      issueComments(last: 100) {
+        nodes {
+          createdAt
+          issue {
+            number
+            title
+            repository { nameWithOwner }
+          }
+          pullRequest {
+            number
+            headRefName
+            author { login }
+          }
+        }
       }
     }
   }
 `;
 
 const repo = z.object({ nameWithOwner: z.string() });
+const author = z.object({ login: z.string() }).nullable().optional();
 const response = z.object({
   viewer: z.object({
     login: z.string(),
@@ -75,7 +102,8 @@ const response = z.object({
             pullRequest: z.object({
               number: z.number(),
               title: z.string(),
-              author: z.object({ login: z.string() }).nullable().optional(),
+              headRefName: z.string().optional(),
+              author,
               repository: repo,
             }),
             pullRequestReview: z.object({
@@ -85,6 +113,31 @@ const response = z.object({
           }),
         ),
       }),
+      issueContributions: z.object({
+        nodes: z.array(
+          z.object({
+            issue: z.object({
+              number: z.number(),
+              title: z.string(),
+              createdAt: z.string(),
+              repository: repo,
+            }),
+          }),
+        ),
+      }),
+    }),
+    /** Your latest comments on issues and pull requests (not review comments). */
+    issueComments: z.object({
+      nodes: z.array(
+        z.object({
+          createdAt: z.string(),
+          issue: z.object({ number: z.number(), title: z.string(), repository: repo }),
+          pullRequest: z
+            .object({ number: z.number(), headRefName: z.string().optional(), author })
+            .nullable()
+            .optional(),
+        }),
+      ),
     }),
   }),
 });
@@ -117,7 +170,7 @@ export function createGitHubSource(client?: GraphQLClient): Source<GitHubConfig>
         throw new Error("GitHub: unexpected response from the contributions API");
 
       const inRange = (d: Date) => d >= range.from && d < range.to;
-      const c = parsed.data.viewer.contributionsCollection;
+      const { login, contributionsCollection: c, issueComments } = parsed.data.viewer;
 
       for (const { pullRequest: pr } of c.pullRequestContributions.nodes) {
         const start = new Date(pr.createdAt);
@@ -146,6 +199,7 @@ export function createGitHubSource(client?: GraphQLClient): Source<GitHubConfig>
             `pr:${pr.repository.nameWithOwner}#${pr.number}`,
             ...(pr.author ? [`author:${pr.author.login}`] : []),
           ],
+          ...(pr.headRefName ? { branch: pr.headRefName } : {}),
         };
         for (const comment of review.comments.nodes) {
           const start = new Date(comment.createdAt);
@@ -155,6 +209,42 @@ export function createGitHubSource(client?: GraphQLClient): Source<GitHubConfig>
           const start = new Date(review.submittedAt);
           if (inRange(start)) yield { ...common, kind: "review", start };
         }
+      }
+
+      for (const { issue } of c.issueContributions.nodes) {
+        const start = new Date(issue.createdAt);
+        if (!inRange(start)) continue;
+        yield {
+          source: "github",
+          kind: "issue",
+          actor: "human",
+          start,
+          title: issue.title,
+          repo: issue.repository.nameWithOwner,
+          refs: [`issue:${issue.repository.nameWithOwner}#${issue.number}`],
+        };
+      }
+
+      // A comment on someone else's pull request is part of reviewing it; on your own, part of
+      // the work on its branch.
+      for (const { createdAt, issue, pullRequest: pr } of issueComments.nodes) {
+        const start = new Date(createdAt);
+        if (!inRange(start)) continue;
+        const name = issue.repository.nameWithOwner;
+        const theirs = pr?.author && pr.author.login !== login;
+        const a: Activity = {
+          source: "github",
+          kind: theirs ? "review_comment" : "comment",
+          actor: "human",
+          start,
+          title: issue.title,
+          repo: name,
+          refs: pr
+            ? [`pr:${name}#${pr.number}`, ...(pr.author ? [`author:${pr.author.login}`] : [])]
+            : [`issue:${name}#${issue.number}`],
+        };
+        if (pr?.headRefName) a.branch = pr.headRefName;
+        yield a;
       }
     },
   };

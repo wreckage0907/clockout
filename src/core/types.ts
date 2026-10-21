@@ -12,7 +12,9 @@ export type ActivityKind =
   | "commit"
   | "pr" // the user opened a pull request
   | "review" // the user submitted a pull request review
-  | "review_comment"
+  | "review_comment" // a comment on someone else's pull request
+  | "issue" // the user opened an issue
+  | "comment" // the user commented on an issue or their own pull request
   | "meeting";
 
 export type Actor = "human" | "agent";

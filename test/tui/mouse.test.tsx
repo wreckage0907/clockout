@@ -132,7 +132,7 @@ describe("mouse input", () => {
         />
       </MouseProvider>,
     );
-    await until(lastFrame, "5h 45m of 8h");
+    await until(lastFrame, "6h of 8h");
     click(events, find(lastFrame() ?? "", "Setup"));
     await until(lastFrame, "Tick what Clockout reads");
     expect(lastFrame()).toContain("Tick what Clockout reads");
@@ -140,6 +140,97 @@ describe("mouse input", () => {
     await until(lastFrame, "Search Claude Code projects");
     expect(lastFrame()).toContain("Search Claude Code projects");
     expect(lastFrame()).toContain("acme-api");
+  });
+
+  it("clicks: a card's ✕ removes it from the day", async () => {
+    const events = new EventEmitter();
+    const { actions, calls } = fakeActions();
+    const { lastFrame, stdin } = render(
+      <MouseProvider events={events}>
+        <App
+          initialDate={FIXTURE_DATE}
+          today={FIXTURE_DATE}
+          config={config}
+          actions={actions}
+          width={120}
+          height={40}
+        />
+      </MouseProvider>,
+    );
+    await until(lastFrame, "6h of 8h");
+    stdin.write("\r");
+    await until(lastFrame, "Copy sheet");
+    click(events, find(lastFrame() ?? "", "✕")); // the first card: Daily standup
+    await until(lastFrame, "5h 30m of 8h");
+    expect(calls.commits.at(-1)?.ops).toEqual([{ op: "delete", id: "b1" }]);
+  });
+
+  it("clicks: the ERP block asks for the address and signs in on Enter", async () => {
+    const events = new EventEmitter();
+    const { actions, calls } = fakeActions();
+    const { lastFrame, stdin } = render(
+      <MouseProvider events={events}>
+        <App
+          initialDate={FIXTURE_DATE}
+          today={FIXTURE_DATE}
+          config={config}
+          actions={actions}
+          width={120}
+          height={40}
+        />
+      </MouseProvider>,
+    );
+    await until(lastFrame, "6h of 8h");
+    stdin.write("\u0010"); // ctrl+p
+    await until(lastFrame, "tick to connect");
+    click(events, find(lastFrame() ?? "", "ERP (next-pms)"));
+    await until(lastFrame, "ERP address");
+    stdin.write("erp.example.com");
+    await until(lastFrame, "erp.example.com");
+    stdin.write("\r");
+    await until(lastFrame, "Days go to erp.example.com");
+    expect(calls.signedIn).toEqual(["erp.example.com"]);
+    expect(lastFrame()).toContain("as dev@example.com");
+    expect(lastFrame()).toContain("No tasks picked yet");
+  });
+
+  it("clicks: a connected ERP lists its tasks, forgets one, and signs out", async () => {
+    const events = new EventEmitter();
+    const withErp = {
+      ...config,
+      timesheet: {
+        type: "next-pms" as const,
+        url: "https://erp.example.com",
+        map: [{ project: "acme/api", erp_task: "TASK-1", label: "Acme API build" }],
+      },
+    };
+    const { actions, calls } = fakeActions({
+      setup: { config: withErp, erp: { connected: true, user: "dev@example.com" } },
+    });
+    const { lastFrame } = render(
+      <MouseProvider events={events}>
+        <App
+          initialDate={FIXTURE_DATE}
+          today={FIXTURE_DATE}
+          config={withErp}
+          actions={actions}
+          width={120}
+          height={40}
+        />
+      </MouseProvider>,
+    );
+    await until(lastFrame, "6h of 8h");
+    click(events, find(lastFrame() ?? "", "Setup"));
+    await until(lastFrame, "Tick what Clockout reads");
+    click(events, find(lastFrame() ?? "", "ERP (next-pms)"));
+    await until(lastFrame, "Acme API build");
+    expect(lastFrame()).toContain("acme/api · every task → Acme API build");
+    click(events, find(lastFrame() ?? "", "✕ forget"));
+    await until(lastFrame, "No tasks picked yet");
+    expect(calls.saved.at(-1)).toMatchObject({ timesheet: { map: [] } });
+    click(events, find(lastFrame() ?? "", "Sign out"));
+    await until(lastFrame, "signed out · erp.example.com");
+    expect(calls.signedOut).toBe(1);
   });
 
   it("clicks: the date opens the picker, and Yesterday switches the day", async () => {
@@ -156,7 +247,7 @@ describe("mouse input", () => {
         />
       </MouseProvider>,
     );
-    await until(lastFrame, "5h 45m of 8h");
+    await until(lastFrame, "6h of 8h");
     click(events, find(lastFrame() ?? "", "Fri, Oct 16 ▾"));
     await until(lastFrame, "Oct 2026");
     expect(lastFrame()).toContain("Oct 2026");
@@ -178,7 +269,7 @@ describe("mouse input", () => {
         />
       </MouseProvider>,
     );
-    await until(lastFrame, "5h 45m of 8h");
+    await until(lastFrame, "6h of 8h");
     click(events, find(lastFrame() ?? "", "Fri, Oct 16 ▾"));
     await until(lastFrame, "Oct 2026");
     stdin.write("\u0010"); // ctrl+p

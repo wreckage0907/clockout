@@ -21,7 +21,9 @@ describe("cards", () => {
       "row:Build export command (PR #48):2h 30m",
       "ask:Design sync:30m",
     ]);
-    expect(cards[1]?.from).toBe("Claude Code + GitHub · 17 prompts in 1 session · opened PR #87");
+    expect(cards[1]?.from).toBe(
+      "Claude Code + GitHub · 17 prompts in 1 session · opened PR #87 · commented on issue #90",
+    );
   });
 
   it("asks only about meetings: untracked time goes through the Add time card", () => {
@@ -55,7 +57,7 @@ describe("cards", () => {
 
   it("splits the day's hours by project for the bar", () => {
     expect(segments(buildCards(day, config)).map((s) => `${s.label} ${hm(s.minutes)}`)).toEqual([
-      "acme/api 2h 45m",
+      "acme/api 3h",
       "clockout 2h 30m",
       "Meetings 30m",
     ]);

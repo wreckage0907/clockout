@@ -34,7 +34,7 @@ function open(opts: Parameters<typeof fakeActions>[0] = {}) {
 
 async function openDay(opts: Parameters<typeof fakeActions>[0] = {}) {
   const app = open(opts);
-  await until(app.ui.lastFrame, "5h 45m of 8h");
+  await until(app.ui.lastFrame, "6h of 8h");
   app.ui.stdin.write("\r");
   await until(app.ui.lastFrame, "Copy sheet");
   return app;
@@ -50,7 +50,7 @@ async function down(ui: ReturnType<typeof render>, n: number) {
 describe("home", () => {
   it("is the logo on the hours bar, the total against the target, and the chat bar", async () => {
     const { ui, calls } = open();
-    await until(ui.lastFrame, "5h 45m of 8h");
+    await until(ui.lastFrame, "6h of 8h");
     const frame = ui.lastFrame() ?? "";
     expect(calls.loads).toEqual([FIXTURE_DATE]);
     expect(frame).toContain("Tell me about your day");
@@ -74,7 +74,7 @@ describe("home", () => {
       />,
     );
     await until(ui.lastFrame, "of 6h");
-    expect(ui.lastFrame()).toContain("5h 45m of 6h");
+    expect(ui.lastFrame()).toContain("6h of 6h");
   });
 });
 
@@ -96,19 +96,32 @@ describe("day view", () => {
     ui.stdin.write("1h 45");
     await tick();
     ui.stdin.write("\r");
-    await until(ui.lastFrame, "5h 15m of 8h");
+    await until(ui.lastFrame, "5h 30m of 8h");
     expect(calls.commits.at(-1)?.ops).toEqual([{ op: "update", id: "b2", minutes: 105 }]);
     expect(ui.lastFrame()).toContain("set by you");
+  });
+
+  it("ctrl+d removes the selected card from the day, and ctrl+z brings it back", async () => {
+    const { ui, calls } = await openDay();
+    await down(ui, 2); // Fix auth token refresh, 2h 15m
+    ui.stdin.write("\u0004"); // ctrl+d
+    await until(ui.lastFrame, "3h 45m of 8h");
+    expect(calls.commits.at(-1)?.ops).toEqual([{ op: "delete", id: "b2" }]);
+    expect(ui.lastFrame()).toContain("Removed “Fix auth token refresh (PR #87)” · day 3h 45m");
+    expect(ui.lastFrame()).not.toContain("17 prompts in 1 session");
+    ui.stdin.write("\u001a"); // ctrl+z
+    await until(ui.lastFrame, "6h of 8h");
+    expect(ui.lastFrame()).toContain("17 prompts in 1 session");
   });
 
   it("+ nudges the selected card by the rounding step, and ctrl+z undoes it", async () => {
     const { ui } = await openDay();
     await down(ui, 1); // Daily standup, 30m
     ui.stdin.write("+");
-    await until(ui.lastFrame, "6h of 8h");
+    await until(ui.lastFrame, "6h 15m of 8h");
     ui.stdin.write("\u001a"); // ctrl+z
-    await until(ui.lastFrame, "5h 45m of 8h");
-    expect(ui.lastFrame()).toContain("5h 45m of 8h");
+    await until(ui.lastFrame, "6h of 8h");
+    expect(ui.lastFrame()).toContain("6h of 8h");
   });
 
   it("answering a meeting saves it, without counting its overlap with coding twice", async () => {
@@ -118,7 +131,7 @@ describe("day view", () => {
     await until(ui.lastFrame, "Attended · ctrl+z");
     expect(calls.commits.at(-1)?.ops).toEqual([{ op: "update", id: "b4", confirmed: true }]);
     expect(ui.lastFrame()).not.toContain("Did you attend “Design sync”?");
-    expect(ui.lastFrame()).toContain("5h 45m of 8h");
+    expect(ui.lastFrame()).toContain("6h of 8h");
   });
 
   it("won't copy while meetings are waiting", async () => {
@@ -137,7 +150,7 @@ describe("day view", () => {
     const { ui, calls } = await openDay({ day: skipped });
     await down(ui, 1); // Daily standup
     ui.stdin.write("+");
-    await until(ui.lastFrame, "6h of 8h");
+    await until(ui.lastFrame, "6h 15m of 8h");
     ui.stdin.write("\u001b"); // deselect: Enter on nothing copies
     await tick();
     ui.stdin.write("\r");
@@ -162,7 +175,7 @@ describe("day view", () => {
     expect(ui.lastFrame()).toContain("Standup ran to 45 minutes.");
     expect(calls.commits).toEqual([]);
     ui.stdin.write("\r");
-    await until(ui.lastFrame, "6h of 8h");
+    await until(ui.lastFrame, "6h 15m of 8h");
     expect(calls.commits.at(-1)).toEqual({
       ops: [{ op: "update", id: "b1", minutes: 45 }],
       text: "standup ran to 45 minutes",
@@ -285,7 +298,7 @@ describe("setup from the chat bar", () => {
 describe("setup", () => {
   it("ctrl+p opens it over the screen with tickable sources, and esc closes it", async () => {
     const { ui } = open();
-    await until(ui.lastFrame, "5h 45m of 8h");
+    await until(ui.lastFrame, "6h of 8h");
     ui.stdin.write("\u0010");
     await until(ui.lastFrame, "Tick what Clockout reads");
     const frame = ui.lastFrame() ?? "";

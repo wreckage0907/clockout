@@ -3,7 +3,7 @@ import type { Activity, Block } from "./types";
 
 /**
  * A short, verb-first line for a block, from the evidence alone (no AI):
- * meeting title, reviewed PR, session title, opened PR, or branch name.
+ * meeting title, reviewed PR, session title, opened PR, issue discussed, or branch name.
  */
 export function heuristicSummary(block: Pick<Block, "kind" | "evidence" | "project">): string {
   const ev = block.evidence;
@@ -20,6 +20,13 @@ export function heuristicSummary(block: Pick<Block, "kind" | "evidence" | "proje
   const title =
     mostCommon(ev.filter((a) => a.kind === "prompt").map((a) => a.title)) ?? opened?.title;
   if (title) return `${title}${prSuffix}`;
+
+  const talk = ev.find((a) => (a.kind === "issue" || a.kind === "comment") && a.title);
+  if (talk?.title) {
+    const ref = talk.refs?.[0]?.split("#");
+    const n = ref?.[1] ? ` (${ref[0]?.startsWith("pr:") ? "PR " : ""}#${ref[1]})` : "";
+    return `${talk.kind === "issue" ? "Open issue" : "Discuss"} ${talk.title}${n}`;
+  }
 
   const branch = mostCommon(ev.map((a) => a.branch));
   if (branch && !["main", "master", "develop", "trunk"].includes(branch)) {

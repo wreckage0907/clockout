@@ -7,7 +7,7 @@ import { describeSettings, type SettingEffect, type SettingOp } from "../config/
 import { describeEdits, placeTimeOps } from "../core/edits";
 import { changes, type PushPlan, type PushRow } from "../core/push";
 import { addDays, parseDuration } from "../core/time";
-import { setRowMinutesOps, timesheetRows } from "../core/timesheet";
+import { removeRowOps, setRowMinutesOps, timesheetRows } from "../core/timesheet";
 import type { Day, EditOp } from "../core/types";
 import { toTsv } from "../export/formats";
 import type { PushResult } from "../push";
@@ -217,6 +217,14 @@ export function App({
       `✓ ${c.title} → ${hm(m)} · day ${hm(minutes - c.minutes + m)}`,
     );
   };
+  /** Takes a card off the day: a row's blocks, or a meeting you weren't in. */
+  const remove = (c: Card) => {
+    if (!day) return;
+    const ops: EditOp[] =
+      c.kind === "ask" ? [{ op: "delete", id: c.key.slice(4) }] : removeRowOps(day, c.key);
+    const left = minutes - (c.kind === "row" ? c.minutes : 0);
+    void commit(ops, `✓ Removed “${c.title}” · day ${hm(left)}`);
+  };
   const choose = (c: Choice) => void commit(c.ops, `✓ ${c.label}`);
   const undo = async () => {
     if (!stored) return;
@@ -423,6 +431,7 @@ export function App({
         setChip(0);
         return;
       }
+      if (key.ctrl && ch === "d") return card ? remove(card) : undefined;
       if (draft.value === "" && card?.kind === "row") {
         if (ch === "+" || ch === "=") return setMinutes(card, card.minutes + step);
         if (ch === "-" || ch === "_") return setMinutes(card, Math.max(step, card.minutes - step));
@@ -703,6 +712,7 @@ export function App({
                   onSelect={() => setSel(i)}
                   onEdit={() => startEdit(i)}
                   onMinutes={(m) => setMinutes(it, m)}
+                  onRemove={() => remove(it)}
                   onChoose={(n) => {
                     const c = it.choices?.[n];
                     if (c) choose(c);
@@ -806,6 +816,7 @@ function CardView({
   onSelect,
   onEdit,
   onMinutes,
+  onRemove,
   onChoose,
 }: {
   c: Card;
@@ -818,6 +829,7 @@ function CardView({
   onSelect: () => void;
   onEdit: () => void;
   onMinutes: (m: number) => void;
+  onRemove: () => void;
   onChoose: (n: number) => void;
 }) {
   const ask = c.kind === "ask";
@@ -894,6 +906,11 @@ function CardView({
             onEdit={ask ? undefined : onEdit}
             onChange={ask ? undefined : onMinutes}
           />
+          {ask ? null : (
+            <Clickable onClick={onRemove} marginLeft={2} alignSelf="center">
+              {(h) => <Text color={h ? T.danger : selected || hover ? T.muted : T.faint}>✕</Text>}
+            </Clickable>
+          )}
         </Box>
       )}
     </Clickable>

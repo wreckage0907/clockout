@@ -3,7 +3,7 @@ import { prNumber } from "../core/summarize";
 import type { Block, Day } from "../core/types";
 import type { LlmBackend } from "./types";
 
-const SYSTEM = `You write timesheet descriptions. For each block of work you get the evidence: coding-session titles, pull requests, branches, reviewed PRs.
+const SYSTEM = `You write timesheet descriptions. For each block of work you get the evidence: coding-session titles, pull requests, branches, reviewed PRs, issues opened or commented on.
 Write one description per block id:
 - 3 to 8 words, start with a past-tense or imperative verb ("Fix", "Add", "Review", "Investigate").
 - Keep PR numbers as "(PR #n)" when a PR was opened or reviewed in the block.
@@ -21,6 +21,11 @@ export function blockSignature(b: Block): string {
 
 function evidenceOf(b: Block) {
   const uniq = (xs: (string | undefined)[]) => [...new Set(xs.filter((x): x is string => !!x))];
+  const discussed = uniq(
+    b.evidence
+      .filter((a) => a.kind === "issue" || a.kind === "comment")
+      .map((a) => `${a.kind === "issue" ? "opened" : "commented on"} ${a.title ?? ""}`.trim()),
+  );
   return {
     kind: b.kind,
     project: b.project,
@@ -36,6 +41,8 @@ function evidenceOf(b: Block) {
         .map((a) => `#${prNumber(a)} ${a.title ?? ""}`.trim()),
     ),
     branches: uniq(b.evidence.map((a) => a.branch)),
+    // Only when there are some, so blocks without them keep their cached summaries.
+    ...(discussed.length ? { discussed } : {}),
   };
 }
 

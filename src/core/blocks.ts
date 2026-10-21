@@ -6,6 +6,8 @@ import type { Activity, Block, Day, Gap, Question } from "./types";
 
 /** Reading the agent's reply, or the time after a review comment, before the next action. */
 const TAIL = 5 * MINUTE;
+/** Reading a pull request before your first comment or verdict on it. */
+const REVIEW_READ = 15 * MINUTE;
 /** Slivers shorter than this are folded into the neighbouring block. */
 const SLIVER = 5 * MINUTE;
 /** Gaps at least this long get a question. */
@@ -75,7 +77,7 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
     .filter((a) => a.actor === "human" && a.kind !== "meeting")
     .sort((a, b) => a.start.getTime() - b.start.getTime());
   const turns = acts.filter((a) => a.kind === "agent_turn");
-  const spans = buildSpans(human, turns, idle);
+  const spans = buildSpans(human, turns, idle, threads(human, turns));
   let pieces = foldSlivers(resolveOverlaps(spans));
 
   // Accepted meetings win over work; note when you were busy during one.
@@ -131,8 +133,9 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
       ),
     ];
     if (evidence.length === 0) evidence.push(...p.span.events.slice(0, 1));
-    const reviewOnly = evidence.every((e) => e.kind === "review" || e.kind === "review_comment");
-    const kind = reviewOnly ? "review" : "work";
+    // Someone else's PR: its comments and verdict, and trying it out on its branch.
+    const reviewing = evidence.some(isReview) && !evidence.some((e) => e.kind === "pr");
+    const kind = reviewing ? "review" : "work";
     blocks.push(
       finish(
         {
@@ -212,8 +215,68 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
   };
 }
 
-/** Each action claims time until the agent's reply is read (capped at the idle cutoff). */
-function buildSpans(human: Activity[], turns: Activity[], idle: number): Span[] {
+function isReview(a: Activity): boolean {
+  return a.kind === "review" || a.kind === "review_comment";
+}
+
+/** The PR a branch was fetched into by number: "pr-2305", "pr/2305", "pull/2305/head". */
+function prOfBranch(branch: string): string | undefined {
+  return /(?:^|\/)(?:pr|pull)[-_/]?(\d+)(?:\/head)?$/i.exec(branch)?.[1];
+}
+
+/** PR numbers a session title names: "Verify PR 2305 locally", "Review #2305". */
+function prsInTitle(title: string): string[] {
+  return [...title.matchAll(/(?:\bPR\s*#?|\bpull(?:\s+request)?\s*[#/]?|#)(\d+)\b/gi)].map(
+    (m) => m[1] as string,
+  );
+}
+
+/**
+ * Which line of work each action belongs to. A PR you reviewed is one, including a session
+ * where you tried it out: one that ran on its branch (under its own name, or fetched as
+ * "pr-2305") or whose title names it. Otherwise the branch, or the PR or issue.
+ */
+function threads(human: Activity[], turns: Activity[]): Map<Activity, string> {
+  const reviewed = human.filter(isReview).flatMap((a) => {
+    const ref = a.refs?.find((r) => r.startsWith("pr:"));
+    return ref ? [{ project: a.project, ref, branch: a.branch, n: ref.split("#").pop() }] : [];
+  });
+  const triedOut = (a: Activity) =>
+    reviewed.find(
+      (r) =>
+        r.project === a.project &&
+        ((a.branch && (r.branch === a.branch || r.n === prOfBranch(a.branch))) ||
+          (a.title && r.n && prsInTitle(a.title).includes(r.n))),
+    )?.ref;
+  const bySession = new Map<string, string>();
+  for (const a of [...human, ...turns]) {
+    const ref = a.sessionId && !isReview(a) ? triedOut(a) : undefined;
+    if (a.sessionId && ref) bySession.set(a.sessionId, ref);
+  }
+  const out = new Map<Activity, string>();
+  for (const a of human) {
+    const ref = a.refs?.find((r) => r.startsWith("pr:") || r.startsWith("issue:"));
+    if (isReview(a) && ref) {
+      out.set(a, ref);
+      continue;
+    }
+    const pr = (a.sessionId ? bySession.get(a.sessionId) : undefined) ?? triedOut(a);
+    out.set(a, pr ?? a.branch ?? ref ?? "");
+  }
+  return out;
+}
+
+/**
+ * Each action claims time until the agent's reply is read (capped at the idle cutoff); a review
+ * also claims the reading before it, where nothing else does. A comment on an issue joins
+ * whatever you were doing in that project just then.
+ */
+function buildSpans(
+  human: Activity[],
+  turns: Activity[],
+  idle: number,
+  thread: Map<Activity, string>,
+): Span[] {
   const byKey = new Map<string, Span[]>();
   for (const h of human) {
     const t = h.start.getTime();
@@ -224,14 +287,26 @@ function buildSpans(human: Activity[], turns: Activity[], idle: number): Span[] 
     }
     end = Math.min(end, t + idle);
     const project = h.project ?? "Unsorted";
-    const key = `${project}|${h.branch ?? h.refs?.find((r) => r.startsWith("pr:")) ?? ""}`;
+    if ((h.kind === "issue" || h.kind === "comment") && !h.branch) {
+      const open = [...byKey.values()]
+        .flat()
+        .filter((s) => s.project === project && t - s.end <= idle)
+        .sort((a, b) => b.end - a.end)[0];
+      if (open) {
+        open.end = Math.max(open.end, end);
+        open.events.push(h);
+        continue;
+      }
+    }
+    const key = `${project}|${thread.get(h) ?? ""}`;
     const list = byKey.get(key) ?? [];
     const last = list.at(-1);
     if (last && t - last.end <= idle) {
       last.end = Math.max(last.end, end);
       last.events.push(h);
     } else {
-      list.push({ key: `${key}@${t}`, project, start: t, end, events: [h] });
+      const start = isReview(h) ? t - Math.min(REVIEW_READ, idle) : t;
+      list.push({ key: `${key}@${t}`, project, start, end, events: [h] });
     }
     byKey.set(key, list);
   }

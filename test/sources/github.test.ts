@@ -56,8 +56,73 @@ describe("github source", async () => {
       ["review_comment", "11:16"],
       ["review_comment", "11:22"],
       ["review", "11:25"],
+      ["review_comment", "11:24"],
     ]);
-    expect(review[0]?.refs).toEqual(["pr:acme/api#212", "author:sam-example"]);
+    expect(review[0]).toMatchObject({
+      refs: ["pr:acme/api#212", "author:sam-example"],
+      branch: "feat/login-rate-limit",
+    });
+  });
+
+  it("emits your comments on issues, and on someone else's PR as part of reviewing it", async () => {
+    const { out } = await collect(response);
+    expect(out.filter((a) => a.kind === "comment")).toEqual([
+      {
+        source: "github",
+        kind: "comment",
+        actor: "human",
+        start: new Date("2026-10-16T05:20:00Z"),
+        title: "Token refresh logs users out",
+        repo: "acme/api",
+        refs: ["issue:acme/api#90"],
+      },
+    ]);
+    expect(
+      out.find(
+        (a) =>
+          a.kind === "review_comment" &&
+          a.start.getUTCHours() === 11 &&
+          a.start.getUTCMinutes() === 24,
+      ),
+    ).toMatchObject({ branch: "feat/login-rate-limit" });
+  });
+
+  it("keeps a comment on your own PR with the work on its branch, and emits issues you opened", async () => {
+    const own = structuredClone(response);
+    own.data.viewer.issueComments.nodes = [
+      {
+        createdAt: "2026-10-16T11:00:00Z",
+        issue: {
+          number: 48,
+          title: "Add CSV export",
+          repository: { nameWithOwner: "dev-example/clockout" },
+        },
+        pullRequest: { number: 48, headRefName: "feat/export", author: { login: "dev-example" } },
+      },
+    ];
+    own.data.viewer.contributionsCollection.issueContributions.nodes = [
+      {
+        issue: {
+          number: 91,
+          title: "Export drops rows past midnight",
+          createdAt: "2026-10-16T12:00:00Z",
+          repository: { nameWithOwner: "dev-example/clockout" },
+        },
+      },
+    ];
+    const { out } = await collect(own);
+    expect(out.filter((a) => a.kind === "comment" || a.kind === "issue")).toEqual([
+      expect.objectContaining({
+        kind: "issue",
+        title: "Export drops rows past midnight",
+        refs: ["issue:dev-example/clockout#91"],
+      }),
+      expect.objectContaining({
+        kind: "comment",
+        branch: "feat/export",
+        refs: ["pr:dev-example/clockout#48", "author:dev-example"],
+      }),
+    ]);
   });
 
   it("drops contributions outside the day", async () => {

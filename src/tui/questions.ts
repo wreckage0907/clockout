@@ -49,7 +49,10 @@ export function short(project: string): string {
   return project.split("/").pop() ?? project;
 }
 
-/** What a block is built from, in one short line: "18 prompts in 2 sessions · opened PR #87". */
+/**
+ * What a block is built from, in one short line: "18 prompts in 2 sessions · opened PR #87",
+ * "reviewed PR #212 · 3 comments", "commented on issue #90".
+ */
 export function evidenceLine(b: Block): string {
   const ev = b.evidence;
   const parts: string[] = [];
@@ -61,9 +64,18 @@ export function evidenceLine(b: Block): string {
     );
   const pr = (a: { refs?: string[] }) => a.refs?.find((r) => r.startsWith("pr:"))?.split("#")[1];
   for (const a of ev.filter((x) => x.kind === "pr")) parts.push(`opened PR #${pr(a) ?? "?"}`);
-  const reviews = ev.filter((x) => x.kind === "review" || x.kind === "review_comment");
-  if (reviews.length)
-    parts.push(`${reviews.length} review comments on PR #${pr(reviews[0] ?? {}) ?? "?"}`);
+  for (const n of new Set(ev.filter(isReview).map((a) => pr(a) ?? "?"))) {
+    const on = ev.filter((a) => isReview(a) && (pr(a) ?? "?") === n);
+    const comments = plural(on.filter((a) => a.kind === "review_comment").length, "comment");
+    if (on.some((a) => a.kind === "review"))
+      parts.push(`reviewed PR #${n}${comments ? ` · ${comments}` : ""}`);
+    else parts.push(`${comments} on PR #${n}`);
+  }
+  for (const a of ev.filter((x) => x.kind === "issue")) parts.push(`opened ${ref(a)}`);
+  for (const r of new Set(ev.filter((x) => x.kind === "comment").map(ref))) {
+    const n = ev.filter((a) => a.kind === "comment" && ref(a) === r).length;
+    parts.push(n === 1 ? `commented on ${r}` : `${n} comments on ${r}`);
+  }
   const meeting = ev.find((a) => a.kind === "meeting");
   if (meeting) {
     const rsvp: Record<string, string> = {
@@ -77,4 +89,18 @@ export function evidenceLine(b: Block): string {
   }
   if (b.project === BREAK_PROJECT) parts.push("not counted");
   return parts.length ? parts.join(" · ") : "added by you";
+}
+
+function isReview(a: { kind: string }): boolean {
+  return a.kind === "review" || a.kind === "review_comment";
+}
+
+/** "issue #90" or "PR #48", from an activity's first reference. */
+function ref(a: { refs?: string[] }): string {
+  const [kind, n] = a.refs?.[0]?.split("#") ?? [];
+  return `${kind?.startsWith("pr:") ? "PR" : "issue"} #${n ?? "?"}`;
+}
+
+function plural(n: number, word: string): string {
+  return n ? `${n} ${word}${n === 1 ? "" : "s"}` : "";
 }

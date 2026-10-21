@@ -90,7 +90,10 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Review screen: ctrl+s / **Send to ERP**, task picker, plan panel, Enter sends
 - [x] Tested live against a local next-pms site (sign-in, send, update, hand-added entries, disconnect)
 - [ ] Try it on rtCamp's ERP (staging first)
-- [ ] Remove a card by hand (✕ / `d`) and an `ignore` project rule (from the review of the personal-project case)
+- [x] Remove a card by hand (✕ / ctrl+d; typed keys go to the chat bar, so not `d`)
+- [ ] An `ignore` project rule (from the review of the personal-project case)
+- [x] ERP in Setup: sign in by address, who you are, task mappings (forget one), sign out
+- [x] GitHub: issues opened, comments on issues and PRs, reading time before a review, trying out a reviewed PR counts as reviewing it, plain review wording on cards
 - [ ] Description style settings (format, length, instructions, examples)
 
 ## Setup by chat

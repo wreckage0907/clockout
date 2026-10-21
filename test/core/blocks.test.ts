@@ -53,7 +53,7 @@ describe("buildDay on the fixture day", async () => {
       "10:00-12:15 work acme/api | Development | Fix auth token refresh (PR #87)",
       "14:00-16:33 work dev-example/clockout | Development | Build export command (PR #48)",
       "15:00-15:30 meeting? Meetings | Meetings | Design sync",
-      "16:40-17:00 review acme/api | Code Review | Review Rate-limit login attempts (PR #212)",
+      "16:33-17:00 review acme/api | Code Review | Review Rate-limit login attempts (PR #212)",
       "17:30-18:00 meeting? Meetings | Meetings | Focus: write release notes",
       "18:00-18:30 meeting? Meetings | Meetings | Acme weekly sync",
       "23:40-23:46 work acme/api | Development | Investigate flaky deploy",
@@ -79,7 +79,7 @@ describe("buildDay on the fixture day", async () => {
       "Meetings|Meetings|0.5",
       "acme/api|Development|2.25",
       "dev-example/clockout|Development|2.5",
-      "acme/api|Code Review|0.25",
+      "acme/api|Code Review|0.5",
       "acme/api|Development|0.25",
     ]);
   });
@@ -241,5 +241,115 @@ describe("review fixes", () => {
     ]);
     expect(day.questions[0]).toMatchObject({ kind: "overlap", blockId: "b2" });
     expect(timesheetRows(day, config).reduce((s, r) => s + r.hours, 0)).toBe(1);
+  });
+});
+
+describe("GitHub activity", () => {
+  const config = fixtureConfig();
+  const pr = (kind: Activity["kind"], hhmm: string, extra: Partial<Activity> = {}): Activity => ({
+    source: "github",
+    kind,
+    actor: "human",
+    start: at(hhmm),
+    title: "Rate-limit login attempts",
+    repo: "acme/api",
+    branch: "feat/login-rate-limit",
+    refs: ["pr:acme/api#212", "author:sam-example"],
+    ...extra,
+  });
+
+  it("counts the reading before an approval with no comments", () => {
+    expect(rows(buildDay(D, [pr("review", "15:00")], config))).toEqual([
+      "14:45-15:05 review acme/api | Code Review | Review Rate-limit login attempts (PR #212)",
+    ]);
+  });
+
+  it("gives the reading time only where you weren't doing something else", () => {
+    const day = buildDay(D, [prompt("14:30"), prompt("14:40"), pr("review", "15:00")], config);
+    expect(rows(day)).toEqual([
+      "14:30-14:45 work acme/api | Development | Task A",
+      "14:45-15:05 review acme/api | Code Review | Review Rate-limit login attempts (PR #212)",
+    ]);
+  });
+
+  it("counts trying out a PR you reviewed on its branch as reviewing it", () => {
+    for (const branch of ["pr-212", "feat/login-rate-limit", "pull/212/head"]) {
+      const day = buildDay(
+        D,
+        [
+          prompt("14:00", { branch, title: "Verify PR 212 locally" }),
+          prompt("14:15", { branch, title: "Verify PR 212 locally" }),
+          pr("review", "14:30"),
+        ],
+        config,
+      );
+      expect(rows(day)).toEqual([
+        "14:00-14:35 review acme/api | Code Review | Review Rate-limit login attempts (PR #212)",
+      ]);
+    }
+  });
+
+  it("counts a session as reviewing when it switched to the PR's branch or names the PR", () => {
+    const turn: Activity = {
+      source: "test",
+      kind: "agent_turn",
+      actor: "agent",
+      start: at("14:01"),
+      end: at("14:10"),
+      sessionId: "s1",
+      repo: "acme/api",
+      branch: "pr-212",
+    };
+    const onDevelop = { branch: "develop", title: "Check the login fix" };
+    for (const [extra, acts] of [
+      [onDevelop, [turn]],
+      [{ branch: "develop", title: "Verify PR #212 locally" }, []],
+    ] as const) {
+      const day = buildDay(
+        D,
+        [prompt("14:00", extra), prompt("14:12", extra), ...acts, pr("review", "14:30")],
+        config,
+      );
+      expect(day.blocks.map((b) => `${b.kind} ${b.task}`)).toEqual(["review Code Review"]);
+    }
+  });
+
+  it("leaves a branch that only mentions a number alone", () => {
+    const day = buildDay(
+      D,
+      [prompt("14:00", { branch: "fix/issue-212" }), pr("review", "16:00")],
+      config,
+    );
+    expect(day.blocks.map((b) => b.kind)).toEqual(["work", "review"]);
+  });
+
+  it("folds a comment on an issue into what you were doing in that project", () => {
+    const comment: Activity = {
+      source: "github",
+      kind: "comment",
+      actor: "human",
+      start: at("10:12"),
+      title: "Token refresh logs users out",
+      repo: "acme/api",
+      refs: ["issue:acme/api#90"],
+    };
+    const day = buildDay(D, [prompt("10:00"), prompt("10:08"), comment], config);
+    expect(rows(day)).toEqual(["10:00-10:17 work acme/api | Development | Task A"]);
+    expect(day.blocks[0]?.evidence.map((a) => a.kind)).toEqual(["prompt", "prompt", "comment"]);
+  });
+
+  it("gives a comment on its own a block named after the issue", () => {
+    const comment: Activity = {
+      source: "github",
+      kind: "comment",
+      actor: "human",
+      start: at("12:00"),
+      title: "Token refresh logs users out",
+      repo: "acme/api",
+      refs: ["issue:acme/api#90"],
+    };
+    expect(rows(buildDay(D, [comment], config))).toEqual([
+      "12:00-12:05 work acme/api | Development | Discuss Token refresh logs users out (#90)",
+    ]);
   });
 });

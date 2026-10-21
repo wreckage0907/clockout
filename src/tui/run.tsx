@@ -163,18 +163,27 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
     },
     setup: {
       async state() {
-        const [projects, github, cli, google] = await Promise.all([
+        const [projects, github, cli, google, erpCreds] = await Promise.all([
           claudeProjects(),
           detectGitHub(ctx),
           detectClaudeCli(),
           loadGoogleCredentials().catch(() => null),
+          loadErpCredentials().catch(() => null),
         ]);
+        const signedIn =
+          !!erpCreds &&
+          !!config.timesheet &&
+          new URL(erpCreds.url).origin === new URL(config.timesheet.url).origin;
         return {
           config,
           googleConnected: google !== null,
           claude: { found: projects.length > 0, projects },
           github: { found: github !== null },
           aiFound: cli !== null,
+          erp: {
+            connected: signedIn,
+            ...(signedIn && erpCreds?.user ? { user: erpCreds.user } : {}),
+          },
         };
       },
       async save(next) {
@@ -194,6 +203,16 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
           scope,
           connected_at: new Date().toISOString(),
         });
+      },
+      async connectErp(site) {
+        const connected = await signInErp(site, openQuietly);
+        target = null;
+        const saved = await actions.setup.save(withErpSite(config, connected.url));
+        return { config: saved, ...(connected.user ? { user: connected.user } : {}) };
+      },
+      async disconnectErp() {
+        await signOutErp();
+        target = null;
       },
     },
   };

@@ -1,6 +1,6 @@
 # Clockout
 
-Turns your day (Claude Code sessions, GitHub PRs and reviews, and calendar meetings) into a ready-to-paste timesheet. You fix it by voice: dictate "the gap after lunch was lunch, I skipped the design sync" and Clockout proposes the edits.
+Turns your day (Claude Code sessions, GitHub PRs, reviews, issues and comments, and calendar meetings) into a ready-to-paste timesheet. You fix it by voice: dictate "the gap after lunch was lunch, I skipped the design sync" and Clockout proposes the edits.
 
 The AI work runs on the Claude Code subscription you already have. No API key needed, and it still works with no AI at all.
 
@@ -54,10 +54,11 @@ node dist/cli.js               # review today
 | **↑ ↓** | Select a card |
 | **Enter** on a card | Type its length: `1h 45`, `1:45`, `1.75`, `45m` (or type it into the chat bar) |
 | **-** / **+** | Shorten or lengthen the selected card by your rounding step |
+| **Ctrl+D** (or the card's **✕**) | Take the selected card off the day (Ctrl+Z brings it back) |
 | **Ctrl+Y** (or **Copy sheet**) | Copy the timesheet, tab-separated, once no meeting is waiting |
 | **Ctrl+S** (or **Send to ERP**) | Send the day to your ERP: shows what would be added, updated or removed first; **Enter** sends |
 | **Ctrl+Z** | Undo |
-| **Ctrl+P** (or **Setup**) | Setup: tick sources (Google Calendar, Claude Code and which of its projects, GitHub), daily target, AI helper, working hours, rounding |
+| **Ctrl+P** (or **Setup**) | Setup: tick sources (Google Calendar, Claude Code and which of its projects, GitHub), sign in to your ERP and see which task each project goes to, daily target, AI helper, working hours, rounding |
 | click the date | Pick another day; **PgUp** / **PgDn** step a day |
 | **Esc** | Back home · **Ctrl+C** quits |
 

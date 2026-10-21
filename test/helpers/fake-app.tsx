@@ -1,5 +1,5 @@
 import { type Correction, localCorrection, type Turn } from "../../src/ai/edits";
-import { withTaskMapping } from "../../src/config/edit";
+import { withErpSite, withTaskMapping } from "../../src/config/edit";
 import type { Config, TaskMapping } from "../../src/config/schema";
 import { applySettings, type SettingOp } from "../../src/config/setting-ops";
 import { buildDay } from "../../src/core/blocks";
@@ -49,6 +49,8 @@ export function fakeActions(
     saved: [] as unknown[],
     mapped: [] as TaskMapping[],
     configured: [] as SettingOp[][],
+    signedIn: [] as string[],
+    signedOut: 0,
   };
   let erpConfig: Config = opts.erp
     ? {
@@ -147,6 +149,7 @@ export function fakeActions(
         },
         github: { found: true },
         aiFound: true,
+        erp: { connected: false },
         ...opts.setup,
       }),
       save: async (next) => {
@@ -154,6 +157,14 @@ export function fakeActions(
         return next;
       },
       connectGoogle: async () => {},
+      connectErp: async (site) => {
+        calls.signedIn.push(site);
+        erpConfig = withErpSite(erpConfig, `https://${site}`);
+        return { config: erpConfig, user: "dev@example.com" };
+      },
+      disconnectErp: async () => {
+        calls.signedOut++;
+      },
     },
   };
   return { actions, calls };

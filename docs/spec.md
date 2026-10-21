@@ -67,11 +67,11 @@ What counts on a timesheet is how long each thing took, not when, so the screen 
 ```
 
 - **Home**: the logo on the hours bar, the total, the chat bar. Its date opens a month picker (days with a draft are dotted; Yesterday / Today); its Setup button and ctrl+p open setup.
-- **Day**: Enter opens one card per timesheet row (same grouping as the export), in the order the work started. The duration box takes a typed length (`1h 45`, `1:45`, `1.75`); − / + nudge by `round_to`. A length you set is stored on the block (`minutes`) and counts exactly that on the timesheet; times don't move. Meetings you haven't confirmed are cards with one-key answers. Gap questions get no card: untracked time only matters if you want hours there, which is what **Add time** is for (project, how long, what; Clockout places it).
+- **Day**: Enter opens one card per timesheet row (same grouping as the export), in the order the work started. The duration box takes a typed length (`1h 45`, `1:45`, `1.75`); − / + nudge by `round_to`. A length you set is stored on the block (`minutes`) and counts exactly that on the timesheet; times don't move. Ctrl+D or a card's ✕ takes it off the day (its blocks are deleted; Ctrl+Z brings them back). Meetings you haven't confirmed are cards with one-key answers. Gap questions get no card: untracked time only matters if you want hours there, which is what **Add time** is for (project, how long, what; Clockout places it).
 - **Corrections**: anything typed that isn't a length goes to the AI, which returns edit operations; they're shown as a proposal and applied on Enter. Ctrl+Z undoes.
 - **Setup by chat** ([ADR 0007](adr/0007-setup-from-the-chat-bar.md)): the same bar takes settings ("connect my ERP at erp.example.com", "leave out my personal project", "my target is 7h30", "send acme/api to the hackathon task"). The AI returns settings operations, shown as a proposal like corrections; on Enter they're applied, validated like config.toml and saved, and the day is drafted again if they affect it. Sign-ins open the browser. An ERP task is searched locally and the picker opens if there's more than one match. A pasted private calendar link is handled without the AI; text that looks like a token is refused and nothing is sent. "connect erp <address>" and "disconnect google" work without the AI. The last three turns go along, so follow-ups work.
 - **Send**: ctrl+s (or **Send to ERP**) sends the day to the timesheet system; see "Sending the day" below.
-- **Setup**: a block per source to tick (Google Calendar signs in; Claude Code opens a searchable list of its projects, each tickable; GitHub), daily target, AI helper; working hours and rounding under More. Saved to config.toml as you go.
+- **Setup**: a block per source to tick (Google Calendar signs in; Claude Code opens a searchable list of its projects, each tickable; GitHub), and one for the ERP: it opens an address field to sign in (browser), or once signed in shows the site, who you are and which ERP task each project goes to (✕ forgets one, so it's asked again on the next send) with Sign out. Then daily target, AI helper; working hours and rounding under More. Saved to config.toml as you go.
 
 ## 5. Sources
 
@@ -117,7 +117,7 @@ Read from local files; nothing to set up. Never read auth or token files.
 | Source | Reads | MVP |
 |---|---|---|
 | `git` | `git log --author=<me>` in repos seen in agent `cwd`s + configured roots | ✓ |
-| `github` | `gh auth token` or `GITHUB_TOKEN` → GraphQL `contributionsCollection` (PRs, reviews) | ✓ |
+| `github` | `gh auth token` or `GITHUB_TOKEN` → GraphQL `contributionsCollection` (PRs and issues opened, reviews with their comments and the PR's branch) and your latest 100 issue and PR comments (a comment on someone else's PR counts as reviewing it) | ✓ |
 | GitLab / Bitbucket | via `command` source for now | later |
 
 ### Calendar
@@ -221,7 +221,7 @@ collect → store → resolve projects → blocks → attendance → summarize �
 1. **Collect** from each configured source for the date range.
 2. **Store** in local SQLite (`~/.local/share/clockout/`). Days survive agents deleting their logs; corrections are saved.
 3. **Resolve projects**: `[[projects]]` rules → git remote → repo root → `cwd`. Ticket keys from branch names. Meetings: links/ticket keys in the description → title rules → attendee domain → past corrections for the same series → AI pick from the project list.
-4. **Blocks**: merge activity on the same project + branch/PR; a gap longer than `idle_cutoff` splits a block. Duration comes from **your** activity (prompts, commits, reviews), not agent runtime. Review blocks: cluster of comment/submit times, minimum 15 min. Calendar wins on overlap. Round to `round_to`.
+4. **Blocks**: merge activity on the same project + branch/PR; a gap longer than `idle_cutoff` splits a block. Duration comes from **your** activity (prompts, commits, reviews), not agent runtime. Review blocks: cluster of comment/submit times, plus up to 15 min of reading before the first one where nothing else claims that time. A session where you try out a PR you reviewed (it ran on the PR's branch, by name or fetched as `pr-2305`, or its title names the PR) is part of the review. A comment on an issue joins whatever you were doing in that project then, or is its own short block. Calendar wins on overlap. Round to `round_to`.
 5. **Attendance**: accepted → count; tentative / no response → ask; declined → drop; no attendees → count. Dense prompts or commits during an accepted meeting → ask "skipped or multitasking?". Never drop a meeting silently.
 6. **Summarize**: one verb-first line per block, ≤ 8 words. AI backend if available, else aiTitle → PR title → commit subject → branch name.
 7. **Gaps**: unaccounted time inside working hours.

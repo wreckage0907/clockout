@@ -9,7 +9,7 @@ describe("renderDay", async () => {
   const lines = out.split("\n");
 
   it("leads with the date, total hours and open questions", () => {
-    expect(lines[0]).toBe("clockout · Fri 2026-10-16 · Asia/Kolkata    5.75h · 5 questions");
+    expect(lines[0]).toBe("clockout · Fri 2026-10-16 · Asia/Kolkata    6.00h · 5 questions");
   });
 
   it("lists blocks and gaps in time order, marking unconfirmed meetings", () => {

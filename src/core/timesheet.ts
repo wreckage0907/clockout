@@ -63,6 +63,13 @@ export function setRowMinutesOps(day: Day, key: string, minutes: number): EditOp
   }));
 }
 
+/** Edits that take a timesheet row off the day: its blocks are deleted (undo brings them back). */
+export function removeRowOps(day: Day, key: string): EditOp[] {
+  return countedBlocks(day)
+    .filter((b) => rowKey(b) === key)
+    .map((b) => ({ op: "delete" as const, id: b.id }));
+}
+
 export interface DayTotals {
   hours: number;
   blocks: number;

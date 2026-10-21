@@ -8,7 +8,9 @@ import {
   withClaudeExclude,
   withDay,
   withErpSite,
+  withoutTaskMapping,
   withSource,
+  withTaskMapping,
 } from "../../src/config/edit";
 import { parseConfig } from "../../src/config/load";
 import { configSchema } from "../../src/config/schema";
@@ -19,6 +21,17 @@ const config = configSchema.parse({
 });
 
 describe("config edits from setup", () => {
+  it("forgets one ERP task mapping and keeps the others", () => {
+    let c = withErpSite(config, "https://erp.example.com");
+    c = withTaskMapping(c, { project: "acme/api", erp_task: "T-1" });
+    c = withTaskMapping(c, { project: "acme/api", task: "Code Review", erp_task: "T-2" });
+    const out = withoutTaskMapping(c, { project: "acme/api" });
+    expect(out.timesheet?.map).toEqual([
+      { project: "acme/api", task: "Code Review", erp_task: "T-2" },
+    ]);
+    expect(withoutTaskMapping(config, { project: "acme/api" })).toBe(config);
+  });
+
   it("turns sources on once and off entirely", () => {
     const on = withSource(config, { type: "google-calendar", calendars: ["primary"] }, true);
     expect(on.sources.map((s) => s.type)).toEqual(["claude-code", "github", "google-calendar"]);
