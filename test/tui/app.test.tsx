@@ -210,6 +210,7 @@ describe("setup from the chat bar", () => {
     expect(calls.configured).toEqual([[{ op: "day", target: "7h" }]]);
     expect(ui.lastFrame()).toContain("✓ Your target is 7h now.");
     expect(calls.commits).toEqual([]);
+    for (let i = 0; i < 50 && calls.loads.length < 2; i++) await tick();
     expect(calls.loads).toHaveLength(2);
   });
 
