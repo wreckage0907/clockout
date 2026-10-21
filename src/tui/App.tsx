@@ -1,8 +1,9 @@
 import { Box, Text, useInput } from "ink";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Correction } from "../ai/edits";
+import type { Correction, Turn } from "../ai/edits";
 import type { OpenedDay } from "../collect";
 import { type Config, durationMinutes, type TaskMapping } from "../config/schema";
+import { describeSettings, type SettingEffect, type SettingOp } from "../config/setting-ops";
 import { describeEdits, placeTimeOps } from "../core/edits";
 import { changes, type PushPlan, type PushRow } from "../core/push";
 import { addDays, parseDuration } from "../core/time";
@@ -37,9 +38,15 @@ import { hm, projectColor, T } from "./theme";
 
 export interface AppActions {
   load(date: string): Promise<OpenedDay>;
-  /** Whether typed corrections can go to an AI right now. */
-  hasAI(): boolean;
-  parse(text: string, day: Day): Promise<Correction>;
+  /** What was said, as edits to the day and changes to settings; `earlier` is the last few turns. */
+  parse(text: string, day: Day, earlier: Turn[]): Promise<Correction>;
+  /**
+   * Applies settings changes said in the chat bar: signs in or out where asked, saves the
+   * config, and returns it, with an ERP task still to pick if the search wasn't conclusive.
+   */
+  configure(
+    ops: SettingOp[],
+  ): Promise<{ config: Config; pick?: Extract<SettingEffect, { kind: "pick_task" }> }>;
   commit(
     stored: StoredDay,
     ops: EditOp[],
@@ -67,9 +74,25 @@ export interface SendActions {
 interface Proposal {
   text: string;
   ops: EditOp[];
+  settings: SettingOp[];
   lines: string[];
   reply: string;
 }
+
+/** An ERP task to choose for a project: before sending, or because you asked in the chat. */
+interface Picking {
+  project: string;
+  task?: string;
+  /** For the picker's heading, e.g. the row's task. */
+  label: string;
+  description: string;
+  query?: string;
+  /** Carry on sending the day once it's picked. */
+  send: boolean;
+}
+
+/** Turns of the chat kept for follow-ups. */
+const TURNS = 3;
 
 /**
  * The review app. Home: the logo standing on the day's hours, the total, and the chat bar.
@@ -106,7 +129,8 @@ export function App({
   const [saved, setSaved] = useState<string[]>([]);
   const [overlay, setOverlay] = useState<"date" | "add" | "task" | null>(null);
   const [sending, setSending] = useState<PushPlan | null>(null);
-  const [unmapped, setUnmapped] = useState<PushRow | null>(null);
+  const [unmapped, setUnmapped] = useState<Picking | null>(null);
+  const [turns, setTurns] = useState<Turn[]>([]);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [sel, setSel] = useState(-1);
   const [chip, setChip] = useState(0);
@@ -225,7 +249,7 @@ export function App({
       const plan = await erp.plan(current);
       const first = plan.items.find((i) => i.action === "unmapped");
       if (first?.action === "unmapped") {
-        setUnmapped(first.row);
+        setUnmapped(picking(first.row));
         setOverlay("task");
       } else setSending(plan);
     } catch (err) {
@@ -234,16 +258,50 @@ export function App({
       setBusy(null);
     }
   };
-  const pickTask = async (row: PushRow, task: RemoteTask) => {
+  const pickTask = async (p: Picking, task: RemoteTask) => {
     if (!erp) return;
     setOverlay(null);
     setUnmapped(null);
     try {
-      setConfig(await erp.map({ project: row.project, erp_task: task.id, label: task.subject }));
+      setConfig(
+        await erp.map({
+          project: p.project,
+          ...(p.task ? { task: p.task } : {}),
+          erp_task: task.id,
+          label: task.subject,
+        }),
+      );
     } catch (err) {
       return showToast(`Couldn't save that: ${(err as Error).message}`);
     }
-    await startSend();
+    if (p.send) await startSend();
+    else showToast(`✓ ${p.project} goes to ${task.subject} from now on`);
+  };
+  /** Settings said in the chat bar; the day is drafted again if what it reads changed. */
+  const configure = async (ops: SettingOp[], done: string) => {
+    const signIn = ops.some((o) => o.op === "connect");
+    setBusy(signIn ? "Finish signing in in your browser…" : "Saving setup…");
+    try {
+      const r = await actions.configure(ops);
+      setConfig(r.config);
+      if (r.pick) {
+        const { project, task, search } = r.pick;
+        setUnmapped({
+          project,
+          ...(task ? { task } : {}),
+          label: task ?? "every task",
+          description: "",
+          query: search,
+          send: false,
+        });
+        setOverlay("task");
+      } else showToast(`✓ ${done}`);
+      if (ops.some(draftsDay)) setReload((n) => n + 1);
+    } catch (err) {
+      showToast(`Couldn't change that: ${(err as Error).message}`);
+    } finally {
+      setBusy(null);
+    }
   };
   const confirmSend = async () => {
     if (!erp || !sending || !stored) return;
@@ -279,23 +337,30 @@ export function App({
     if (c && m !== null) setMinutes(c, m);
   };
 
-  /** Typed or dictated words: a length for the selected card, or a correction for the AI. */
+  /**
+   * Typed or dictated words: a length for the selected card, or for the AI a correction to the
+   * day or a change to settings ("connect my ERP", "leave out my personal projects").
+   */
   const send = async (text: string) => {
     if (!day) return;
     draft.setValue("");
     const typed = parseDuration(text);
     if (typed !== null && card?.kind === "row") return setMinutes(card, typed);
-    if (!actions.hasAI()) {
-      draft.setValue(text);
-      return showToast("Typed corrections need the AI helper. Turn it on in Setup (ctrl+p).");
-    }
     setBusy(`Thinking about “${text.length > 50 ? `${text.slice(0, 49)}…` : text}”`);
     try {
-      const { ops, reply } = await actions.parse(text, day);
+      const { ops, settings = [], reply } = await actions.parse(text, day, turns);
+      const asked = describeEdits(day, ops).join(" ");
+      setTurns((t) => [...t, { said: text, reply: reply || asked }].slice(-TURNS));
       const changes = ops.filter((o) => o.op !== "clarify");
-      if (changes.length === 0)
-        showToast(describeEdits(day, ops).join(" ") || reply || "No changes.");
-      else setProposal({ text, ops, lines: describeEdits(day, ops), reply });
+      if (changes.length === 0 && settings.length === 0) showToast(asked || reply || "No changes.");
+      else
+        setProposal({
+          text,
+          ops: changes,
+          settings,
+          lines: [...describeEdits(day, changes), ...describeSettings(settings)],
+          reply,
+        });
     } catch (err) {
       draft.setValue(text);
       showToast((err as Error).message);
@@ -303,11 +368,12 @@ export function App({
       setBusy(null);
     }
   };
-  const apply = () => {
+  const apply = async () => {
     if (!proposal) return;
     const p = proposal;
     setProposal(null);
-    void commit(p.ops, `✓ ${p.reply || "Changed"}`, p.text);
+    if (p.ops.length) await commit(p.ops, `✓ ${p.reply || "Changed"}`, p.text);
+    if (p.settings.length) await configure(p.settings, p.reply || "Setup changed");
   };
   const discard = () => {
     if (!proposal) return;
@@ -326,7 +392,7 @@ export function App({
         return;
       }
       if (proposal) {
-        if (key.return) return apply();
+        if (key.return) return void apply();
         if (key.escape) return discard();
         return;
       }
@@ -402,7 +468,7 @@ export function App({
       busy={busy}
       placeholder={
         view === "home"
-          ? 'Tell me about your day…  "standup ran to 45 minutes"'
+          ? 'Tell me about your day, or what to set up…  "standup ran to 45 minutes"'
           : card?.kind === "row"
             ? `How long was “${card.title}”?  type 1h 45m, or say what changed`
             : 'Say what changed…  "standup ran to 45 minutes"'
@@ -460,7 +526,12 @@ export function App({
       ) : null}
       {overlay === "task" && unmapped && erp ? (
         <TaskPicker
-          row={unmapped}
+          row={{
+            project: unmapped.project,
+            task: unmapped.label,
+            description: unmapped.description,
+          }}
+          {...(unmapped.query ? { query: unmapped.query } : {})}
           search={erp.searchTasks}
           screen={screen}
           onPick={(t) => void pickTask(unmapped, t)}
@@ -646,7 +717,12 @@ export function App({
         )}
       </Clickable>
       {proposal ? (
-        <ProposalPanel width={listW} proposal={proposal} onApply={apply} onDiscard={discard} />
+        <ProposalPanel
+          width={listW}
+          proposal={proposal}
+          onApply={() => void apply()}
+          onDiscard={discard}
+        />
       ) : null}
       {sending && erp ? (
         <SendPanel
@@ -665,6 +741,16 @@ export function App({
       {toast ? <Toast text={toast} bottom={7} /> : null}
     </Box>
   );
+}
+
+/** Whether a settings change can change how the day is drafted (the ERP's can't). */
+function draftsDay(op: SettingOp): boolean {
+  if (op.op === "erp_task") return false;
+  return !((op.op === "connect" || op.op === "disconnect") && op.service === "erp");
+}
+
+function picking(row: PushRow): Picking {
+  return { project: row.project, label: row.task, description: row.description, send: true };
 }
 
 function ProposalPanel({

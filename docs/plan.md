@@ -93,6 +93,13 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [ ] Remove a card by hand (✕ / `d`) and an `ignore` project rule (from the review of the personal-project case)
 - [ ] Description style settings (format, length, instructions, examples)
 
+## Setup by chat
+
+- [x] ADR 0007: settings through the chat bar, one AI call, settings summary only
+- [x] Settings operations (sources, Claude Code projects, day numbers, time zone, task names, AI, project rules, connect / disconnect, ERP task), applied and validated like config.toml
+- [x] Private calendar links and tokens never reach the AI; plain connect / disconnect without it
+- [x] Review screen: settings proposals, sign-ins from the app, ERP task search and picker, last turns for follow-ups
+
 ## Day 11 — Export and demo
 
 - [x] Clipboard, Markdown, CSV, TSV, JSON: date, project, task, hours, description (same work merged into one row)

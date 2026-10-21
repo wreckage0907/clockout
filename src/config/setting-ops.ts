@@ -1,0 +1,323 @@
+import { z } from "zod";
+import { withAi, withClaudeExclude, withDay, withSource, withTaskMapping } from "./edit";
+import { type Config, configSchema } from "./schema";
+
+// Settings changes said in the chat bar. The AI returns these operations; it never writes the
+// config. They're applied here (pure), then the whole config is validated like config.toml is.
+// Signing in and out are side effects, so they come back as effects for the caller to run.
+
+const service = z.enum(["google", "erp"]).describe('"google" is the calendar, "erp" the timesheet');
+
+const erpTask = z
+  .object({
+    op: z.literal("erp_task"),
+    project: z.string().min(1).describe("A Clockout project, as in the day or known projects"),
+    task: z.string().min(1).optional().describe("Only this task's rows; leave out for all"),
+    search: z
+      .string()
+      .min(1)
+      .describe('The ERP task\'s name as they said it, without words like "task"'),
+  })
+  .describe("Send a project's rows to an ERP task from now on");
+
+const source = z
+  .object({ op: z.literal("source"), source: z.enum(["claude-code", "github"]), on: z.boolean() })
+  .describe("Read Claude Code sessions or GitHub activity, or stop");
+const claudeProjects = z
+  .object({
+    op: z.literal("claude_projects"),
+    names: z.array(z.string().min(1)).min(1).describe("Names from claude_projects"),
+    on: z.boolean(),
+  })
+  .describe("Read these Claude Code projects (on) or leave them out (off)");
+const day = z
+  .object({
+    op: z.literal("day"),
+    target: z.string().optional().describe('Hours to log a day, e.g. "7h30m"'),
+    working_hours: z.string().optional().describe('"HH:MM-HH:MM", e.g. "09:30-18:30"'),
+    round_to: z.string().optional().describe('e.g. "15m"'),
+    idle_cutoff: z
+      .string()
+      .optional()
+      .describe('A pause longer than this ends a block, e.g. "20m"'),
+  })
+  .describe("Daily target, working hours, rounding, idle cutoff");
+const timezone = z
+  .object({ op: z.literal("timezone"), timezone: z.string().min(1) })
+  .describe("The person's IANA time zone, e.g. Asia/Kolkata");
+const taskNames = z
+  .object({
+    op: z.literal("task_names"),
+    work: z.string().min(1).optional(),
+    review: z.string().min(1).optional(),
+    meeting: z.string().min(1).optional(),
+  })
+  .describe("Default task names by kind of block");
+const ai = z
+  .object({ op: z.literal("ai"), on: z.boolean() })
+  .describe("Turn the AI helper on or off");
+const projectRule = z
+  .object({
+    op: z.literal("project_rule"),
+    name: z.string().min(1).describe("The project name to use"),
+    task: z.string().min(1).optional().describe("Default task for its work"),
+    repo: z.string().optional().describe('"owner/name"'),
+    title: z.string().optional().describe("Regular expression for meeting and session titles"),
+    attendee_domain: z.string().optional().describe('e.g. "acme.com"'),
+  })
+  .describe("Add or replace a rule that puts matching work under a project name");
+const removeProjectRule = z
+  .object({ op: z.literal("remove_project_rule"), name: z.string().min(1) })
+  .describe("Remove the project rules with this name");
+const connect = z
+  .object({
+    op: z.literal("connect"),
+    service,
+    url: z.string().optional().describe("The ERP's address, e.g. erp.example.com"),
+  })
+  .describe("Sign in in the browser: Google Calendar, or the ERP at an address");
+const disconnect = z
+  .object({ op: z.literal("disconnect"), service })
+  .describe("Sign out and forget the sign-in");
+
+/** What the AI may return. A private calendar link never reaches it, so no calendar_feed op. */
+export const aiSettingOpSchema = z.discriminatedUnion("op", [
+  source,
+  claudeProjects,
+  day,
+  timezone,
+  taskNames,
+  ai,
+  projectRule,
+  removeProjectRule,
+  connect,
+  disconnect,
+  erpTask,
+]);
+
+export const settingOpSchema = z.discriminatedUnion("op", [
+  source,
+  claudeProjects,
+  day,
+  timezone,
+  taskNames,
+  ai,
+  projectRule,
+  removeProjectRule,
+  connect,
+  disconnect,
+  erpTask.extend({
+    /** Filled in once the ERP has been searched. */
+    erp_task: z.string().min(1).optional(),
+    label: z.string().optional(),
+  }),
+  z.object({ op: z.literal("calendar_feed"), url: z.string().min(1) }),
+]);
+export type SettingOp = z.infer<typeof settingOpSchema>;
+
+/** Sign-ins and an ERP task still to choose: the caller does these. */
+export type SettingEffect =
+  | { kind: "connect"; service: "google" | "erp"; url?: string }
+  | { kind: "disconnect"; service: "google" | "erp" }
+  | { kind: "pick_task"; project: string; task?: string; search: string };
+
+export interface ClaudeProjectRef {
+  /** Folder name inside ~/.claude/projects, as `exclude` stores it. */
+  folder: string;
+  /** Short name, e.g. the repo folder. */
+  name: string;
+}
+
+export interface SettingsResult {
+  config: Config;
+  effects: SettingEffect[];
+  errors: string[];
+}
+
+/** Applies settings operations to a config; nothing is saved. `config` is valid on no errors. */
+export function applySettings(
+  config: Config,
+  ops: readonly SettingOp[],
+  projects: readonly ClaudeProjectRef[] = [],
+): SettingsResult {
+  let next = config;
+  const effects: SettingEffect[] = [];
+  const errors: string[] = [];
+  for (const op of ops) {
+    switch (op.op) {
+      case "source":
+        next = withSource(next, { type: op.source }, op.on);
+        break;
+      case "claude_projects": {
+        const folders = op.names.flatMap((n) => {
+          const found = projects.filter((p) => same(p.name, n) || p.folder === n);
+          if (!found.length) errors.push(`No Claude Code project called “${n}”.`);
+          return found.map((p) => p.folder);
+        });
+        if (!folders.length) break;
+        if (op.on && !next.sources.some((s) => s.type === "claude-code"))
+          next = withSource(next, { type: "claude-code" }, true);
+        const claude = next.sources.find((s) => s.type === "claude-code");
+        const excluded = claude?.type === "claude-code" ? (claude.exclude ?? []) : [];
+        next = withClaudeExclude(
+          next,
+          op.on
+            ? excluded.filter((f) => !folders.includes(f))
+            : [...new Set([...excluded, ...folders])],
+        );
+        break;
+      }
+      case "day": {
+        const { op: _, ...day } = op;
+        next = withDay(next, defined(day));
+        break;
+      }
+      case "timezone":
+        next = { ...next, me: { ...next.me, timezone: op.timezone } };
+        break;
+      case "task_names": {
+        const { op: _, ...tasks } = op;
+        next = { ...next, tasks: { ...next.tasks, ...defined(tasks) } };
+        break;
+      }
+      case "ai":
+        next = withAi(next, op.on ? "auto" : "none");
+        break;
+      case "project_rule": {
+        const match = {
+          ...(op.repo ? { repo: op.repo } : {}),
+          ...(op.title ? { title: op.title } : {}),
+          ...(op.attendee_domain ? { attendee_domain: op.attendee_domain } : {}),
+        };
+        const rule = { name: op.name, ...(op.task ? { task: op.task } : {}), match };
+        const others = next.projects.filter(
+          (p) => !(p.name === op.name && sameMatch(p.match, match)),
+        );
+        next = { ...next, projects: [...others, rule] };
+        break;
+      }
+      case "remove_project_rule": {
+        const left = next.projects.filter((p) => !same(p.name, op.name));
+        if (left.length === next.projects.length)
+          errors.push(`There's no project rule called “${op.name}”.`);
+        next = { ...next, projects: left };
+        break;
+      }
+      case "calendar_feed":
+        next = {
+          ...next,
+          sources: [
+            ...next.sources.filter((s) => s.type !== "calendar"),
+            { type: "calendar", method: "ics", url: op.url },
+          ],
+        };
+        break;
+      case "connect":
+        effects.push({ kind: "connect", service: op.service, ...(op.url ? { url: op.url } : {}) });
+        break;
+      case "disconnect":
+        effects.push({ kind: "disconnect", service: op.service });
+        break;
+      case "erp_task":
+        if (!next.timesheet && !effects.some((e) => e.kind === "connect" && e.service === "erp")) {
+          errors.push("Connect your ERP first: say “connect my ERP at erp.example.com”.");
+          break;
+        }
+        if (op.erp_task)
+          next = withTaskMapping(next, {
+            project: op.project,
+            ...(op.task ? { task: op.task } : {}),
+            erp_task: op.erp_task,
+            ...(op.label ? { label: op.label } : {}),
+          });
+        else
+          effects.push({
+            kind: "pick_task",
+            project: op.project,
+            ...(op.task ? { task: op.task } : {}),
+            search: op.search,
+          });
+        break;
+    }
+  }
+  const valid = configSchema.safeParse(next);
+  if (!valid.success)
+    errors.push(
+      ...valid.error.issues.map(
+        (i) => `${i.path.length ? `${i.path.join(".")}: ` : ""}${i.message}`,
+      ),
+    );
+  return { config: valid.success ? valid.data : next, effects, errors };
+}
+
+/** One line per operation, for the proposal panel. */
+export function describeSettings(ops: readonly SettingOp[]): string[] {
+  return ops.map(describeSetting);
+}
+
+function describeSetting(op: SettingOp): string {
+  const onOff = (on: boolean) => (on ? "Read" : "Stop reading");
+  switch (op.op) {
+    case "source":
+      return `${onOff(op.on)} ${op.source === "github" ? "GitHub" : "Claude Code sessions"}`;
+    case "claude_projects":
+      return `${op.on ? "Read" : "Leave out"} Claude Code project${op.names.length === 1 ? "" : "s"} ${op.names.join(", ")}`;
+    case "day": {
+      const parts = [
+        op.target ? `daily target → ${op.target}` : "",
+        op.working_hours ? `working hours → ${op.working_hours}` : "",
+        op.round_to ? `round to ${op.round_to}` : "",
+        op.idle_cutoff ? `idle cutoff → ${op.idle_cutoff}` : "",
+      ].filter(Boolean);
+      return parts.join(", ") || "No change to the day";
+    }
+    case "timezone":
+      return `Time zone → ${op.timezone}`;
+    case "task_names": {
+      const parts = (["work", "review", "meeting"] as const)
+        .filter((k) => op[k])
+        .map((k) => `${k} task → ${op[k]}`);
+      return parts.join(", ") || "No change to task names";
+    }
+    case "ai":
+      return op.on ? "Turn the AI helper on" : "Turn the AI helper off";
+    case "project_rule": {
+      const what = [
+        op.repo ? `repo ${op.repo}` : "",
+        op.title ? `titles like /${op.title}/` : "",
+        op.attendee_domain ? `meetings with ${op.attendee_domain}` : "",
+      ].filter(Boolean);
+      return `${what.join(", ") || "Matching work"} → project ${op.name}${op.task ? ` (${op.task})` : ""}`;
+    }
+    case "remove_project_rule":
+      return `Remove the project rule for ${op.name}`;
+    case "calendar_feed":
+      return "Read your calendar from its private link (kept on this machine)";
+    case "connect":
+      return op.service === "google"
+        ? "Sign in to Google Calendar in your browser"
+        : `Sign in to your ERP${op.url ? ` at ${op.url}` : ""} in your browser`;
+    case "disconnect":
+      return op.service === "google"
+        ? "Sign out of Google Calendar and stop reading it"
+        : "Sign out of your ERP";
+    case "erp_task":
+      return op.erp_task
+        ? `Send ${op.project}${op.task ? ` · ${op.task}` : ""} rows to ${op.label ?? op.erp_task}`
+        : `Pick the ERP task for ${op.project}${op.task ? ` · ${op.task}` : ""} (searching “${op.search}”)`;
+  }
+}
+
+function defined<T extends object>(o: T): Partial<T> {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
+}
+
+function same(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function sameMatch(a: Record<string, string | undefined>, b: Record<string, string | undefined>) {
+  return (["repo", "title", "attendee_domain"] as const).every(
+    (k) => (a[k] ?? "") === (b[k] ?? ""),
+  );
+}

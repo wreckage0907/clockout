@@ -4,6 +4,7 @@ import type { Config } from "../../src/config/schema";
 import { applyEdits } from "../../src/core/edits";
 import { App } from "../../src/tui/App";
 import { config, fakeActions, fixtureDay } from "../helpers/fake-app";
+import { fakeTarget } from "../helpers/fake-target";
 import { FIXTURE_DATE } from "../helpers/fixture-day";
 
 const W = 120;
@@ -186,6 +187,97 @@ describe("day view", () => {
     ui.stdin.write("\r"); // 1h on the first project
     await until(ui.lastFrame, "6h 45m of 8h");
     expect(calls.commits.at(-1)?.ops[0]).toMatchObject({ op: "add", start: "12:15", end: "13:15" });
+  });
+});
+
+describe("setup from the chat bar", () => {
+  it("proposes a settings change, saves it on Enter, and drafts the day again", async () => {
+    const { ui, calls } = await openDay({
+      parse: async () => ({
+        ops: [],
+        settings: [{ op: "day", target: "7h" }],
+        reply: "Your target is 7h now.",
+      }),
+    });
+    ui.stdin.write(PASTE("my target is seven hours"));
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Apply");
+    expect(ui.lastFrame()).toContain("daily target → 7h");
+    expect(calls.configured).toEqual([]);
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "of 7h");
+    expect(calls.configured).toEqual([[{ op: "day", target: "7h" }]]);
+    expect(ui.lastFrame()).toContain("✓ Your target is 7h now.");
+    expect(calls.commits).toEqual([]);
+    expect(calls.loads).toHaveLength(2);
+  });
+
+  it("connects the ERP from a plain sentence, even without the AI", async () => {
+    const { ui, calls } = await openDay();
+    ui.stdin.write(PASTE("connect erp erp.example.com"));
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Apply");
+    expect(ui.lastFrame()).toContain("Sign in to your ERP at erp.example.com in your browser");
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "✓ Connect your ERP");
+    expect(calls.configured).toEqual([[{ op: "connect", service: "erp", url: "erp.example.com" }]]);
+    expect(calls.loads).toHaveLength(1); // the ERP doesn't change the draft
+  });
+
+  it("passes the last turns along, so a follow-up answers the AI's question", async () => {
+    const seen: unknown[] = [];
+    const { ui } = await openDay({
+      parse: async (_t, _d, earlier) => {
+        seen.push(earlier);
+        return { ops: [{ op: "clarify", question: "Which project?" }], reply: "" };
+      },
+    });
+    for (const said of ["leave out that project", "the personal one"]) {
+      ui.stdin.write(PASTE(said));
+      await tick();
+      ui.stdin.write("\r");
+      await until(ui.lastFrame, "Which project?");
+      for (let i = 0; i < 80 && (ui.lastFrame() ?? "").includes("Thinking"); i++) await tick();
+    }
+    expect(seen).toEqual([
+      [],
+      [{ said: "leave out that project", reply: "Question: Which project?" }],
+    ]);
+  });
+
+  it("opens the ERP task picker on the words you used when the search isn't conclusive", async () => {
+    const erp = fakeTarget({
+      tasks: [
+        { id: "TASK-H1", subject: "Hackathon build", project: "Clockout" },
+        { id: "TASK-H2", subject: "Hackathon demo", project: "Clockout" },
+      ],
+    });
+    const { ui, calls } = await openDay({
+      erp: { target: erp.target },
+      parse: async () => ({
+        ops: [],
+        settings: [{ op: "erp_task", project: "acme/api", search: "hackathon" }],
+        reply: "",
+      }),
+    });
+    ui.stdin.write(PASTE("send acme api to the hackathon task"));
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Apply");
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Which ERP task is this?");
+    await until(ui.lastFrame, "Hackathon demo");
+    expect(ui.lastFrame()).toContain("hackathon");
+    ui.stdin.write(DOWN);
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "goes to Hackathon demo");
+    expect(calls.mapped).toEqual([
+      { project: "acme/api", erp_task: "TASK-H2", label: "Hackathon demo" },
+    ]);
+    expect(ui.lastFrame()).not.toContain("Send to erp.example.com");
   });
 });
 

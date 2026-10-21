@@ -71,6 +71,14 @@ Things you can say:
 - "add 30 minutes reviewing Sam's PR on acme"
 - "put the standup under Acme API, task Meetings"
 
+Setup works the same way: say what to change, check the proposal, press Enter.
+
+- "connect my ERP at erp.example.com" (signs in in your browser)
+- "stop reading my personal project" · "turn off GitHub"
+- "my target is seven and a half hours, round to 30 minutes"
+- "send acme api to the hackathon task"
+- paste your calendar's private ICS link: it's read on this machine and never sent to the AI
+
 ## Commands
 
 ```sh

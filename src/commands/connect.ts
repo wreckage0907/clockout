@@ -9,6 +9,7 @@ import {
   saveErpCredentials,
   saveGoogleCredentials,
 } from "../config/credentials";
+import { withErpSite } from "../config/edit";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths, tildify } from "../config/paths";
 import type { Config } from "../config/schema";
@@ -101,23 +102,11 @@ async function connectErpSite(url: string | undefined) {
   const site = url ?? config?.timesheet?.url;
   if (!site)
     throw new Error("Give your ERP's address: clockout connect erp https://erp.example.com");
-  let origin: string;
-  try {
-    origin = siteOrigin(site.includes("://") ? site : `https://${site}`);
-  } catch {
-    throw new Error(`"${site}" isn't a web address. Use e.g. https://erp.example.com`);
-  }
+  const origin = erpOrigin(site);
   console.log(
     `Clockout signs in to ${origin} as you. It only reads and writes your own timesheet entries, and only when you send a day.`,
   );
-  const connected = await connectErp(origin, openInBrowser("ERP"));
-  await saveErpCredentials({
-    url: connected.url,
-    client_id: connected.clientId,
-    refresh_token: connected.refreshToken,
-    ...(connected.user ? { user: connected.user } : {}),
-    connected_at: new Date().toISOString(),
-  });
+  const connected = await signInErp(origin, openInBrowser("ERP"));
   console.log(
     `Connected${connected.user ? ` as ${connected.user}` : ""}. The sign-in is kept in ${tildify(credentialsPath(), homedir())} (only you can read it).`,
   );
@@ -125,33 +114,61 @@ async function connectErpSite(url: string | undefined) {
     console.log("Run `clockout init` to finish setting up.");
     return;
   }
-  const same = config.timesheet && siteOrigin(config.timesheet.url) === connected.url;
-  await saveConfig(configFile, {
-    ...config,
-    timesheet:
-      same && config.timesheet
-        ? config.timesheet
-        : { type: "next-pms", url: connected.url, map: [] },
-  });
+  await saveConfig(configFile, withErpSite(config, connected.url));
   console.log("Review a day with `clockout`, then send it with ctrl+s (or `clockout push`).");
+}
+
+/** "erp.example.com" or a full address → "https://erp.example.com". */
+export function erpOrigin(site: string): string {
+  const trimmed = site.trim().replace(/[.,!]+$/, "");
+  try {
+    return siteOrigin(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+  } catch {
+    throw new Error(`"${site}" isn't a web address. Use e.g. https://erp.example.com`);
+  }
+}
+
+/** Signs in to the ERP in the browser and keeps the sign-in. */
+export async function signInErp(site: string, open: (url: string) => Promise<void>) {
+  const connected = await connectErp(erpOrigin(site), open);
+  await saveErpCredentials({
+    url: connected.url,
+    client_id: connected.clientId,
+    refresh_token: connected.refreshToken,
+    ...(connected.user ? { user: connected.user } : {}),
+    connected_at: new Date().toISOString(),
+  });
+  return connected;
+}
+
+/** Revokes the ERP sign-in and forgets it; the site and task mappings stay in the config. */
+export async function signOutErp(): Promise<string | null> {
+  const creds = await loadErpCredentials();
+  if (creds) await revokeErp(creds);
+  await removeErpCredentials();
+  return creds?.url ?? null;
+}
+
+/** Revokes the Google sign-in and forgets it; true if there was one. */
+export async function signOutGoogle(): Promise<boolean> {
+  const creds = await loadGoogleCredentials();
+  if (creds) await revoke(creds.refresh_token);
+  await removeGoogleCredentials();
+  return creds !== null;
 }
 
 /** `clockout disconnect google|erp`: revokes access and forgets the sign-in. */
 export async function runDisconnect(service: string) {
   if (check(service) === "erp") {
-    const creds = await loadErpCredentials();
-    if (creds) await revokeErp(creds);
-    await removeErpCredentials();
+    const url = await signOutErp();
     console.log(
-      creds
-        ? `Disconnected from ${creds.url}. Your task mappings stay in the config.`
+      url
+        ? `Disconnected from ${url}. Your task mappings stay in the config.`
         : "No ERP was connected.",
     );
     return;
   }
-  const creds = await loadGoogleCredentials();
-  if (creds) await revoke(creds.refresh_token);
-  await removeGoogleCredentials();
+  const had = await signOutGoogle();
   const { configFile } = resolvePaths();
   const config = await loadConfig(configFile);
   if (config?.sources.some((s) => s.type === "google-calendar")) {
@@ -160,5 +177,5 @@ export async function runDisconnect(service: string) {
       sources: config.sources.filter((s) => s.type !== "google-calendar"),
     });
   }
-  console.log(creds ? "Disconnected from Google Calendar." : "Google Calendar wasn't connected.");
+  console.log(had ? "Disconnected from Google Calendar." : "Google Calendar wasn't connected.");
 }

@@ -4,15 +4,21 @@ import { execa } from "execa";
 import { render, useWindowSize } from "ink";
 import { chooseBackend } from "../ai";
 import { detectClaudeCli } from "../ai/claude-cli";
-import { parseCorrection } from "../ai/edits";
+import { type Correction, localCorrection, parseCorrection } from "../ai/edits";
 import type { LlmBackend } from "../ai/types";
 import { openDay } from "../collect";
+import { signInErp, signOutErp, signOutGoogle } from "../commands/connect";
 import type { AppContext } from "../commands/context";
-import { loadGoogleCredentials, saveGoogleCredentials } from "../config/credentials";
-import { withTaskMapping } from "../config/edit";
+import {
+  loadErpCredentials,
+  loadGoogleCredentials,
+  saveGoogleCredentials,
+} from "../config/credentials";
+import { withErpSite, withSource, withTaskMapping } from "../config/edit";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths } from "../config/paths";
 import type { Config } from "../config/schema";
+import { applySettings, type SettingEffect } from "../config/setting-ops";
 import { localDate } from "../core/time";
 import { commitEdits, undoEdit } from "../corrections";
 import { applyPush, preparePush } from "../push";
@@ -81,12 +87,72 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
     },
   };
 
+  const claudeProjects = () => {
+    const claude = config.sources.find((s) => s.type === "claude-code");
+    return listClaudeProjects(ctx, new Date(Date.now() - 7 * 86_400_000), claude?.projects_dir);
+  };
+  /** An ERP task named in the chat: picked straight away when the search finds just one. */
+  const findTasks = async (said: Correction): Promise<Correction> => {
+    if (!config.timesheet || !said.settings?.some((s) => s.op === "erp_task")) return said;
+    const settings = await Promise.all(
+      said.settings.map(async (s) => {
+        if (s.op !== "erp_task" || s.erp_task) return s;
+        const found = await send.searchTasks(s.search).catch(() => []);
+        const exact = found.filter((t) => t.subject.toLowerCase() === s.search.toLowerCase());
+        const one = found.length === 1 ? found[0] : exact.length === 1 ? exact[0] : undefined;
+        return one ? { ...s, erp_task: one.id, label: one.subject } : s;
+      }),
+    );
+    return { ...said, settings };
+  };
+
   const actions: AppActions = {
     load: (d) => openDay(d, config, store, { ai }),
-    hasAI: () => ai !== null,
-    parse: (text, day) => {
-      if (!ai) throw new Error("No AI helper is set up.");
-      return parseCorrection(text, day, config, ai);
+    async parse(text, day, earlier) {
+      if (!ai) {
+        const local = localCorrection(text);
+        if (local) return local;
+        throw new Error("Typed corrections need the AI helper. Turn it on in Setup (ctrl+p).");
+      }
+      const [projects, google, erpCreds] = await Promise.all([
+        claudeProjects(),
+        loadGoogleCredentials().catch(() => null),
+        loadErpCredentials().catch(() => null),
+      ]);
+      const facts = {
+        googleConnected: google !== null,
+        erpConnected: erpCreds !== null,
+        claudeProjects: projects,
+      };
+      return findTasks(await parseCorrection(text, day, config, ai, { facts, earlier }));
+    },
+    async configure(ops) {
+      const r = applySettings(config, ops, await claudeProjects());
+      if (r.errors.length) throw new Error(r.errors.join(" "));
+      let next = r.config;
+      let pick: Extract<SettingEffect, { kind: "pick_task" }> | undefined;
+      const google = { type: "google-calendar" as const, calendars: ["primary"] };
+      for (const e of r.effects) {
+        if (e.kind === "pick_task") pick = e;
+        else if (e.kind === "connect" && e.service === "google") {
+          if (!(await loadGoogleCredentials().catch(() => null)))
+            await actions.setup.connectGoogle();
+          next = withSource(next, google, true);
+        } else if (e.kind === "connect") {
+          const site = e.url ?? next.timesheet?.url;
+          if (!site) throw new Error("Say where your ERP is: “connect my ERP at erp.example.com”.");
+          next = withErpSite(next, (await signInErp(site, openQuietly)).url);
+          target = null;
+        } else if (e.service === "google") {
+          await signOutGoogle();
+          next = withSource(next, google, false);
+        } else {
+          await signOutErp();
+          target = null;
+        }
+      }
+      config = await actions.setup.save(next);
+      return { config, ...(pick ? { pick } : {}) };
     },
     commit: (stored, ops, text) => commitEdits(stored, ops, config, store, text),
     undo: (stored) => undoEdit(stored, store),
@@ -97,10 +163,8 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
     },
     setup: {
       async state() {
-        const claude = config.sources.find((s) => s.type === "claude-code");
-        const weekAgo = new Date(Date.now() - 7 * 86_400_000);
         const [projects, github, cli, google] = await Promise.all([
-          listClaudeProjects(ctx, weekAgo, claude?.projects_dir),
+          claudeProjects(),
           detectGitHub(ctx),
           detectClaudeCli(),
           loadGoogleCredentials().catch(() => null),

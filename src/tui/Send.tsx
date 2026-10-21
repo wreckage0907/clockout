@@ -93,19 +93,22 @@ export function SendPanel({
  */
 export function TaskPicker({
   row,
+  query: initial = "",
   search,
   screen,
   onPick,
   onClose,
 }: {
-  row: PushRow;
+  row: Pick<PushRow, "project" | "task" | "description">;
+  /** What to search for first. */
+  query?: string;
   search: (query: string) => Promise<RemoteTask[]>;
   screen: { width: number; height: number };
   onPick: (task: RemoteTask) => void;
   onClose: () => void;
 }) {
   const name = row.project.split("/").pop() ?? row.project;
-  const draft = useDraft(true);
+  const draft = useDraft(true, initial);
   const [tasks, setTasks] = useState<RemoteTask[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sel, setSel] = useState(0);

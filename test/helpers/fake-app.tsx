@@ -1,6 +1,7 @@
-import type { Correction } from "../../src/ai/edits";
+import { type Correction, localCorrection, type Turn } from "../../src/ai/edits";
 import { withTaskMapping } from "../../src/config/edit";
 import type { Config, TaskMapping } from "../../src/config/schema";
+import { applySettings, type SettingOp } from "../../src/config/setting-ops";
 import { buildDay } from "../../src/core/blocks";
 import { applyEdits } from "../../src/core/edits";
 import type { Day, EditOp } from "../../src/core/types";
@@ -32,7 +33,7 @@ export const stored: StoredDay = {
  */
 export function fakeActions(
   opts: {
-    parse?: (text: string, day: Day) => Promise<Correction>;
+    parse?: (text: string, day: Day, earlier: Turn[]) => Promise<Correction>;
     setup?: Partial<SetupState>;
     /** The day to load; the fixture day by default. */
     day?: Day;
@@ -47,6 +48,7 @@ export function fakeActions(
     copied: [] as string[],
     saved: [] as unknown[],
     mapped: [] as TaskMapping[],
+    configured: [] as SettingOp[][],
   };
   let erpConfig: Config = opts.erp
     ? {
@@ -65,10 +67,22 @@ export function fakeActions(
       calls.loads.push(date);
       return { stored: start, warnings: [], kept: false };
     },
-    hasAI: () => opts.parse !== undefined,
-    parse: (text, day) => {
-      if (!opts.parse) throw new Error("no AI");
-      return opts.parse(text, day);
+    parse: async (text, day, earlier) => {
+      if (opts.parse) return opts.parse(text, day, earlier);
+      const local = localCorrection(text);
+      if (local) return local;
+      throw new Error("Typed corrections need the AI helper. Turn it on in Setup (ctrl+p).");
+    },
+    configure: async (ops) => {
+      calls.configured.push(ops);
+      const r = applySettings(erpConfig, ops, [
+        { folder: "-Users-dev-work-acme-api", name: "acme-api" },
+        { folder: "-Users-dev-code-clockout", name: "clockout" },
+      ]);
+      if (r.errors.length) throw new Error(r.errors.join(" "));
+      erpConfig = r.config;
+      const pick = r.effects.find((e) => e.kind === "pick_task");
+      return { config: erpConfig, ...(pick?.kind === "pick_task" ? { pick } : {}) };
     },
     commit: async (s, ops, text) => {
       calls.commits.push({ ops, ...(text ? { text } : {}) });

@@ -65,7 +65,7 @@ src/demo.ts       --demo: bundled fixtures, temp store, fixed date
 
 - All data stays on the user's machine. No telemetry.
 - Never read or log credential files (`~/.codex/auth.json`, keychains, `.env`, tokens). Get the GitHub token only via `gh auth token` or `GITHUB_TOKEN`, and never print it.
-- AI backends get titles, branch names and commit subjects only, never code or full prompts.
+- AI backends get titles, branch names and commit subjects only, never code or full prompts. For setup by chat they also get a settings summary ([ADR 0007](docs/adr/0007-setup-from-the-chat-bar.md)): never credentials, private calendar links or folder paths.
 - Run `claude -p` with tools off, no session persistence, in an empty temp dir.
 - Test fixtures are synthetic. Never copy real session logs, calendar data or PRs into `test/fixtures/`.
 

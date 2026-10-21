@@ -1,13 +1,14 @@
 import { z } from "zod";
 import type { Config } from "../config/schema";
+import { aiSettingOpSchema, type ClaudeProjectRef, type SettingOp } from "../config/setting-ops";
 import { editOpSchema } from "../core/edit-schema";
 import { prNumber } from "../core/summarize";
 import { localDate, localTime, minutesBetween } from "../core/time";
 import type { Day, EditOp } from "../core/types";
 import type { LlmBackend } from "./types";
 
-const SYSTEM = `You update a person's drafted timesheet from what they say (often dictated, so expect loose wording and misheard names).
-Return edit operations on the day you're given, plus a one-sentence reply saying what you changed.
+const SYSTEM = `You update a person's drafted timesheet, and Clockout's settings, from what they say (often dictated, so expect loose wording and misheard names).
+Return edit operations on the day you're given in "ops", settings changes in "settings", plus a one-sentence reply saying what you changed.
 
 Rules:
 - Use block ids (b1, b2…) and gap ids (g1, g2…) exactly as given. Never invent ids.
@@ -20,13 +21,81 @@ Rules:
 - Tasks: use one of the known tasks unless the person names another.
 - People and PRs: match names like "Sam's PR" against the PR list.
 - If you can't tell what they mean, return a single clarify op with a short question instead of guessing.
-- Change only what they asked for.`;
+- Change only what they asked for.
+
+Settings (what Clockout reads and how it counts), from "settings" in the input:
+- Turning sources on or off, Claude Code projects to read or leave out (use names from claude_projects), daily target, working hours, rounding, time zone, default task names, the AI helper, and project rules ("anything in acme/api is Acme Website").
+- Durations are like "7h30m", "45m"; working hours "HH:MM-HH:MM".
+- Google Calendar and the ERP need a sign-in in the browser: use connect (with the ERP's address when they give one) and disconnect. Never ask for passwords, tokens or private calendar links.
+- "Send <project> to <task>" or "log <project> against <task>": erp_task with the words they used to name the task as search.
+- A request about settings changes no blocks, and a correction to the day changes no settings.
+- "earlier" holds the last few things they said and your replies; use it to understand short follow-ups ("yes", "the second one").`;
 
 export const correctionSchema = z.object({
   ops: z.array(editOpSchema),
+  settings: z.array(aiSettingOpSchema).optional().describe("Changes to Clockout's settings"),
   reply: z.string().describe("One short sentence describing the change, or empty"),
 });
-export type Correction = z.infer<typeof correctionSchema>;
+export type Correction = Omit<z.infer<typeof correctionSchema>, "settings"> & {
+  settings?: SettingOp[];
+};
+
+/** What's on this machine besides the config, for the settings the AI sees. */
+export interface SettingsFacts {
+  googleConnected: boolean;
+  erpConnected: boolean;
+  claudeProjects: (ClaudeProjectRef & { recent?: number })[];
+}
+
+/** A turn of the chat, so follow-ups make sense to a CLI that remembers nothing. */
+export interface Turn {
+  said: string;
+  reply: string;
+}
+
+/**
+ * Clockout's settings as the AI sees them: what's on, names and numbers. No credentials, no
+ * private calendar link, no folder paths.
+ */
+export function settingsContext(config: Config, facts: SettingsFacts) {
+  const has = (type: string) => config.sources.some((s) => s.type === type);
+  const claude = config.sources.find((s) => s.type === "claude-code");
+  const excluded = claude?.type === "claude-code" ? (claude.exclude ?? []) : [];
+  return {
+    sources: {
+      "claude-code": has("claude-code"),
+      github: has("github"),
+      "google-calendar": has("google-calendar"),
+      google_signed_in: facts.googleConnected,
+      calendar_feed: has("calendar"),
+    },
+    claude_projects: facts.claudeProjects.map((p) => ({
+      name: p.name,
+      on: has("claude-code") && !excluded.includes(p.folder),
+      ...(p.recent ? { sessions_this_week: p.recent } : {}),
+    })),
+    day: config.day,
+    timezone: config.me.timezone,
+    task_names: config.tasks,
+    ai_helper: config.ai.backend !== "none",
+    project_rules: config.projects.map((p) => ({
+      name: p.name,
+      ...(p.task ? { task: p.task } : {}),
+      ...p.match,
+    })),
+    erp: config.timesheet
+      ? {
+          site: new URL(config.timesheet.url).host,
+          signed_in: facts.erpConnected,
+          sends: config.timesheet.map.map((m) => ({
+            project: m.project,
+            ...(m.task ? { task: m.task } : {}),
+            to: m.label ?? m.erp_task,
+          })),
+        }
+      : null,
+  };
+}
 
 /** The day as the AI sees it: times, ids, labels and PRs. No prompt text, no code. */
 export function correctionContext(day: Day, config: Config, now = new Date()) {
@@ -81,9 +150,91 @@ export async function parseCorrection(
   day: Day,
   config: Config,
   backend: LlmBackend,
+  opts: { facts?: SettingsFacts; earlier?: Turn[] } = {},
 ): Promise<Correction> {
-  const prompt = JSON.stringify({ day: correctionContext(day, config), said: text }, null, 2);
+  const local = localCorrection(text);
+  if (local) return local;
+  refuseSecrets(text);
+  const facts = opts.facts ?? { googleConnected: false, erpConnected: false, claudeProjects: [] };
+  const prompt = JSON.stringify(
+    {
+      day: correctionContext(day, config),
+      settings: settingsContext(config, facts),
+      ...(opts.earlier?.length ? { earlier: opts.earlier } : {}),
+      said: text,
+    },
+    null,
+    2,
+  );
   return backend.complete({ system: SYSTEM, prompt, schema: correctionSchema });
+}
+
+const URLS = /\b(?:https?|webcal):\/\/[^\s<>"']+/gi;
+
+/** A private calendar address: anyone holding it can read the calendar. */
+function isCalendarFeed(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "webcal:" || /\.ics$/i.test(u.pathname) || /\/ical\//i.test(u.pathname);
+  } catch {
+    return false;
+  }
+}
+
+const SERVICE = "(?:my\\s+|the\\s+)?(erp|google(?:\\s+calendar)?|calendar)";
+const CONNECT = new RegExp(
+  `^(?:connect|sign\\s+in\\s+to)\\s+${SERVICE}(?:\\s+(?:at\\s+)?(\\S+))?[.!]?$`,
+  "i",
+);
+const DISCONNECT = new RegExp(`^(?:disconnect|sign\\s+out\\s+of)\\s+${SERVICE}[.!]?$`, "i");
+
+/**
+ * What can be done without the AI: a pasted private calendar link (which must never reach the
+ * AI) and plain "connect erp <address>" / "disconnect google". Null for anything else.
+ */
+export function localCorrection(text: string): Correction | null {
+  const feed = text.match(URLS)?.find(isCalendarFeed);
+  if (feed)
+    return {
+      ops: [],
+      settings: [{ op: "calendar_feed", url: feed.replace(/^webcal:/i, "https:") }],
+      reply: "Read your calendar from its private link",
+    };
+  const said = text.trim();
+  const which = (s: string) => (s.toLowerCase() === "erp" ? "erp" : "google");
+  const c = CONNECT.exec(said);
+  if (c?.[1]) {
+    const service = which(c[1]);
+    return {
+      ops: [],
+      settings: [{ op: "connect", service, ...(service === "erp" && c[2] ? { url: c[2] } : {}) }],
+      reply: service === "erp" ? "Connect your ERP" : "Connect Google Calendar",
+    };
+  }
+  const d = DISCONNECT.exec(said);
+  if (d?.[1]) {
+    const service = which(d[1]);
+    return {
+      ops: [],
+      settings: [{ op: "disconnect", service }],
+      reply: service === "erp" ? "Sign out of your ERP" : "Sign out of Google Calendar",
+    };
+  }
+  return null;
+}
+
+const TOKEN =
+  /\b(?:gh[opsur]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|sk-[\w-]{20,}|xox[abprs]-[\w-]{10,}|ya29\.[\w-]{20,}|AKIA[0-9A-Z]{16})/;
+
+/** Throws when the text holds something that looks like a token or key, so it's never sent. */
+export function refuseSecrets(text: string): void {
+  const random = (text.match(/[A-Za-z0-9_+/=-]{32,}/g) ?? []).some(
+    (w) => (w.match(/\d/g)?.length ?? 0) >= 4 && (w.match(/[A-Za-z]/g)?.length ?? 0) >= 4,
+  );
+  if (TOKEN.test(text) || random)
+    throw new Error(
+      "That looks like a password or token, so it wasn't sent to the AI. Clockout never needs one: sign-ins happen in your browser.",
+    );
 }
 
 export type { EditOp };

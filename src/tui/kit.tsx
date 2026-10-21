@@ -148,8 +148,8 @@ export function HoursBar({
  * Typed keys and pasted dictation for an input. Pastes arrive whole (bracketed paste), so
  * dictated words are never read as shortcuts, and newlines never submit.
  */
-export function useDraft(active: boolean) {
-  const [value, setValue] = useState("");
+export function useDraft(active: boolean, initial = "") {
+  const [value, setValue] = useState(initial);
   usePaste(
     (text) => {
       const clean = text.replace(/\s*[\r\n]+\s*/g, " ").trim();

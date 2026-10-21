@@ -58,3 +58,10 @@ export function withTaskMapping(config: Config, mapping: TaskMapping): Config {
   const map = t.map.filter((m) => !(m.project === mapping.project && m.task === mapping.task));
   return { ...config, timesheet: { ...t, map: [...map, mapping] } };
 }
+
+/** Sends days to the ERP at `origin`; keeps the task mappings if it's the same site. */
+export function withErpSite(config: Config, origin: string): Config {
+  const t = config.timesheet;
+  const same = t && new URL(t.url).origin === new URL(origin).origin;
+  return { ...config, timesheet: same ? t : { type: "next-pms", url: origin, map: [] } };
+}
