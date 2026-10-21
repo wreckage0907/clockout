@@ -76,15 +76,13 @@ src/demo.ts       --demo: bundled fixtures, temp store, fixed date
 - TUI: `ink-testing-library`.
 - `test/e2e/` runs the built CLI.
 
-## Commits and pull requests
+## Commits
 
-Every change goes through a pull request; `main` is protected and only accepts merged PRs with green CI.
+Commit straight to `main` and push; there are no pull requests (no one else reviews). CI still runs on every push.
 
-1. Branch from an up-to-date `main`: `git switch main && git pull && git switch -c <type>/<short-name>` (e.g. `fix/gap-questions`).
+1. Start from an up-to-date `main`: `git switch main && git pull`.
 2. Commit with Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`). The pre-commit hook (lefthook) runs Biome, the typecheck and the tests.
-3. Push and open a PR: `git push -u origin HEAD && gh pr create --fill`. Say what changed, why, and how it was tested.
-4. Wait for CI (`gh pr checks --watch`). Fix failures on the same branch.
-5. The owner reviews and merges (squash). Don't merge your own PR unless asked.
+3. `git push`, then check CI (`gh run watch`). Fix failures with a follow-up commit.
 
 ## Never
 
@@ -92,7 +90,7 @@ Every change goes through a pull request; `main` is protected and only accepts m
 - Weaken `tsconfig.json` or Biome rules to make an error go away.
 - Delete or skip a failing test to get green.
 - Edit `dist/` or `pnpm-lock.yaml` by hand.
-- Push to `main` directly; open a PR instead.
+- Force-push to `main` or rewrite its history.
 
 ## Voice-driven work
 
