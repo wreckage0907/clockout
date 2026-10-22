@@ -419,6 +419,35 @@ describe("setup", () => {
     expect(ui.lastFrame()).toContain("1 of 2 projects");
   });
 
+  it("never forgets an ERP task on Enter; ⌫ does", async () => {
+    const withErp = {
+      ...config,
+      timesheet: {
+        type: "next-pms" as const,
+        url: "https://erp.example.com",
+        map: [{ project: "acme/api", erp_task: "TASK-1", label: "Acme API build" }],
+      },
+    };
+    const { ui, calls } = await openSetup({
+      setup: { config: withErp, erp: { connected: true, user: "dev@example.com" } },
+    });
+    for (let i = 0; i < 4; i++) {
+      ui.stdin.write("\u001b[B");
+      await tick();
+    }
+    await until(ui.lastFrame, "Acme API build");
+    ui.stdin.write("\r"); // into the rows: the mapping
+    await tick();
+    ui.stdin.write("\r");
+    ui.stdin.write(" ");
+    await tick();
+    expect(calls.saved).toEqual([]);
+    expect(ui.lastFrame()).toContain("⌫ forget");
+    ui.stdin.write("\u007f"); // backspace
+    await until(ui.lastFrame, "No tasks picked yet");
+    expect(lastSaved(calls)?.timesheet?.map).toEqual([]);
+  });
+
   it("signs in to the ERP from the keyboard", async () => {
     const { ui, calls } = await openSetup();
     for (let i = 0; i < 4; i++) {

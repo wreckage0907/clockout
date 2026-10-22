@@ -89,9 +89,14 @@ interface Row {
   opens?: () => void;
   /** A small action at the end of the line, e.g. "✕ forget". */
   trail?: string;
+  /**
+   * Takes something away: ⌫ / Delete on the row, or a click on its trail. Never Enter or
+   * Space, which also move you into a section and would delete by accident.
+   */
+  remove?: () => void;
 }
 
-const canChange = (r: Row) => !r.dead && !!(r.press || r.step || r.options || r.opens);
+const canChange = (r: Row) => !r.dead && !!(r.press || r.step || r.options || r.opens || r.remove);
 
 const ROUNDING = [5, 15, 30];
 const IDLE = [10, 20, 30, 45];
@@ -189,6 +194,7 @@ export function Setup({
       return;
     }
     if (!row) return;
+    if (row.remove && (key.backspace || key.delete)) return row.remove();
     if (row.input) {
       if (key.return) return row.press?.();
       if (key.leftArrow && !site.value) return setFocus("nav");
@@ -276,7 +282,9 @@ export function Setup({
         ? "↑↓ section · → or enter to change it · esc close"
         : row?.input
           ? "type the address · enter signs in · esc back"
-          : "↑↓ move · ←→ change · enter or space pick · esc back";
+          : row?.remove
+            ? "↑↓ move · ⌫ forget · esc back"
+            : "↑↓ move · ←→ change · enter or space pick · esc back";
 
   return (
     <Dialog title="Setup" width={width} screen={screen} onClose={onClose}>
@@ -644,7 +652,7 @@ export function Setup({
               label: `${m.project} · ${m.task ?? "every task"} → ${m.label ?? m.erp_task}`,
               wide: true,
               trail: "✕ forget",
-              press: () => void save(withoutTaskMapping(c, m)),
+              remove: () => void save(withoutTaskMapping(c, m)),
             }),
           )
         : [
@@ -860,7 +868,7 @@ function RowView({
             </Text>
           </Box>
           {r.trail ? (
-            <Clickable onClick={r.press} flexShrink={0}>
+            <Clickable onClick={r.remove ?? r.press} flexShrink={0}>
               {(h) => <Text color={h ? T.danger : selected ? T.muted : T.faint}>{r.trail}</Text>}
             </Clickable>
           ) : null}
