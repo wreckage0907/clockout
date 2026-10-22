@@ -107,7 +107,7 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
   };
 
   const actions: AppActions = {
-    load: (d) => openDay(d, config, store, { ai }),
+    load: (d, opts) => openDay(d, config, store, { ai, ...opts }),
     async parse(text, day, earlier) {
       if (!ai) {
         const local = localCorrection(text);

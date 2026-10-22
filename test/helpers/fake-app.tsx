@@ -39,11 +39,14 @@ export function fakeActions(
     day?: Day;
     /** An ERP to send to; no "Send to ERP" without one. */
     erp?: { target: Target; map?: TaskMapping[] };
+    /** A corrected day with newer activity that can't be merged under it, until refreshed. */
+    stale?: boolean;
   } = {},
 ) {
   const start: StoredDay = opts.day ? { ...stored, day: opts.day } : stored;
   const calls = {
     loads: [] as string[],
+    refreshes: 0,
     commits: [] as { ops: EditOp[]; text?: string }[],
     copied: [] as string[],
     saved: [] as unknown[],
@@ -65,8 +68,16 @@ export function fakeActions(
   const memoryStore = { save: async () => {} } as unknown as DayStore;
   const erp = opts.erp?.target;
   const actions: AppActions = {
-    load: async (date) => {
+    load: async (date, o) => {
       calls.loads.push(date);
+      if (o?.refresh) calls.refreshes++;
+      if (opts.stale && !o?.refresh)
+        return {
+          stored: { ...start, edits: [{ at: "", ops: [] }] },
+          warnings: ["There's newer activity that can't be merged under your corrections."],
+          kept: true,
+          stale: true,
+        };
       return { stored: start, warnings: [], kept: false };
     },
     parse: async (text, day, earlier) => {

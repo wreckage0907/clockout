@@ -60,6 +60,8 @@ export interface OpenedDay {
   warnings: string[];
   /** True when the day has your corrections (replayed on fresh activity where possible). */
   kept: boolean;
+  /** Newer activity couldn't be replayed under your corrections; rebuilding (`refresh`) picks it up. */
+  stale?: boolean;
 }
 
 /**
@@ -107,10 +109,8 @@ export async function openDay(
   if (corrected) {
     const replayed = replayEdits(corrected, draft, config);
     if (!replayed) {
-      warnings.push(
-        "There's newer activity that can't be merged under your corrections automatically. Run with --refresh to rebuild the day (drops corrections).",
-      );
-      return { stored: corrected, warnings, kept: true };
+      warnings.push("There's newer activity that can't be merged under your corrections.");
+      return { stored: corrected, warnings, kept: true, stale: true };
     }
     if (sameBlocks(replayed.day, corrected.day)) return { stored: corrected, warnings, kept: true };
     ({ day, history } = replayed);

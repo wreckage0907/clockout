@@ -200,4 +200,10 @@ describe("settings in the chat", () => {
     ]);
     expect(localCorrection("connect the standup to the design sync")).toBeNull();
   });
+
+  it("takes refresh without the AI", () => {
+    for (const said of ["refresh", "Rebuild the day.", "start over", "reload my day"])
+      expect(localCorrection(said)?.rebuild).toBe(true);
+    expect(localCorrection("refresh my GitHub token")).toBeNull();
+  });
 });

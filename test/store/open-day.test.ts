@@ -124,5 +124,11 @@ describe("corrections and new activity", () => {
     const later = await openDay(FIXTURE_DATE, fakeConfig, s, { sources });
     expect(later.stored.day.blocks.map((b) => b.summary)).toEqual(["Fix login"]);
     expect(later.warnings.join(" ")).toMatch(/can't be merged under your corrections/);
+    expect(later.stale).toBe(true);
+
+    const rebuilt = await openDay(FIXTURE_DATE, fakeConfig, s, { sources, refresh: true });
+    expect(rebuilt.stale).toBeFalsy();
+    expect(rebuilt.stored.edits).toEqual([]);
+    expect(rebuilt.stored.day.blocks.map((b) => b.summary)).toEqual(["Early", "Morning"]);
   });
 });

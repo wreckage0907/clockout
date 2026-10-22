@@ -29,11 +29,16 @@ Settings (what Clockout reads and how it counts), from "settings" in the input:
 - Google Calendar and the ERP need a sign-in in the browser: use connect (with the ERP's address when they give one) and disconnect. Never ask for passwords, tokens or private calendar links.
 - "Send <project> to <task>" or "log <project> against <task>": erp_task with the words they used to name the task as search.
 - A request about settings changes no blocks, and a correction to the day changes no settings.
+- Rebuilding the day from the latest activity ("refresh", "pull in the new activity", "start the day over"): rebuild true, no ops and no settings.
 - "earlier" holds the last few things they said and your replies; use it to understand short follow-ups ("yes", "the second one").`;
 
 export const correctionSchema = z.object({
   ops: z.array(editOpSchema),
   settings: z.array(aiSettingOpSchema).optional().describe("Changes to Clockout's settings"),
+  rebuild: z
+    .boolean()
+    .optional()
+    .describe("Draft the day again from the latest activity, dropping corrections"),
   reply: z.string().describe("One short sentence describing the change, or empty"),
 });
 export type Correction = Omit<z.infer<typeof correctionSchema>, "settings"> & {
@@ -187,10 +192,12 @@ const CONNECT = new RegExp(
   "i",
 );
 const DISCONNECT = new RegExp(`^(?:disconnect|sign\\s+out\\s+of)\\s+${SERVICE}[.!]?$`, "i");
+const REBUILD =
+  /^(?:refresh|rebuild|reload|redraft|start\s+over)(?:\s+(?:the\s+|this\s+|my\s+)?day)?[.!]?$/i;
 
 /**
  * What can be done without the AI: a pasted private calendar link (which must never reach the
- * AI) and plain "connect erp <address>" / "disconnect google". Null for anything else.
+ * AI), plain "connect erp <address>" / "disconnect google", and "refresh". Null for anything else.
  */
 export function localCorrection(text: string): Correction | null {
   const feed = text.match(URLS)?.find(isCalendarFeed);
@@ -201,6 +208,8 @@ export function localCorrection(text: string): Correction | null {
       reply: "Read your calendar from its private link",
     };
   const said = text.trim();
+  if (REBUILD.test(said))
+    return { ops: [], rebuild: true, reply: "Rebuild the day from the latest activity" };
   const which = (s: string) => (s.toLowerCase() === "erp" ? "erp" : "google");
   const c = CONNECT.exec(said);
   if (c?.[1]) {

@@ -261,6 +261,31 @@ describe("setup from the chat bar", () => {
     ]);
   });
 
+  it("rebuilds the day when you say refresh, asking first because it drops corrections", async () => {
+    const { ui, calls } = await openDay({ stale: true });
+    expect(ui.lastFrame()).toContain("can't be merged under your corrections");
+    expect(ui.lastFrame()).toContain("Rebuild the day");
+    ui.stdin.write(PASTE("refresh"));
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Drops your 1 correction");
+    expect(calls.refreshes).toBe(0);
+    ui.stdin.write("\r");
+    for (let i = 0; i < 50 && (ui.lastFrame() ?? "").includes("can't be merged"); i++) await tick();
+    expect(calls.refreshes).toBe(1);
+    expect(ui.lastFrame()).not.toContain("can't be merged");
+  });
+
+  it("drafts the day again straight away on refresh when there's nothing to lose", async () => {
+    const { ui, calls } = await openDay();
+    ui.stdin.write(PASTE("refresh the day"));
+    await tick();
+    ui.stdin.write("\r");
+    for (let i = 0; i < 50 && calls.refreshes === 0; i++) await tick();
+    expect(calls.refreshes).toBe(1);
+    expect(calls.loads).toEqual([FIXTURE_DATE, FIXTURE_DATE]);
+  });
+
   it("opens the ERP task picker on the words you used when the search isn't conclusive", async () => {
     const erp = fakeTarget({
       tasks: [

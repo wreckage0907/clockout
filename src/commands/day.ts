@@ -27,13 +27,14 @@ export async function runDay(dateInput: string | undefined, opts: DayOptions, ap
     await runTui(date, ctx, ai);
     return;
   }
-  const { stored, warnings, kept } = await openDay(date, config, store, {
+  const { stored, warnings, kept, stale } = await openDay(date, config, store, {
     refresh: opts.refresh,
     ai,
   });
   const day = stored.day;
 
   for (const w of warnings) console.error(`warning: ${w}`);
+  if (stale) console.error("Run with --refresh to rebuild the day from it (drops corrections).");
 
   if (opts.json) {
     console.log(JSON.stringify({ ...day, rows: timesheetRows(day, config) }, null, 2));

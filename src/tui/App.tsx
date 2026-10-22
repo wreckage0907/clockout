@@ -37,7 +37,8 @@ import { Setup, type SetupActions } from "./Setup";
 import { hm, projectColor, T } from "./theme";
 
 export interface AppActions {
-  load(date: string): Promise<OpenedDay>;
+  /** The day; `refresh` drafts it again from the latest activity, dropping corrections. */
+  load(date: string, opts?: { refresh?: boolean }): Promise<OpenedDay>;
   /** What was said, as edits to the day and changes to settings; `earlier` is the last few turns. */
   parse(text: string, day: Day, earlier: Turn[]): Promise<Correction>;
   /**
@@ -77,6 +78,8 @@ interface Proposal {
   settings: SettingOp[];
   lines: string[];
   reply: string;
+  /** Draft the day again from the latest activity instead. */
+  rebuild?: boolean;
 }
 
 /** An ERP task to choose for a project: before sending, or because you asked in the chat. */
@@ -124,6 +127,7 @@ export function App({
   const [reload, setReload] = useState(0);
   const [stored, setStored] = useState<StoredDay | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [stale, setStale] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState<string[]>([]);
@@ -139,22 +143,27 @@ export function App({
   const draft = useDraft(!setup && !overlay && !editing && !busy && !proposal && !sending);
   const pill = useDraft(!setup && editing !== null);
   const offset = useRef(0);
+  const refreshNext = useRef(false);
 
   useEffect(() => {
     void reload;
     let live = true;
+    const refresh = refreshNext.current;
+    refreshNext.current = false;
     setLoading(true);
     actions
-      .load(date)
+      .load(date, refresh ? { refresh } : undefined)
       .then((opened) => {
         if (!live) return;
         setStored(opened.stored);
         setWarnings(opened.warnings);
+        setStale(!!opened.stale);
       })
       .catch((err: Error) => {
         if (!live) return;
         setStored(null);
         setWarnings([`Couldn't load ${date}: ${err.message}`]);
+        setStale(false);
       })
       .finally(() => live && setLoading(false));
     return () => {
@@ -331,6 +340,27 @@ export function App({
     }
   };
 
+  /** Asks before drafting the day again when that would drop corrections. */
+  const askRebuild = (text = "", reply = "") => {
+    const n = stored?.edits.length ?? 0;
+    if (n === 0) return rebuild();
+    setProposal({
+      text,
+      ops: [],
+      settings: [],
+      rebuild: true,
+      lines: [
+        `Draft ${longDate(date)} again from the latest activity`,
+        `Drops your ${n} correction${n === 1 ? "" : "s"}; ctrl+z can't bring ${n === 1 ? "it" : "them"} back`,
+      ],
+      reply: reply || "Rebuild the day",
+    });
+  };
+  const rebuild = () => {
+    refreshNext.current = true;
+    setReload((n) => n + 1);
+  };
+
   const startEdit = (i: number) => {
     const c = items[i];
     if (!c || c === "add" || c.kind !== "row") return;
@@ -356,9 +386,10 @@ export function App({
     if (typed !== null && card?.kind === "row") return setMinutes(card, typed);
     setBusy(`Thinking about “${text.length > 50 ? `${text.slice(0, 49)}…` : text}”`);
     try {
-      const { ops, settings = [], reply } = await actions.parse(text, day, turns);
+      const { ops, settings = [], reply, rebuild } = await actions.parse(text, day, turns);
       const asked = describeEdits(day, ops).join(" ");
       setTurns((t) => [...t, { said: text, reply: reply || asked }].slice(-TURNS));
+      if (rebuild) return askRebuild(text, reply);
       const changes = ops.filter((o) => o.op !== "clarify");
       if (changes.length === 0 && settings.length === 0) showToast(asked || reply || "No changes.");
       else
@@ -380,6 +411,7 @@ export function App({
     if (!proposal) return;
     const p = proposal;
     setProposal(null);
+    if (p.rebuild) return rebuild();
     if (p.ops.length) await commit(p.ops, `✓ ${p.reply || "Changed"}`, p.text);
     if (p.settings.length) await configure(p.settings, p.reply || "Setup changed");
   };
@@ -570,9 +602,14 @@ export function App({
     </>
   );
   const warning = warnings.length ? (
-    <Text color={T.ask} wrap="truncate-end">
-      ⚠ {warnings.join(" · ")}
-    </Text>
+    <Box gap={1} flexGrow={1}>
+      <Box flexShrink={1} flexGrow={1}>
+        <Text color={T.ask} wrap="truncate-end">
+          ⚠ {warnings.join(" · ")}
+        </Text>
+      </Box>
+      {stale ? <Button label="Rebuild the day" tone="ask" onClick={() => askRebuild()} /> : null}
+    </Box>
   ) : null;
 
   if (view === "home")
