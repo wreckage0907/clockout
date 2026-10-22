@@ -32,7 +32,7 @@ describe("codex source", () => {
     const prompts = (await collect("2026-10-16")).filter((a) => a.kind === "prompt");
     // Not the injected user/developer context at 07:00, not the review subagent at 07:20,
     // and not the 00:10 IST prompt of the late session.
-    expect(prompts.map(hhmm)).toEqual(["07:01", "07:15", "18:16"]);
+    expect(prompts.map(hhmm)).toEqual(["07:01", "07:15", "09:31", "09:45", "18:16"]);
     expect(prompts[0]).toMatchObject({
       source: "codex",
       actor: "human",
@@ -42,7 +42,7 @@ describe("codex source", () => {
       sessionId: "0b2c3d4e-0000-4000-8000-000000000001",
     });
     expect(prompts[1]?.cwd).toBe("/Users/dev/work/acme-api/web"); // from the newer turn_context
-    expect(prompts[2]).not.toHaveProperty("repo");
+    expect(prompts[4]).not.toHaveProperty("repo");
     expect(prompts.every((a) => a.title === undefined)).toBe(true); // Codex titles are the full prompt
   });
 
@@ -51,8 +51,23 @@ describe("codex source", () => {
     expect(turns.map((a) => [hhmm(a), a.end?.toISOString().slice(11, 19)])).toEqual([
       ["07:01", "07:04:00"],
       ["07:15", "07:20:00"],
+      ["09:31", "09:33:00"],
+      ["09:45", "09:47:30"],
       ["18:16", "18:19:00"],
     ]);
+  });
+
+  it("reads newer rollouts, where a prompt is a completed UserMessage item", async () => {
+    const session = await readCodexSession(
+      join(days, "rollout-2026-10-16T15-00-00-0b2c3d4e-0000-4000-8000-000000000004.jsonl"),
+    );
+    const prompts = session.events.filter((e) => e.kind === "prompt");
+    expect(prompts.map((e) => e.at.toISOString().slice(11, 16))).toEqual(["09:31", "09:45"]);
+    expect(prompts[0]).toMatchObject({
+      cwd: "/Users/dev/code/clockout",
+      branch: "feat/csv-header",
+    });
+    expect(session.repo).toBe("dev-example/clockout");
   });
 
   it("puts the rest of a session that crosses midnight on the next day", async () => {
@@ -79,7 +94,7 @@ describe("codex source", () => {
   });
 
   it("is detected when it has rollouts", async () => {
-    expect(await codex.detect(ctx)).toEqual({ summary: expect.stringMatching(/^3 sessions in /) });
+    expect(await codex.detect(ctx)).toEqual({ summary: expect.stringMatching(/^4 sessions in /) });
     expect(await codex.detect({ ...ctx, env: { CODEX_HOME: "/nowhere" } })).toBeNull();
   });
 });

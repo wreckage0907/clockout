@@ -20,7 +20,8 @@ export interface CodexConfig {
 
 // Only the fields Clockout uses. Each line is { timestamp, type, payload }: `session_meta` first
 // (id, cwd, git), `turn_context` when a turn starts (cwd), `event_msg` for what happened
-// (`user_message` is a prompt you typed) and `response_item` for what went to and from the model.
+// (a prompt you typed is `user_message`, or from about 0.149 an `item_completed` whose item is a
+// `UserMessage`) and `response_item` for what went to and from the model.
 const line = z.object({
   timestamp: z.string(),
   type: z.string(),
@@ -32,6 +33,7 @@ const line = z.object({
       cwd: z.string().optional(),
       source: z.unknown().optional(),
       thread_source: z.string().optional(),
+      item: z.object({ type: z.string() }).optional(),
       git: z
         .object({ branch: z.string().optional(), repository_url: z.string().optional() })
         .optional(),
@@ -129,11 +131,16 @@ export async function readCodexSession(file: string): Promise<AgentSession> {
 type Payload = NonNullable<z.infer<typeof line>["payload"]>;
 
 /**
- * A prompt is the `user_message` event. The `user` and `developer` messages sent to the model
- * also hold injected context (instructions, environment), so they don't count as either side.
+ * A prompt is the `user_message` event, or in newer versions the completed `UserMessage` item; a
+ * file has one or the other. The `user` and `developer` messages sent to the model also hold
+ * injected context (instructions, environment), so they don't count as either side.
  */
 function eventKind(type: string, payload: Payload | undefined): SessionEvent["kind"] | null {
-  if (type === "event_msg") return payload?.type === "user_message" ? "prompt" : null;
+  if (type === "event_msg") {
+    if (payload?.type === "user_message") return "prompt";
+    if (payload?.type === "item_completed" && payload.item?.type === "UserMessage") return "prompt";
+    return null;
+  }
   if (type !== "response_item") return null;
   if (payload?.type === "message" && payload.role !== "assistant") return null;
   return "agent";
