@@ -121,7 +121,7 @@ export function TaskPicker({
    * Typed since the shown tasks were found: Enter waits for the search to catch up. A ref, as
    * keys typed in one burst arrive before the screen (and `query`) catch up.
    */
-  const typing = useRef(true);
+  const typing = useRef(false);
   const answered = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sel, setSel] = useState(0);
@@ -165,6 +165,7 @@ export function TaskPicker({
     if (key.return) {
       if (typing.current) return;
       if (reset && sel === 0) return reset.onPick();
+      if (tasks === null) return;
       const t = shown[sel - first];
       if (t) onPick(t);
       return;

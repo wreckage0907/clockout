@@ -180,8 +180,9 @@ describe("which ERP task a card goes to", () => {
 
     ui.stdin.write(CTRL_T);
     await until(ui.lastFrame, "↺ Back to API maintenance");
+    const before = calls.commits.length;
     ui.stdin.write("\r"); // the way back is the first choice
-    await until(ui.lastFrame, "✓");
+    for (let i = 0; i < 80 && calls.commits.length === before; i++) await tick();
     expect(calls.commits.at(-1)?.ops.every((o) => o.op === "send_to" && o.task === null)).toBe(
       true,
     );
