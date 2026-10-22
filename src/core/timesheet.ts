@@ -1,6 +1,6 @@
 import { type Config, durationMinutes } from "../config/schema";
 import { minutesBetween, roundedHours } from "./time";
-import type { Block, Day, EditOp, Gap, TimesheetRow } from "./types";
+import type { Block, Day, EditOp, ErpTaskRef, Gap, TimesheetRow } from "./types";
 
 /** Blocks that go on the timesheet: confirmed and billable. */
 export function countedBlocks(day: Day): Block[] {
@@ -38,6 +38,7 @@ export function timesheetRows(day: Day, config: Config): TimesheetRow[] {
       minutes: 0,
       set: false,
     };
+    if (b.sendTo && !g.row.sendTo) g.row.sendTo = b.sendTo;
     g.minutes += blockMinutes(b);
     g.set ||= b.minutes !== undefined;
     groups.set(key, g);
@@ -61,6 +62,20 @@ export function setRowMinutesOps(day: Day, key: string, minutes: number): EditOp
     id: b.id,
     minutes: i === 0 ? Math.max(0, Math.round(minutes)) : 0,
   }));
+}
+
+/**
+ * Edits that send a timesheet row to an ERP task of your choosing (or, with null, back to its
+ * project's): every block of the row carries the choice, so it holds however the row is cut.
+ */
+export function sendRowOps(day: Day, key: string, to: ErpTaskRef | null): EditOp[] {
+  return countedBlocks(day)
+    .filter((b) => rowKey(b) === key)
+    .map((b) =>
+      to
+        ? { op: "send_to" as const, id: b.id, task: to.task, label: to.label }
+        : { op: "send_to" as const, id: b.id, task: null },
+    );
 }
 
 /** Edits that take a timesheet row off the day: its blocks are deleted (undo brings them back). */

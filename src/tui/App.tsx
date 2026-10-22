@@ -5,9 +5,9 @@ import type { OpenedDay } from "../collect";
 import { type Config, durationMinutes, type TaskMapping } from "../config/schema";
 import { describeSettings, type SettingEffect, type SettingOp } from "../config/setting-ops";
 import { describeEdits, placeTimeOps } from "../core/edits";
-import { changes, type PushPlan, type PushRow } from "../core/push";
+import { changes, mappingFor, type PushPlan, type PushRow } from "../core/push";
 import { addDays, parseDuration } from "../core/time";
-import { removeRowOps, setRowMinutesOps, timesheetRows } from "../core/timesheet";
+import { removeRowOps, sendRowOps, setRowMinutesOps, timesheetRows } from "../core/timesheet";
 import type { Day, EditOp } from "../core/types";
 import { toTsv } from "../export/formats";
 import type { PushResult } from "../push";
@@ -92,6 +92,8 @@ interface Picking {
   query?: string;
   /** Carry on sending the day once it's picked. */
   send: boolean;
+  /** Picking for one card (its row key) rather than for the whole project. */
+  card?: string;
 }
 
 /** Turns of the chat kept for follow-ups. */
@@ -275,10 +277,60 @@ export function App({
       setBusy(null);
     }
   };
+  /** The task a picked card's project goes to, if it has one yet. */
+  const projectTaskOf = (p: Picking): TaskMapping | undefined =>
+    p.card
+      ? mappingFor({ project: p.project, task: p.label }, config.timesheet?.map ?? [])
+      : undefined;
+  /** For a card's pick: what the rest of its project gets, and the way back to it. */
+  const cardPick = (p: Picking) => {
+    const projectTask = projectTaskOf(p);
+    if (!p.card || !projectTask || !day) return {};
+    const key = p.card;
+    const label = projectTask.label ?? projectTask.erp_task;
+    const own = cards.find((c) => c.key === key)?.sendTo?.own;
+    return {
+      only: { projectTask: label },
+      ...(own
+        ? {
+            reset: {
+              label,
+              onPick: () => {
+                setOverlay(null);
+                setUnmapped(null);
+                void commit(sendRowOps(day, key, null), `✓ “${p.description}” → ${label}`);
+              },
+            },
+          }
+        : {}),
+    };
+  };
+  /** Which ERP task a card goes to. Its project's first pick becomes the project's task. */
+  const pickFor = (c: Card) => {
+    if (c.kind !== "row") return;
+    if (!erp) return showToast("Sign in to your ERP first: Setup (ctrl+p) → ERP");
+    setUnmapped({
+      project: c.project,
+      label: c.task,
+      description: c.title,
+      send: false,
+      card: c.key,
+    });
+    setOverlay("task");
+  };
   const pickTask = async (p: Picking, task: RemoteTask) => {
     if (!erp) return;
     setOverlay(null);
     setUnmapped(null);
+    const projectTask = projectTaskOf(p);
+    if (p.card && projectTask && day) {
+      // The project's own task needs no exception; anything else holds for this card alone.
+      const to = projectTask.erp_task === task.id ? null : { task: task.id, label: task.subject };
+      return void commit(
+        sendRowOps(day, p.card, to),
+        `✓ “${p.description}” → ${task.subject}${to ? " · only this card" : ""}`,
+      );
+    }
     try {
       setConfig(
         await erp.map({
@@ -464,6 +516,7 @@ export function App({
         return;
       }
       if (key.ctrl && ch === "d") return card ? remove(card) : undefined;
+      if (key.ctrl && ch === "t") return card ? pickFor(card) : undefined;
       if (draft.value === "" && card?.kind === "row") {
         if (ch === "+" || ch === "=") return setMinutes(card, card.minutes + step);
         if (ch === "-" || ch === "_") return setMinutes(card, Math.max(step, card.minutes - step));
@@ -573,6 +626,7 @@ export function App({
             description: unmapped.description,
           }}
           {...(unmapped.query ? { query: unmapped.query } : {})}
+          {...cardPick(unmapped)}
           search={erp.searchTasks}
           screen={screen}
           onPick={(t) => void pickTask(unmapped, t)}
@@ -751,6 +805,7 @@ export function App({
                   onEdit={() => startEdit(i)}
                   onMinutes={(m) => setMinutes(it, m)}
                   onRemove={() => remove(it)}
+                  onSendTo={() => pickFor(it)}
                   onChoose={(n) => {
                     const c = it.choices?.[n];
                     if (c) choose(c);
@@ -855,6 +910,7 @@ function CardView({
   onEdit,
   onMinutes,
   onRemove,
+  onSendTo,
   onChoose,
 }: {
   c: Card;
@@ -868,9 +924,11 @@ function CardView({
   onEdit: () => void;
   onMinutes: (m: number) => void;
   onRemove: () => void;
+  onSendTo: () => void;
   onChoose: (n: number) => void;
 }) {
   const ask = c.kind === "ask";
+  const to = c.sendTo;
   let body: ReactNode;
   if (ask)
     body = (
@@ -901,12 +959,29 @@ function CardView({
         <Text color={T.text} bold wrap="truncate-end">
           {c.title}
         </Text>
-        <Text wrap="truncate-end">
-          <Text color={projectColor(c.project)}>● </Text>
-          <Text color={T.text}>{short(c.project)}</Text>
-          <Text color={T.muted}> · {c.task}</Text>
-          {c.edited ? <Text color={T.primary}> · set by you</Text> : null}
-        </Text>
+        <Box>
+          <Box flexShrink={1}>
+            <Text wrap="truncate-end">
+              <Text color={projectColor(c.project)}>● </Text>
+              <Text color={T.text}>{short(c.project)}</Text>
+              <Text color={T.muted}> · {c.task}</Text>
+              {c.edited ? <Text color={T.primary}> · set by you</Text> : null}
+            </Text>
+          </Box>
+          {to !== undefined ? (
+            <Clickable onClick={onSendTo} flexShrink={1} marginLeft={2}>
+              {(h) => (
+                <Text
+                  wrap="truncate-end"
+                  color={h ? T.text : to === null ? T.ask : to.own ? T.info : T.muted}
+                >
+                  → {to === null ? "pick an ERP task" : to.label}
+                  {selected ? <Text color={T.faint}> ctrl+t</Text> : null}
+                </Text>
+              )}
+            </Clickable>
+          ) : null}
+        </Box>
         <Text color={T.faint} wrap="truncate-end">
           {c.from}
         </Text>

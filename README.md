@@ -56,6 +56,7 @@ node dist/cli.js               # review today
 | **Enter** on a card | Type its length: `1h 45`, `1:45`, `1.75`, `45m` (or type it into the chat bar) |
 | **-** / **+** | Shorten or lengthen the selected card by your rounding step |
 | **Ctrl+D** (or the card's **✕**) | Take the selected card off the day (Ctrl+Z brings it back) |
+| **Ctrl+T** (or the card's **→ task**) | Pick which ERP task the selected card goes to. The first pick for a project is for all its cards; after that, a different pick is for this card only |
 | **Ctrl+Y** (or **Copy sheet**) | Copy the timesheet, tab-separated, once no meeting is waiting |
 | **Ctrl+S** (or **Send to ERP**) | Send the day to your ERP: shows what would be added, updated or removed first; **Enter** sends |
 | **Ctrl+Z** | Undo |
@@ -157,7 +158,7 @@ label = "API maintenance"
 Instead of pasting rows, send the day straight into your timesheet. Supported now: Frappe/ERPNext sites running [next-pms](https://github.com/rtCamp/next-pms).
 
 1. `clockout connect erp https://erp.example.com` signs you in through the browser (OAuth; no password or API key is stored). The site's OAuth Settings must allow dynamic client registration.
-2. In the review screen press **Ctrl+S**. The first time a project is sent, pick its ERP task from a searchable list; it's remembered.
+2. In the review screen press **Ctrl+S**. The first time a project is sent, pick its ERP task from a searchable list; it's remembered. To send one card somewhere else (two kinds of work in the same project), select it and press **Ctrl+T**.
 3. Clockout reads what's already logged for that day and shows the plan: `+` add, `~` update, `−` remove, `=` already sent, `!` can't (approved week, rejected entry), `·` added in the ERP by hand. **Enter** sends.
 
 Sending again only changes what changed. Entries you added in the ERP yourself are never touched, and approval stays in the ERP. From scripts: `clockout push yesterday --dry-run`, then `--yes`.

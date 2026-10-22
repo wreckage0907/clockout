@@ -1,4 +1,5 @@
 import { type Config, durationMinutes } from "../config/schema";
+import { mappingFor } from "../core/push";
 import { minutesBetween, roundedHours } from "../core/time";
 import { blockMinutes, countedBlocks, rowKey } from "../core/timesheet";
 import type { Block, Day, Question } from "../core/types";
@@ -36,6 +37,11 @@ export interface Card {
   minutes: number;
   /** True when you set the length yourself. */
   edited: boolean;
+  /**
+   * Where the row goes in the ERP: a task picked for this card (`own`), its project's task, or
+   * null when neither is picked yet. Undefined when no ERP is set up.
+   */
+  sendTo?: { label: string; own: boolean } | null;
   /** For ask cards: the question and its answers. */
   question?: string;
   reason?: string | null;
@@ -74,6 +80,8 @@ export function buildCards(day: Day, config: Config): Card[] {
     const b = blocks[0] as Block;
     const minutes = blocks.reduce((s, x) => s + blockMinutes(x), 0);
     const edited = blocks.some((x) => x.minutes !== undefined);
+    const own = blocks.find((x) => x.sendTo)?.sendTo;
+    const mapped = config.timesheet ? mappingFor(b, config.timesheet.map) : undefined;
     return {
       key,
       kind: "row",
@@ -83,6 +91,15 @@ export function buildCards(day: Day, config: Config): Card[] {
       from: fromLine(blocks),
       minutes: edited ? minutes : roundedHours(minutes, step) * 60,
       edited,
+      ...(config.timesheet
+        ? {
+            sendTo: own
+              ? { label: own.label, own: true }
+              : mapped
+                ? { label: mapped.label ?? mapped.erp_task, own: false }
+                : null,
+          }
+        : {}),
       first: Math.min(...blocks.map((x) => x.start.getTime())),
     };
   });

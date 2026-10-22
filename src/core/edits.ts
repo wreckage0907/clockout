@@ -233,6 +233,13 @@ export function applyEdits(day: Day, ops: readonly EditOp[], config: Config): Ed
       case "clarify":
         clarifications.push(op.question);
         break;
+      case "send_to": {
+        const b = find(op.id);
+        if (!b) break;
+        if (op.task === null) delete b.sendTo;
+        else b.sendTo = { task: op.task, label: op.label ?? op.task };
+        break;
+      }
     }
   }
 
@@ -318,6 +325,10 @@ export function describeEdits(day: Day, ops: readonly EditOp[]): string[] {
       }
       case "clarify":
         return `Question: ${op.question}`;
+      case "send_to":
+        return op.task === null
+          ? `${name(op.id)}: send to its project's ERP task`
+          : `${name(op.id)}: send to ${op.label ?? op.task}`;
       default:
         return op satisfies never;
     }

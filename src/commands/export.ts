@@ -59,7 +59,11 @@ export async function runExport(
         ? `${toTsv(rows)}\n`
         : format === "md"
           ? `${toMarkdown(rows)}\n`
-          : `${JSON.stringify(rows, null, 2)}\n`;
+          : `${JSON.stringify(
+              rows.map(({ sendTo: _, ...r }) => r),
+              null,
+              2,
+            )}\n`;
 
   if (opts.out) {
     await writeFile(opts.out, text);

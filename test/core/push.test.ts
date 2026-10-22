@@ -191,3 +191,20 @@ describe("plainText", () => {
     expect(plainText("<p>Fix &amp; ship</p><p>Review&nbsp;PR</p>")).toBe("Fix & ship\nReview PR");
   });
 });
+
+describe("a row's own ERP task", () => {
+  it("goes there instead of its project's task", () => {
+    const own = pushRows([{ ...auth, sendTo: { task: "TASK-9", label: "Bug fixing" } }, standup]);
+    const plan = planPush(DATE, own, map, remote(), []);
+    expect(plan.items.map((i) => (i.action === "create" ? i.want.task : i.action))).toEqual([
+      "TASK-9",
+      "TASK-2",
+    ]);
+    expect(plan.items[0]).toMatchObject({ want: { label: "Bug fixing" } });
+  });
+
+  it("is sent even when the project has no task yet", () => {
+    const own = pushRows([{ ...auth, project: "new/repo", sendTo: { task: "T", label: "T" } }]);
+    expect(actions(planPush(DATE, own, [], remote(), []).items)).toEqual(["create"]);
+  });
+});

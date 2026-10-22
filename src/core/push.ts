@@ -129,14 +129,19 @@ export function planPush(
   pushed: readonly PushedEntry[],
 ): PushPlan {
   const byId = new Map(remote.entries.map((e) => [e.id, e]));
-  const labelOf = (task: string) => map.find((m) => m.erp_task === task)?.label ?? task;
+  const labelOf = (task: string) =>
+    map.find((m) => m.erp_task === task)?.label ??
+    rows.find((r) => r.sendTo?.task === task)?.sendTo?.label ??
+    task;
   // Sent before and still there.
   const ledger = pushed.filter((p) => byId.has(p.id));
   const claimed = new Set<string>();
   const items: PushItem[] = [];
 
   const wants = rows.map((row) => {
-    const m = mappingFor(row, map);
+    const m = row.sendTo
+      ? { erp_task: row.sendTo.task, label: row.sendTo.label }
+      : mappingFor(row, map);
     const want: Desired | null = m
       ? {
           task: m.erp_task,

@@ -63,7 +63,18 @@ export interface Block {
    * timesheet; the times themselves stay as they were.
    */
   minutes?: number;
+  /**
+   * The ERP task you picked for this block's row in the review screen. Wins over the task
+   * mapped for its project, for this day only.
+   */
+  sendTo?: ErpTaskRef;
   evidence: Activity[];
+}
+
+/** An ERP task by id, with its name for display. */
+export interface ErpTaskRef {
+  task: string;
+  label: string;
 }
 
 /** Unaccounted time inside working hours. */
@@ -134,7 +145,12 @@ export type EditOp =
       summary: string;
       billable?: boolean;
     }
-  | { op: "clarify"; question: string };
+  | { op: "clarify"; question: string }
+  /**
+   * Which ERP task a block's row is sent to; `task: null` goes back to the project's. Made by the
+   * review screen's task picker, never by the AI (it isn't in the schema the AI gets).
+   */
+  | { op: "send_to"; id: string; task: string | null; label?: string };
 
 /** One timesheet row as exported. */
 export interface TimesheetRow {
@@ -143,4 +159,6 @@ export interface TimesheetRow {
   task: string;
   hours: number;
   description: string;
+  /** The ERP task picked for this row, if it differs from its project's. Not exported. */
+  sendTo?: ErpTaskRef;
 }

@@ -89,11 +89,14 @@ export function SendPanel({
 
 /**
  * Which ERP task a project's rows go to: type to search the ERP's tasks, ↑↓ and enter (or
- * click) to pick. Asked once per project; the answer is saved in config.
+ * click) to pick. Asked once per project; the answer is saved in config. For one card
+ * (`only`), the pick holds for that card alone, and `reset` sends it back to its project's.
  */
 export function TaskPicker({
   row,
   query: initial = "",
+  only,
+  reset,
   search,
   screen,
   onPick,
@@ -102,6 +105,10 @@ export function TaskPicker({
   row: Pick<PushRow, "project" | "task" | "description">;
   /** What to search for first. */
   query?: string;
+  /** Picking for one card: the task the rest of its project goes to. */
+  only?: { projectTask: string };
+  /** The card has its own task: a first choice that goes back to the project's. */
+  reset?: { label: string; onPick: () => void };
   search: (query: string) => Promise<RemoteTask[]>;
   screen: { width: number; height: number };
   onPick: (task: RemoteTask) => void;
@@ -113,6 +120,7 @@ export function TaskPicker({
   const [error, setError] = useState<string | null>(null);
   const [sel, setSel] = useState(0);
   const query = draft.value.trim();
+  const canReset = reset !== undefined;
 
   useEffect(() => {
     let live = true;
@@ -123,7 +131,8 @@ export function TaskPicker({
             if (!live) return;
             setTasks(found);
             setError(null);
-            setSel(0);
+            // Typing means looking for a task, so the first result is the one picked.
+            setSel(query && canReset ? 1 : 0);
           })
           .catch((err: Error) => live && setError(err.message));
       },
@@ -133,16 +142,19 @@ export function TaskPicker({
       live = false;
       clearTimeout(t);
     };
-  }, [query, search]);
+  }, [query, search, canReset]);
 
   const rows = Math.max(3, Math.min(10, screen.height - 16));
   const shown = (tasks ?? []).slice(0, rows);
+  // The reset choice, when there is one, sits above the search results as row 0.
+  const first = reset ? 1 : 0;
   useInput((ch, key) => {
     if (key.escape) return onClose();
     if (key.upArrow) return setSel((s) => Math.max(0, s - 1));
-    if (key.downArrow) return setSel((s) => Math.min(shown.length - 1, s + 1));
+    if (key.downArrow) return setSel((s) => Math.min(shown.length - 1 + first, s + 1));
     if (key.return) {
-      const t = shown[sel];
+      if (reset && sel === 0) return reset.onPick();
+      const t = shown[sel - first];
       if (t) onPick(t);
       return;
     }
@@ -165,6 +177,19 @@ export function TaskPicker({
         </Text>
       </Box>
       <Box height={1} />
+      {reset ? (
+        <Clickable onClick={reset.onPick}>
+          {(hover) => (
+            <Text
+              wrap="truncate-end"
+              backgroundColor={sel === 0 ? T.elementHi : hover ? T.element : undefined}
+            >
+              <Text color={T.text}>↺ Back to {reset.label}</Text>
+              <Text color={T.muted}> · what the rest of {row.project} gets</Text>
+            </Text>
+          )}
+        </Clickable>
+      ) : null}
       {error ? (
         <Text color={T.danger}>{error}</Text>
       ) : tasks === null ? (
@@ -179,7 +204,7 @@ export function TaskPicker({
             {(hover) => (
               <Text
                 wrap="truncate-end"
-                backgroundColor={i === sel ? T.elementHi : hover ? T.element : undefined}
+                backgroundColor={i + first === sel ? T.elementHi : hover ? T.element : undefined}
               >
                 <Text color={T.text}>{t.subject}</Text>
                 <Text color={T.muted}> · {t.project}</Text>
@@ -189,9 +214,12 @@ export function TaskPicker({
         ))
       )}
       <Box height={1} />
-      <Text color={T.faint}>
-        ↑↓ choose · enter pick · every {row.project} row goes there from now on
+      <Text color={only ? T.info : T.muted} wrap="wrap">
+        {only
+          ? `Only this card. The rest of ${row.project} goes to ${only.projectTask}.`
+          : `Every ${row.project} row goes there from now on.`}
       </Text>
+      <Text color={T.faint}>↑↓ choose · enter pick · esc cancel</Text>
     </Dialog>
   );
 }
