@@ -160,6 +160,8 @@ export function fakeActions(
         },
         pi: { found: "2 projects in ~/.pi/agent/sessions" },
         codex: { found: null },
+        opencode: { found: null },
+        antigravity: { found: null },
         github: { found: true },
         aiFound: true,
         erp: { connected: false },

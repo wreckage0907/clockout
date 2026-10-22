@@ -18,6 +18,8 @@ const SOURCE_NAMES: Record<string, string> = {
   "claude-code": "Claude Code",
   pi: "Pi",
   codex: "Codex",
+  opencode: "opencode",
+  antigravity: "Antigravity",
   github: "GitHub",
   calendar: "Calendar",
   "google-calendar": "Google Calendar",

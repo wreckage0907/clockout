@@ -71,6 +71,8 @@ export function settingsContext(config: Config, facts: SettingsFacts) {
       "claude-code": has("claude-code"),
       pi: has("pi"),
       codex: has("codex"),
+      opencode: has("opencode"),
+      antigravity: has("antigravity"),
       github: has("github"),
       "google-calendar": has("google-calendar"),
       google_signed_in: facts.googleConnected,

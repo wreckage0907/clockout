@@ -13,6 +13,8 @@ const everything: Detections = {
   claudeCode: { summary: "3 projects" },
   pi: { summary: "2 projects" },
   codex: { summary: "5 sessions" },
+  opencode: { summary: "4 sessions" },
+  antigravity: { summary: "2 conversations" },
   github: { summary: "logged in with the gh CLI" },
   claudeCli: "2.1.302",
 };
@@ -24,6 +26,8 @@ describe("buildConfig", () => {
       { type: "claude-code" },
       { type: "pi" },
       { type: "codex" },
+      { type: "opencode" },
+      { type: "antigravity" },
       { type: "github" },
       { type: "calendar", method: "ics", url: "https://calendar.example/basic.ics" },
     ]);
@@ -35,6 +39,8 @@ describe("buildConfig", () => {
       claudeCode: null,
       pi: null,
       codex: null,
+      opencode: null,
+      antigravity: null,
       github: null,
       claudeCli: null,
     });

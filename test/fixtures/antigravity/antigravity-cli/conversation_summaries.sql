@@ -1,0 +1,6 @@
+-- Synthetic Antigravity CLI conversation index (columns Clockout reads, plus a few neighbours).
+-- Conversation ...a3 is missing on purpose: its transcript still counts, without a title.
+CREATE TABLE `conversation_summaries` (`conversation_id` text,`title` text NOT NULL DEFAULT "",`step_count` integer NOT NULL DEFAULT 0,`last_modified_time` datetime NOT NULL,`workspace_uris` text NOT NULL,`status` text NOT NULL DEFAULT "",`parent_conversation_id` text NOT NULL DEFAULT "",`nesting_depth` integer NOT NULL DEFAULT 0,`last_user_input_time` datetime NOT NULL,PRIMARY KEY (`conversation_id`));
+INSERT INTO conversation_summaries VALUES ('0a1b2c3d-0000-4000-8000-0000000000a1', 'Add retries to the webhook sender', 10, '2026-10-16 06:11:31+00:00', '["file:///Users/dev/work/acme-api"]', '', '', 0, '2026-10-16 06:11:31+00:00');
+INSERT INTO conversation_summaries VALUES ('0a1b2c3d-0000-4000-8000-0000000000a2', 'Find the webhook sender', 10, '2026-10-16 06:00:40+00:00', '["file:///Users/dev/work/acme-api"]', '', '0a1b2c3d-0000-4000-8000-0000000000a1', 1, '2026-10-16 06:00:40+00:00');
+INSERT INTO conversation_summaries VALUES ('0a1b2c3d-0000-4000-8000-0000000000a4', 'Plan the onboarding page', 10, '2026-10-16 09:00:00+00:00', '["file:///Users/dev/code/site"]', '', '', 0, '2026-10-16 09:00:00+00:00');

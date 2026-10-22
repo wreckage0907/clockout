@@ -1,6 +1,6 @@
 # Clockout
 
-Turns your day (Claude Code, Pi and Codex sessions, GitHub PRs, reviews, issues and comments, and calendar meetings) into a ready-to-paste timesheet. You fix it by voice: dictate "the gap after lunch was lunch, I skipped the design sync" and Clockout proposes the edits.
+Turns your day (Claude Code, Pi, Codex, opencode and Antigravity sessions, GitHub PRs, reviews, issues and comments, and calendar meetings) into a ready-to-paste timesheet. You fix it by voice: dictate "the gap after lunch was lunch, I skipped the design sync" and Clockout proposes the edits.
 
 The AI work runs on the Claude Code subscription you already have. No API key needed, and it still works with no AI at all.
 
@@ -33,7 +33,7 @@ node dist/cli.js init
 ## Use it on your own day
 
 ```sh
-node dist/cli.js init          # finds Claude Code, Pi, Codex and your gh login, asks for your calendar link
+node dist/cli.js init          # finds your coding agents and gh login, asks for your calendar link
 node dist/cli.js               # review today
 ```
 
@@ -41,6 +41,7 @@ node dist/cli.js               # review today
 
 - **Claude Code** sessions in `~/.claude/projects` (found automatically).
 - **Pi** sessions in `~/.pi/agent/sessions` and **Codex** sessions in `~/.codex/sessions` (found automatically; `PI_CODING_AGENT_DIR` and `CODEX_HOME` are respected).
+- **opencode** sessions in `~/.local/share/opencode/opencode.db` (opencode 2; `XDG_DATA_HOME` is respected) and **Antigravity** CLI conversations in `~/.gemini/antigravity-cli` (the IDE's own conversations can't be read). Both need Node 22.13 or later.
 - **GitHub**: `gh auth login`, or a `GITHUB_TOKEN`.
 - **Google Calendar**: sign in once with `clockout connect google` (read-only). It reads your RSVPs, so declined meetings drop out and unanswered ones become questions. First time only: [create a Google sign-in client](docs/google-setup.md) (5 minutes).
 - Or any calendar's private ICS address, if your account allows one.
@@ -60,7 +61,7 @@ node dist/cli.js               # review today
 | **Ctrl+Y** (or **Copy sheet**) | Copy the timesheet, tab-separated, once no meeting is waiting |
 | **Ctrl+S** (or **Send to ERP**) | Send the day to your ERP: shows what would be added, updated or removed first; **Enter** sends |
 | **Ctrl+Z** | Undo |
-| **Ctrl+P** (or **Setup**) | Setup, in sections: **Sources** (Claude Code and which of its projects, Pi, Codex, Google Calendar, GitHub), **Day** (daily target, working hours, rounding, idle cutoff), **AI helper**, **Projects** (task names and project rules), **ERP** (sign in, which task each project goes to). Arrow keys or the mouse |
+| **Ctrl+P** (or **Setup**) | Setup, in sections: **Sources** (Claude Code and which of its projects, Pi, Codex, opencode, Antigravity, Google Calendar, GitHub), **Day** (daily target, working hours, rounding, idle cutoff), **AI helper**, **Projects** (task names and project rules), **ERP** (sign in, which task each project goes to). Arrow keys or the mouse |
 | click the date | Pick another day; **PgUp** / **PgDn** step a day |
 | **Esc** | Back home · **Ctrl+C** quits |
 

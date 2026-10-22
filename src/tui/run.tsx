@@ -22,10 +22,12 @@ import { applySettings, type SettingEffect } from "../config/setting-ops";
 import { localDate } from "../core/time";
 import { commitEdits, undoEdit } from "../corrections";
 import { applyPush, preparePush } from "../push";
+import { antigravity } from "../sources/antigravity";
 import { listClaudeProjects } from "../sources/claude-code/paths";
 import { codex } from "../sources/codex";
 import { detectGitHub } from "../sources/github/token";
 import { connectGoogle, googleClient } from "../sources/google-calendar/oauth";
+import { opencode } from "../sources/opencode";
 import { pi } from "../sources/pi";
 import { openTarget } from "../targets";
 import type { Target } from "../targets/types";
@@ -165,10 +167,22 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
     },
     setup: {
       async state() {
-        const [projects, piFound, codexFound, github, cli, google, erpCreds] = await Promise.all([
+        const [
+          projects,
+          piFound,
+          codexFound,
+          opencodeFound,
+          agyFound,
+          github,
+          cli,
+          google,
+          erpCreds,
+        ] = await Promise.all([
           claudeProjects(),
           pi.detect(ctx),
           codex.detect(ctx),
+          opencode.detect(ctx),
+          antigravity.detect(ctx),
           detectGitHub(ctx),
           detectClaudeCli(),
           loadGoogleCredentials().catch(() => null),
@@ -184,6 +198,8 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
           claude: { found: projects.length > 0, projects },
           pi: { found: piFound?.summary ?? null },
           codex: { found: codexFound?.summary ?? null },
+          opencode: { found: opencodeFound?.summary ?? null },
+          antigravity: { found: agyFound?.summary ?? null },
           github: { found: github !== null },
           aiFound: cli !== null,
           erp: {

@@ -74,7 +74,7 @@ Collected 2026-10-18. Sources were checked on the web (via Firecrawl) and, for a
 | Gemini CLI *(docs)* | `~/.gemini/tmp/<project_hash>/chats/` | JSON | Message timestamps; project is a hash of the root dir | Medium |
 | Aider *(docs)* | `.aider.chat.history.md` per repo | Markdown | Only "chat started at" headers | Medium |
 | Cursor *(docs)* | `…/Cursor/User/globalStorage/state.vscdb` (`cursorDiskKV`) + `~/.cursor/…` | SQLite KV | `composerData:<id>` (`createdAt`), `bubbleId:…` | Hard |
-| Antigravity | `~/.gemini/antigravity/conversations/*.pb` | Binary protobuf | — | Not feasible yet |
+| Antigravity | IDE: `~/.gemini/antigravity/conversations/*.pb`; CLI: `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl` + `conversation_summaries.db` | IDE: binary protobuf; CLI: JSONL + SQLite | CLI steps: `type`, `source`, `created_at` | IDE not feasible; CLI easy (read since 2026-10-22) |
 | Windsurf *(docs)* | `~/.codeium/windsurf/cascade/*.pb` | Encrypted protobuf | — | Not feasible; use hooks |
 
 ### Push-based collection (optional, more accurate)

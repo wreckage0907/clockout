@@ -1,0 +1,1 @@
+- [ ] (an IDE conversation keeps no transcript)

@@ -45,6 +45,18 @@ const codexSource = z.object({
   sessions_dir: z.string().optional(),
 });
 
+const opencodeSource = z.object({
+  type: z.literal("opencode"),
+  /** Defaults to $XDG_DATA_HOME/opencode/opencode.db or ~/.local/share/opencode/opencode.db. */
+  db: z.string().optional(),
+});
+
+const antigravitySource = z.object({
+  type: z.literal("antigravity"),
+  /** The Antigravity CLI's folder; defaults to ~/.gemini/antigravity-cli. */
+  dir: z.string().optional(),
+});
+
 const githubSource = z.object({
   type: z.literal("github"),
 });
@@ -69,6 +81,8 @@ export const sourceConfig = z.discriminatedUnion("type", [
   claudeCodeSource,
   piSource,
   codexSource,
+  opencodeSource,
+  antigravitySource,
   githubSource,
   calendarSource,
   googleCalendarSource,

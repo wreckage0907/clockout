@@ -23,10 +23,12 @@ const erpTask = z
 const source = z
   .object({
     op: z.literal("source"),
-    source: z.enum(["claude-code", "pi", "codex", "github"]),
+    source: z.enum(["claude-code", "pi", "codex", "opencode", "antigravity", "github"]),
     on: z.boolean(),
   })
-  .describe("Read Claude Code, Pi or Codex sessions, or GitHub activity, or stop");
+  .describe(
+    "Read Claude Code, Pi, Codex, opencode or Antigravity sessions, or GitHub activity, or stop",
+  );
 const claudeProjects = z
   .object({
     op: z.literal("claude_projects"),
@@ -259,6 +261,8 @@ const SOURCE_LABELS: Record<SourceOp["source"], string> = {
   "claude-code": "Claude Code sessions",
   pi: "Pi sessions",
   codex: "Codex sessions",
+  opencode: "opencode sessions",
+  antigravity: "Antigravity conversations",
   github: "GitHub",
 };
 

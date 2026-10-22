@@ -72,7 +72,7 @@ What counts on a timesheet is how long each thing took, not when, so the screen 
 - **Refresh**: corrections are replayed on newer activity when every drafted block is still in place. When they can't be, the day keeps your corrections and says so, with a **Rebuild the day** button. "refresh" (or "rebuild the day", "start over"; no AI needed) in the chat bar does the same: it drafts the day again from the latest activity, after asking first if that drops corrections. `--refresh` does it from the command line.
 - **Setup by chat** ([ADR 0007](adr/0007-setup-from-the-chat-bar.md)): the same bar takes settings ("connect my ERP at erp.example.com", "leave out my personal project", "my target is 7h30", "send acme/api to the hackathon task"). The AI returns settings operations, shown as a proposal like corrections; on Enter they're applied, validated like config.toml and saved, and the day is drafted again if they affect it. Sign-ins open the browser. An ERP task is searched locally and the picker opens if there's more than one match. A pasted private calendar link is handled without the AI; text that looks like a token is refused and nothing is sent. "connect erp <address>" and "disconnect google" work without the AI. The last three turns go along, so follow-ups work.
 - **Send**: ctrl+s (or **Send to ERP**) sends the day to the timesheet system; see "Sending the day" below.
-- **Setup**: sections on the left, the chosen one's settings on the right; ↑↓ moves, → or Enter goes into a section, ←→ changes a value, Space or Enter ticks, Esc goes back; everything is clickable too. **Sources**: coding agents (Claude Code opens a searchable page of its projects, each tickable; Pi; Codex), calendar (Google Calendar signs in; a private feed shows as read-only), code (GitHub); a tool that isn't on this machine is greyed out. **Day**: daily target, working hours, rounding, idle cutoff, time zone. **AI helper**: on or off, and the model. **Projects**: default task names and project rules, shown with how to change them in the chat bar. **ERP**: an address field to sign in (browser), or once signed in the site, who you are and which ERP task each project goes to (✕ forgets one, so it's asked again on the next send) with Sign out. Saved to config.toml as you go.
+- **Setup**: sections on the left, the chosen one's settings on the right; ↑↓ moves, → or Enter goes into a section, ←→ changes a value, Space or Enter ticks, Esc goes back; everything is clickable too. **Sources**: coding agents (Claude Code opens a searchable page of its projects, each tickable; Pi; Codex; opencode; Antigravity), calendar (Google Calendar signs in; a private feed shows as read-only), code (GitHub); a tool that isn't on this machine is greyed out. **Day**: daily target, working hours, rounding, idle cutoff, time zone. **AI helper**: on or off, and the model. **Projects**: default task names and project rules, shown with how to change them in the chat bar. **ERP**: an address field to sign in (browser), or once signed in the site, who you are and which ERP task each project goes to (✕ forgets one, so it's asked again on the next send) with Sign out. Saved to config.toml as you go.
 
 ## 5. Sources
 
@@ -106,8 +106,8 @@ Read from local files; nothing to set up. Never read auth or token files.
 |---|---|---|
 | Claude Code | `~/.claude/projects/*/*.jsonl` — `user` prompts = human activity, `ai-title` = title, `cwd` / `gitBranch` on events | ✓ |
 | Codex | `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` — `event_msg` `user_message` (from about 0.149: `item_completed` with a `UserMessage` item) = human activity (the `user` / `developer` messages sent to the model hold injected context and don't count); `response_item`s = agent work; `cwd` from `session_meta` / `turn_context`, branch and repo from `session_meta.git`. Subagent threads (`thread_source = "subagent"`) are skipped. No title: the `threads` table's title is the whole first prompt. `.jsonl.zst` rollouts aren't read yet | ✓ |
-| Antigravity | `~/.gemini/antigravity-cli/conversation_summaries.db` (title, workspace, last user input time; covers IDE conversations too) | ✓ |
-| opencode | `~/.local/share/opencode/opencode.db` `session_v2` | ✓ |
+| Antigravity | The CLI's `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl`: `USER_INPUT` steps from a `USER_…` source = human activity, `MODEL` steps = agent work, system and error steps ignored; title, workspace folder and subagents (`parent_conversation_id`) from `conversation_summaries.db`. A conversation missing from the index still counts, without a title. The IDE's conversations are opaque protobuf and aren't read (the index lists them, but they have no transcript) | ✓ |
+| opencode | `$XDG_DATA_HOME/opencode/opencode.db` (default `~/.local/share`), opencode 2 — `session_v2` has `directory`, `title` (a "New session - …" placeholder counts as none) and `parent_id` (subagent sessions are skipped); `session_message` `user` with text = human activity, `assistant` from `time_created` to `data.time.completed` = agent work, everything else ignored. Only times and types are read. Older layouts (1.x JSON storage, the `session` / `message` tables) aren't read | ✓ |
 | Pi | `$PI_CODING_AGENT_DIR/sessions/*/*.jsonl` (default `~/.pi/agent`) — `session` header has `cwd`; `message` role `user` (with text) and `bashExecution` (a `!` command) = human activity, `assistant` = agent work, `toolResult` ignored; title only from a name you gave the session (`session_info`). No branch in the log | ✓ |
 | Copilot CLI | `~/.copilot/session-store.db` `sessions`, `turns` | stretch |
 | Gemini CLI, Goose, Crush, Amp, Kiro, Cline, Cursor | see RESEARCH.md | later |
@@ -202,6 +202,12 @@ type = "pi"          # sessions_dir = "…" to read somewhere other than ~/.pi/a
 type = "codex"       # sessions_dir = "…" to read somewhere other than ~/.codex/sessions
 
 [[sources]]
+type = "opencode"    # db = "…" to read somewhere other than ~/.local/share/opencode/opencode.db
+
+[[sources]]
+type = "antigravity" # dir = "…" to read somewhere other than ~/.gemini/antigravity-cli
+
+[[sources]]
 type = "github"
 
 [[sources]]
@@ -291,7 +297,7 @@ See [ADR 0004](adr/0004-toolchain.md) for the toolchain and [docs/plan.md](plan.
 - **TypeScript 7 / Node ≥ 22.12**, ESM, pnpm 11, tsdown, vitest, Biome, lefthook
 - TUI: `ink` 8 + `ink-text-input`; CLI: `commander`; setup wizard: `@clack/prompts`
 - Config: `smol-toml`; validation: `zod`
-- Store: JSON files ([ADR 0003](adr/0003-json-store.md)); reading Codex / Antigravity / opencode SQLite comes later via `node:sqlite`
+- Store: JSON files ([ADR 0003](adr/0003-json-store.md)); opencode's and Antigravity's SQLite are read with `node:sqlite` ([ADR 0008](adr/0008-read-agent-sqlite-with-node-sqlite.md))
 - Calendar: `node-ical`; macOS EventKit helper later
 - GitHub: `@octokit/graphql`; git and agent CLIs via `execa`
 - `clipboardy`, `date-fns` + `@date-fns/tz`

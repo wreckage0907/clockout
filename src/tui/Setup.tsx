@@ -21,9 +21,11 @@ export interface SetupState {
   config: Config;
   googleConnected: boolean;
   claude: { found: boolean; projects: ClaudeProject[] };
-  /** Pi and Codex session logs on this machine: what `detect()` said, or null. */
+  /** Other agents' session logs on this machine: what `detect()` said, or null. */
   pi: { found: string | null };
   codex: { found: string | null };
+  opencode: { found: string | null };
+  antigravity: { found: string | null };
   github: { found: boolean };
   /** The `claude` CLI is installed, so the AI helper can work. */
   aiFound: boolean;
@@ -424,7 +426,11 @@ export function Setup({
     if (!state || !config) return [];
     const c = config;
     const included = projects.filter((p) => !excluded.includes(p.folder)).length;
-    const agent = (type: "pi" | "codex", label: string, found: string | null): Row => ({
+    const agent = (
+      type: "pi" | "codex" | "opencode" | "antigravity",
+      label: string,
+      found: string | null,
+    ): Row => ({
       id: type,
       group: "Coding agents",
       label,
@@ -457,6 +463,8 @@ export function Setup({
       },
       agent("pi", "Pi", state.pi.found),
       agent("codex", "Codex", state.codex.found),
+      agent("opencode", "opencode", state.opencode.found),
+      agent("antigravity", "Antigravity", state.antigravity.found),
       {
         id: "google",
         group: "Calendar",

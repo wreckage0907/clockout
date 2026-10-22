@@ -6,9 +6,11 @@ import { detectClaudeCli } from "../ai/claude-cli";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths, tildify } from "../config/paths";
 import { type ConfigInput, isTimeZone, type SourceConfig } from "../config/schema";
+import { antigravity } from "../sources/antigravity";
 import { detectClaudeCode } from "../sources/claude-code/paths";
 import { codex } from "../sources/codex";
 import { detectGitHub } from "../sources/github/token";
+import { opencode } from "../sources/opencode";
 import { pi } from "../sources/pi";
 import type { Detected } from "../sources/types";
 import { runConnect } from "./connect";
@@ -17,6 +19,8 @@ export interface Detections {
   claudeCode: Detected | null;
   pi: Detected | null;
   codex: Detected | null;
+  opencode: Detected | null;
+  antigravity: Detected | null;
   github: Detected | null;
   claudeCli: string | null;
 }
@@ -36,6 +40,8 @@ export function buildConfig(answers: InitAnswers, found: Detections): ConfigInpu
   if (found.claudeCode) sources.push({ type: "claude-code" });
   if (found.pi) sources.push({ type: "pi" });
   if (found.codex) sources.push({ type: "codex" });
+  if (found.opencode) sources.push({ type: "opencode" });
+  if (found.antigravity) sources.push({ type: "antigravity" });
   if (found.github) sources.push({ type: "github" });
   if (answers.icsUrl) sources.push({ type: "calendar", method: "ics", url: answers.icsUrl });
   return {
@@ -77,19 +83,37 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
   const spin = p.spinner();
   spin.start("Looking for your tools");
   const ctx = { homeDir: home, env };
-  const [claudeCode, piFound, codexFound, github, claudeCli, gitName, gitEmail] = await Promise.all(
-    [
-      detectClaudeCode(ctx),
-      pi.detect(ctx),
-      codex.detect(ctx),
-      detectGitHub(ctx),
-      detectClaudeCli(env),
-      gitConfig("user.name"),
-      gitConfig("user.email"),
-    ],
-  );
+  const [
+    claudeCode,
+    piFound,
+    codexFound,
+    opencodeFound,
+    agyFound,
+    github,
+    claudeCli,
+    gitName,
+    gitEmail,
+  ] = await Promise.all([
+    detectClaudeCode(ctx),
+    pi.detect(ctx),
+    codex.detect(ctx),
+    opencode.detect(ctx),
+    antigravity.detect(ctx),
+    detectGitHub(ctx),
+    detectClaudeCli(env),
+    gitConfig("user.name"),
+    gitConfig("user.email"),
+  ]);
   spin.stop("Checked your tools");
-  const found: Detections = { claudeCode, pi: piFound, codex: codexFound, github, claudeCli };
+  const found: Detections = {
+    claudeCode,
+    pi: piFound,
+    codex: codexFound,
+    opencode: opencodeFound,
+    antigravity: agyFound,
+    github,
+    claudeCli,
+  };
 
   p.log.message(
     [
@@ -98,6 +122,8 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
         : "✗ Claude Code sessions: none found",
       ...(piFound ? [`✓ Pi sessions: ${piFound.summary}`] : []),
       ...(codexFound ? [`✓ Codex sessions: ${codexFound.summary}`] : []),
+      ...(opencodeFound ? [`✓ opencode sessions: ${opencodeFound.summary}`] : []),
+      ...(agyFound ? [`✓ Antigravity conversations: ${agyFound.summary}`] : []),
       github
         ? `✓ GitHub: ${github.summary}`
         : "✗ GitHub: not logged in. Run `gh auth login`, then `clockout init` again.",

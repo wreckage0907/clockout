@@ -42,6 +42,25 @@ describe("applySettings", () => {
     ).toEqual(["Read Pi sessions", "Stop reading Codex sessions"]);
   });
 
+  it("turns on opencode and Antigravity sessions", () => {
+    const ops = [
+      { op: "source", source: "opencode", on: true },
+      { op: "source", source: "antigravity", on: true },
+    ] as const;
+    const r = applySettings(config, [...ops]);
+    expect(r.errors).toEqual([]);
+    expect(r.config.sources.map((s) => s.type)).toEqual([
+      "claude-code",
+      "github",
+      "opencode",
+      "antigravity",
+    ]);
+    expect(describeSettings([...ops])).toEqual([
+      "Read opencode sessions",
+      "Read Antigravity conversations",
+    ]);
+  });
+
   it("leaves Claude Code projects out by name, and back in", () => {
     const out = applySettings(
       config,
