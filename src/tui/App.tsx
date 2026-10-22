@@ -13,7 +13,7 @@ import { toTsv } from "../export/formats";
 import type { PushResult } from "../push";
 import type { StoredDay } from "../store/json-store";
 import type { RemoteTask } from "../targets/types";
-import { buildCards, type Card, segments, untracked } from "./cards";
+import { buildCards, type Card, segments } from "./cards";
 import { Clickable } from "./clickable";
 import {
   AddTimeDialog,
@@ -730,7 +730,8 @@ export function App({
                   <AddCard
                     key="add"
                     width={listW}
-                    untracked={day ? untracked(day) : 0}
+                    left={Math.max(0, target - minutes)}
+                    target={target}
                     notes={day?.notes ?? []}
                     selected={i === sel}
                     onClick={() => setOverlay("add")}
@@ -967,13 +968,16 @@ const DASHED = {
 
 function AddCard({
   width,
-  untracked,
+  left,
+  target,
   notes,
   selected,
   onClick,
 }: {
   width: number;
-  untracked: number;
+  /** What the day is short of its target. */
+  left: number;
+  target: number;
   notes: string[];
   selected: boolean;
   onClick: () => void;
@@ -996,8 +1000,8 @@ function AddCard({
                 + Add time
               </Text>
               <Text color={T.muted}>
-                {untracked
-                  ? `${hm(untracked)} untracked on this day`
+                {left
+                  ? `${hm(left)} short of your ${hm(target)} day`
                   : "for anything nothing recorded"}
               </Text>
             </Box>

@@ -116,8 +116,3 @@ export function segments(cards: Card[]): Segment[] {
     .sort((a, b) => b[1] - a[1])
     .map(([p, m]) => ({ label: short(p), color: projectColor(p), minutes: m }));
 }
-
-/** Unaccounted time inside working hours. */
-export function untracked(day: Day): number {
-  return day.gaps.reduce((s, g) => s + minutesBetween(g.start, g.end), 0);
-}

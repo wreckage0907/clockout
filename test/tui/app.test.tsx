@@ -2,6 +2,7 @@ import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
 import type { Config } from "../../src/config/schema";
 import { applyEdits } from "../../src/core/edits";
+import { parseDuration } from "../../src/core/time";
 import { App } from "../../src/tui/App";
 import { config, fakeActions, fixtureDay } from "../helpers/fake-app";
 import { fakeTarget } from "../helpers/fake-target";
@@ -192,9 +193,13 @@ describe("day view", () => {
     expect(calls.commits).toEqual([]);
   });
 
-  it("adds untracked time from the dashed card", async () => {
+  it("adds untracked time from the dashed card, which counts down to the daily target", async () => {
     const { ui, calls } = await openDay();
     await down(ui, 9); // past the last card: + Add time
+    const frame = ui.lastFrame() ?? "";
+    const total = parseDuration(/(\S+) of 8h/.exec(frame)?.[1] ?? "") ?? 0;
+    const left = parseDuration(/([\dhm ]+) short of your 8h day/.exec(frame)?.[1]?.trim() ?? "");
+    expect(left).toBe(480 - total); // the target, not the gaps in working hours
     ui.stdin.write("\r");
     await until(ui.lastFrame, "How long");
     ui.stdin.write("\r"); // 1h on the first project
