@@ -1,5 +1,5 @@
 import { Box, Text, useInput } from "ink";
-import { type ReactNode, useEffect, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 import {
   clockMinutes,
   clockText,
@@ -10,7 +10,7 @@ import {
   withoutTaskMapping,
   withSource,
 } from "../config/edit";
-import { type Config, durationMinutes, type TaskMapping } from "../config/schema";
+import { type Config, durationMinutes } from "../config/schema";
 import type { ClaudeProject } from "../sources/claude-code/paths";
 import { Clickable } from "./clickable";
 import { Button, Dialog, Spinner, Typed, useDraft } from "./kit";
@@ -43,28 +43,66 @@ export interface SetupActions {
   disconnectErp(): Promise<void>;
 }
 
-interface Block {
-  id: string;
-  group: string;
-  title: string;
+type SectionId = "sources" | "day" | "ai" | "projects" | "erp";
+
+const SECTIONS: { id: SectionId; label: string }[] = [
+  { id: "sources", label: "Sources" },
+  { id: "day", label: "Day" },
+  { id: "ai", label: "AI helper" },
+  { id: "projects", label: "Projects" },
+  { id: "erp", label: "ERP" },
+];
+
+interface Option {
+  label: string;
   on: boolean;
-  /** What it's reading, or why it can't. */
-  line: string;
-  /** Can't be ticked here. */
-  dead?: boolean;
-  /** Opens a panel under the blocks: Claude Code's projects, or the ERP's address and tasks. */
-  panel?: "claude" | "erp";
-  tick?: () => void;
+  pick: () => void;
 }
 
+/** One line of a section. A row you can change has `press`, `step`, `options` or `opens`. */
+interface Row {
+  id: string;
+  /** Heading over the first row of a group. */
+  group?: string;
+  label: string;
+  /** The label takes the whole line instead of a column (a task mapping). */
+  wide?: boolean;
+  /** Shown after the control, quieter: what it's reading, or what it does. */
+  note?: string;
+  /** A switch: ✓ or ○ before the label. */
+  on?: boolean;
+  /** Greyed out: nothing to change here. */
+  dead?: boolean;
+  busy?: boolean;
+  /** What it's set to. With `step`, nudged by ← → or − +. */
+  value?: string;
+  step?: (d: -1 | 1) => void;
+  /** Choices, picked by ← → or a click. */
+  options?: Option[];
+  /** Text typed into the row (the ERP address). */
+  input?: { value: string; placeholder: string };
+  /** The row is a button. */
+  button?: "primary" | "neutral";
+  /** Enter, space or a click. */
+  press?: () => void;
+  /** Opens a page (›): Claude Code's projects. Enter and → open it; space still ticks. */
+  opens?: () => void;
+  /** A small action at the end of the line, e.g. "✕ forget". */
+  trail?: string;
+}
+
+const canChange = (r: Row) => !r.dead && !!(r.press || r.step || r.options || r.opens);
+
 const ROUNDING = [5, 15, 30];
+const IDLE = [10, 20, 30, 45];
+const NAV = 15;
+const LABEL = 16;
 
 /**
- * Setup, over whatever screen you're on (ctrl+p or the chat bar's Setup button). Every source
- * is a block you tick; Claude Code opens into a searchable list of its projects, each tickable.
- * The ERP opens into its address, or where days go and which task each project goes to.
- * Then your daily target and the AI helper; working hours and rounding wait under "More".
- * Every change is saved to config.toml straight away.
+ * Setup, over whatever screen you're on (ctrl+p or the chat bar's Setup button). Sections on the
+ * left, the chosen one's settings on the right; the keyboard and the mouse both work everywhere.
+ * Claude Code opens a page of its projects to tick. Everything is saved to config.toml straight
+ * away; what can't be set here (task names, project rules) is shown with how to say it instead.
  */
 export function Setup({
   actions,
@@ -81,11 +119,14 @@ export function Setup({
   const [state, setState] = useState<SetupState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"claude" | "erp" | null>(null);
-  const [more, setMore] = useState(false);
-  const open = panel === "claude";
-  const typingSite = panel === "erp" && !state?.erp.connected && busy !== "erp";
-  const search = useDraft(open);
+  const [section, setSection] = useState<SectionId>("sources");
+  const [focus, setFocus] = useState<"nav" | "rows">("nav");
+  const [sel, setSel] = useState(0);
+  const [page, setPage] = useState<"claude" | null>(null);
+  const [pick, setPick] = useState(0);
+  const search = useDraft(page === "claude");
+  const typingSite =
+    section === "erp" && focus === "rows" && !state?.erp.connected && busy !== "erp";
   const site = useDraft(typingSite);
 
   useEffect(() => {
@@ -110,24 +151,112 @@ export function Setup({
     }
   };
 
+  const config = state?.config;
+  const projects = state?.claude.projects ?? [];
+  const excluded = (config && claudeSource(config)?.exclude) ?? [];
+  const q = search.value.toLowerCase();
+  const shown = projects.filter(
+    (p) => p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q),
+  );
+  const rows = state && config ? sectionRows(section) : [];
+  const changeable = rows.flatMap((r, i) => (canChange(r) ? [i] : []));
+  // Rows come and go (signing in swaps the ERP's), so the selection snaps to one that's there.
+  const cur = changeable.includes(sel) ? sel : (changeable[0] ?? -1);
+  const row = rows[cur];
+
   useInput((ch, key) => {
     if (busy === "erp") return; // signing in: the browser has it
-    if (key.escape) {
-      if (open && search.value) return search.setValue("");
-      if (panel) return setPanel(null);
-      return onClose();
-    }
     if (key.ctrl && ch === "p") return onClose();
-    if (open) search.edit(ch, key);
-    if (typingSite) {
-      if (key.return) return void connectErp();
+    if (page === "claude") return projectKeys(ch, key);
+    if (focus === "nav") {
+      if (key.escape) return onClose();
+      if (key.upArrow || key.downArrow) {
+        const i = SECTIONS.findIndex((s) => s.id === section) + (key.upArrow ? -1 : 1);
+        const next = SECTIONS[(i + SECTIONS.length) % SECTIONS.length];
+        if (next) moveTo(next.id);
+        return;
+      }
+      if ((key.rightArrow || key.return || key.tab) && changeable.length) {
+        setFocus("rows");
+        setSel(changeable[0] ?? 0);
+      }
+      return;
+    }
+    if (key.escape || key.tab) return setFocus("nav");
+    if (key.upArrow || key.downArrow) {
+      const at = changeable.indexOf(cur) + (key.upArrow ? -1 : 1);
+      setSel(changeable[Math.max(0, Math.min(changeable.length - 1, at))] ?? cur);
+      return;
+    }
+    if (!row) return;
+    if (row.input) {
+      if (key.return) return row.press?.();
+      if (key.leftArrow && !site.value) return setFocus("nav");
       site.edit(ch, key);
+      return;
+    }
+    if (key.leftArrow || key.rightArrow) {
+      const d = key.leftArrow ? -1 : 1;
+      if (row.step) return row.step(d);
+      if (row.options) return chooseNext(row.options, d);
+      if (key.rightArrow && row.opens && row.on) return row.opens();
+      if (key.leftArrow) return setFocus("nav");
+      return;
+    }
+    if (key.return) {
+      if (row.opens && row.on) return row.opens();
+      if (row.options) return chooseNext(row.options, 1);
+      return row.press?.();
+    }
+    if (ch === " ") {
+      if (row.options) return chooseNext(row.options, 1);
+      return row.press?.();
     }
   });
 
-  const width = Math.min(96, screen.width - 4);
+  function moveTo(id: SectionId) {
+    setSection(id);
+    setPage(null);
+    setSel(0);
+  }
+
+  function chooseNext(options: Option[], d: -1 | 1) {
+    const at = options.findIndex((o) => o.on);
+    const next = options[Math.max(0, Math.min(options.length - 1, at + d))];
+    if (next && !next.on) next.pick();
+  }
+
+  function projectKeys(ch: string, key: Parameters<Parameters<typeof useInput>[0]>[1]) {
+    if (key.escape && search.value) return search.setValue("");
+    if (key.escape || (key.leftArrow && !search.value)) return setPage(null);
+    if (key.upArrow || key.downArrow) {
+      const d = key.upArrow ? -1 : 1;
+      setPick((p) => Math.max(0, Math.min(shown.length - 1, p + d)));
+      return;
+    }
+    if (key.return || ch === " ") {
+      const p = shown[Math.min(pick, shown.length - 1)];
+      if (p) toggleProject(p);
+      return;
+    }
+    if (search.edit(ch, key)) setPick(0);
+  }
+
+  function toggleProject(p: ClaudeProject) {
+    if (!config) return;
+    const isOn = !excluded.includes(p.folder);
+    void save(
+      withClaudeExclude(
+        config,
+        isOn ? [...excluded, p.folder] : excluded.filter((f) => f !== p.folder),
+      ),
+    );
+  }
+
+  const width = Math.min(100, screen.width - 4);
   const inner = width - 6;
-  if (!state)
+  const paneWidth = inner - NAV - 3;
+  if (!state || !config)
     return (
       <Dialog title="Setup" width={width} screen={screen} onClose={onClose}>
         {error ? (
@@ -140,17 +269,425 @@ export function Setup({
       </Dialog>
     );
 
-  const { config } = state;
-  const has = (type: string) => config.sources.some((s) => s.type === type);
-  const claude = config.sources.find((s) => s.type === "claude-code");
-  const excluded = claude?.exclude ?? [];
-  const projects = state.claude.projects;
-  const included = projects.filter((p) => !excluded.includes(p.folder)).length;
+  const hint =
+    page === "claude"
+      ? "type to search · ↑↓ move · space tick · esc back"
+      : focus === "nav"
+        ? "↑↓ section · → or enter to change it · esc close"
+        : row?.input
+          ? "type the address · enter signs in · esc back"
+          : "↑↓ move · ←→ change · enter or space pick · esc back";
 
-  const erpHost = config.timesheet ? new URL(config.timesheet.url).host : null;
-  const erpOn = state.erp.connected && !!config.timesheet;
-  const connectErp = async () => {
-    const address = site.value.trim() || erpHost;
+  return (
+    <Dialog title="Setup" width={width} screen={screen} onClose={onClose}>
+      <Box minHeight={Math.min(16, Math.max(8, screen.height - 12))}>
+        <Box flexDirection="column" width={NAV} flexShrink={0}>
+          {SECTIONS.map((s) => (
+            <NavItem
+              key={s.id}
+              label={s.label}
+              active={s.id === section}
+              focused={s.id === section && focus === "nav" && page === null}
+              onClick={() => {
+                moveTo(s.id);
+                setFocus("nav");
+              }}
+            />
+          ))}
+        </Box>
+        <Box
+          flexDirection="column"
+          width={paneWidth + 3}
+          paddingLeft={2}
+          borderStyle="single"
+          borderTop={false}
+          borderRight={false}
+          borderBottom={false}
+          borderColor={T.border}
+          borderBackgroundColor={T.panel}
+        >
+          {page === "claude" ? (
+            <ClaudeProjects
+              width={paneWidth}
+              projects={projects}
+              shown={shown.slice(0, Math.max(4, screen.height - 18))}
+              excluded={excluded}
+              search={search.value}
+              picked={Math.min(pick, shown.length - 1)}
+              onBack={() => setPage(null)}
+              onToggle={toggleProject}
+            />
+          ) : (
+            <>
+              <Box marginBottom={1} width={paneWidth}>
+                <Text color={T.muted} wrap="wrap">
+                  {lead(section)}
+                </Text>
+              </Box>
+              {rows.map((r, i) => (
+                <Fragment key={r.id}>
+                  {r.group && r.group !== rows[i - 1]?.group ? (
+                    <Box marginTop={i > 0 ? 1 : 0} paddingX={1}>
+                      <Text color={T.faint}>{r.group.toUpperCase()}</Text>
+                    </Box>
+                  ) : null}
+                  <RowView
+                    row={r}
+                    width={paneWidth}
+                    selected={focus === "rows" && i === cur}
+                    onSelect={() => {
+                      setFocus("rows");
+                      if (canChange(r)) setSel(i);
+                    }}
+                  />
+                </Fragment>
+              ))}
+            </>
+          )}
+        </Box>
+      </Box>
+      {error ? (
+        <Box marginTop={1}>
+          <Text color={T.danger} wrap="wrap">
+            {error}
+          </Text>
+        </Box>
+      ) : null}
+      <Box marginTop={1} gap={2} width={inner}>
+        <Box flexGrow={1} flexShrink={1}>
+          <Text color={T.faint} wrap="truncate-end">
+            {hint}
+          </Text>
+        </Box>
+        <Text color={T.faint}>saved as you go</Text>
+      </Box>
+    </Dialog>
+  );
+
+  // ── Sections ───────────────────────────────────────────────────────────────
+
+  function lead(id: SectionId): ReactNode {
+    if (!state || !config) return null;
+    switch (id) {
+      case "sources":
+        return "What Clockout reads to draft your day. Nothing leaves this machine.";
+      case "day":
+        return "How the day is counted and rounded.";
+      case "ai":
+        return "Writes the descriptions and reads what you type in the chat bar. It gets titles, branch names and commit subjects, never code or your prompts.";
+      case "projects":
+        return 'Change these by saying it in the chat bar, e.g. "anything in acme/api is Acme Website" or "call meetings Calls".';
+      case "erp": {
+        const host = erpHost(config);
+        if (state.erp.connected && host)
+          return (
+            <>
+              Days go to <Text bold>{host}</Text>
+              {state.erp.user ? ` as ${state.erp.user}` : ""}
+            </>
+          );
+        return host
+          ? `Signed out · ${host}. Sign in again to send days.`
+          : "Sign in to your next-pms site to send each day to your timesheet.";
+      }
+    }
+  }
+
+  function sectionRows(id: SectionId): Row[] {
+    switch (id) {
+      case "sources":
+        return sourceRows();
+      case "day":
+        return dayRows();
+      case "ai":
+        return aiRows();
+      case "projects":
+        return projectRows();
+      case "erp":
+        return erpRows();
+    }
+  }
+
+  function has(type: string) {
+    return config?.sources.some((s) => s.type === type) ?? false;
+  }
+
+  function sourceRows(): Row[] {
+    if (!state || !config) return [];
+    const c = config;
+    const included = projects.filter((p) => !excluded.includes(p.folder)).length;
+    const agent = (type: "pi" | "codex", label: string, found: string | null): Row => ({
+      id: type,
+      group: "Coding agents",
+      label,
+      on: has(type),
+      dead: !found && !has(type),
+      note: found ?? "no sessions found",
+      press: () => void save(withSource(c, { type }, !has(type))),
+    });
+    return [
+      {
+        id: "claude",
+        group: "Coding agents",
+        label: "Claude Code",
+        on: has("claude-code"),
+        dead: !state.claude.found && !has("claude-code"),
+        note: !state.claude.found
+          ? "no sessions found"
+          : has("claude-code")
+            ? `${included} of ${projects.length} projects`
+            : `${projects.length} projects`,
+        press: () => void save(withSource(c, { type: "claude-code" }, !has("claude-code"))),
+        ...(state.claude.found
+          ? {
+              opens: () => {
+                setPage("claude");
+                setPick(0);
+              },
+            }
+          : {}),
+      },
+      agent("pi", "Pi", state.pi.found),
+      agent("codex", "Codex", state.codex.found),
+      {
+        id: "google",
+        group: "Calendar",
+        label: "Google Calendar",
+        on: has("google-calendar"),
+        busy: busy === "google",
+        note:
+          busy === "google"
+            ? "finish in your browser…"
+            : has("google-calendar")
+              ? "meetings you kept"
+              : "tick to sign in",
+        press: () =>
+          has("google-calendar")
+            ? void save(withSource(c, { type: "google-calendar", calendars: ["primary"] }, false))
+            : void connectGoogle(),
+      },
+      ...(has("calendar")
+        ? [
+            {
+              id: "ics",
+              group: "Calendar",
+              label: "Calendar feed",
+              on: true,
+              dead: true,
+              note: "private link · in config.toml",
+            },
+          ]
+        : []),
+      {
+        id: "github",
+        group: "Code",
+        label: "GitHub",
+        on: has("github"),
+        dead: !state.github.found && !has("github"),
+        note: !state.github.found ? "run gh auth login first" : "PRs, reviews, issues and comments",
+        press: () => void save(withSource(c, { type: "github" }, !has("github"))),
+      },
+    ];
+  }
+
+  function dayRows(): Row[] {
+    if (!config) return [];
+    const c = config;
+    const target = durationMinutes(c.day.target);
+    const [from, to] = c.day.working_hours.split("-") as [string, string];
+    const [start, end] = [clockMinutes(from), clockMinutes(to)];
+    const hours = (a: number, b: number) =>
+      void save(withDay(c, { working_hours: `${clockText(a)}-${clockText(b)}` }));
+    const minutes = (key: "round_to" | "idle_cutoff", choices: number[]): Option[] => {
+      const now = durationMinutes(c.day[key]);
+      const all = choices.includes(now) ? choices : [...choices, now].sort((a, b) => a - b);
+      return all.map((m) => ({
+        label: `${m}m`,
+        on: m === now,
+        pick: () => void save(withDay(c, { [key]: durationText(m) })),
+      }));
+    };
+    return [
+      {
+        id: "target",
+        label: "Daily target",
+        value: hm(target),
+        note: "the bar behind the logo fills towards this",
+        step: (d) =>
+          void save(
+            withDay(c, { target: durationText(Math.max(60, Math.min(16 * 60, target + d * 30))) }),
+          ),
+      },
+      {
+        id: "start",
+        group: "Working hours",
+        label: "Starts",
+        value: clockText(start),
+        step: (d) => hours(Math.max(0, Math.min(end - 60, start + d * 30)), end),
+      },
+      {
+        id: "end",
+        group: "Working hours",
+        label: "Ends",
+        value: clockText(end),
+        step: (d) => hours(start, Math.max(start + 60, Math.min(23 * 60 + 30, end + d * 30))),
+      },
+      {
+        id: "round",
+        group: "Counting",
+        label: "Round to",
+        options: minutes("round_to", ROUNDING),
+        note: "each row's hours",
+      },
+      {
+        id: "idle",
+        group: "Counting",
+        label: "Idle cutoff",
+        options: minutes("idle_cutoff", IDLE),
+        note: "a longer pause ends a block",
+      },
+      {
+        id: "tz",
+        group: "Counting",
+        label: "Time zone",
+        value: c.me.timezone,
+        note: 'say "my time zone is …" to change it',
+      },
+    ];
+  }
+
+  function aiRows(): Row[] {
+    if (!state || !config) return [];
+    const c = config;
+    const on = c.ai.backend !== "none";
+    return [
+      {
+        id: "ai",
+        label: "Helper",
+        options: [
+          { label: "Claude Code", on, pick: () => void save(withAi(c, "auto")) },
+          { label: "No AI", on: !on, pick: () => void save(withAi(c, "none")) },
+        ],
+        note: state.aiFound || !on ? "" : "needs the claude CLI on your PATH",
+      },
+      {
+        id: "model",
+        label: "Model",
+        value: c.ai.model,
+        note: on ? "ai.model in config.toml" : "off: descriptions come from titles",
+      },
+    ];
+  }
+
+  function projectRows(): Row[] {
+    if (!config) return [];
+    const c = config;
+    const tasks: Row[] = [
+      { id: "t-work", label: "Coding", value: c.tasks.work },
+      { id: "t-review", label: "Reviews", value: c.tasks.review },
+      { id: "t-meeting", label: "Meetings", value: c.tasks.meeting },
+    ].map((r) => ({ ...r, group: "Default tasks" }));
+    const rules: Row[] = c.projects.length
+      ? c.projects.map((p, i) => ({
+          id: `rule-${i}`,
+          group: "Project rules",
+          label: p.name,
+          value: [
+            p.match.repo ? `repo ${p.match.repo}` : "",
+            p.match.title ? `title /${p.match.title}/` : "",
+            p.match.attendee_domain ? `meetings with ${p.match.attendee_domain}` : "",
+          ]
+            .filter(Boolean)
+            .join(", "),
+          ...(p.task ? { note: `→ ${p.task}` } : {}),
+        }))
+      : [
+          {
+            id: "rules-none",
+            group: "Project rules",
+            label: "None yet",
+            note: "projects come from each repo's name",
+          },
+        ];
+    return [...tasks, ...rules];
+  }
+
+  function erpRows(): Row[] {
+    if (!state || !config) return [];
+    const c = config;
+    const host = erpHost(c);
+    if (!state.erp.connected || !c.timesheet)
+      return [
+        {
+          id: "address",
+          label: "ERP address",
+          input: { value: site.value, placeholder: host ?? "erp.example.com" },
+          busy: busy === "erp",
+          ...(busy === "erp" ? { note: "finish signing in in your browser…" } : {}),
+          press: () => void connectErp(),
+        },
+        {
+          id: "sign-in",
+          label: "Sign in ↵",
+          button: "primary",
+          note: "opens your browser · only your own timesheet entries",
+          press: () => void connectErp(),
+        },
+      ];
+    const map = c.timesheet.map;
+    return [
+      ...(map.length
+        ? map.map(
+            (m): Row => ({
+              id: `map-${m.project}|${m.task ?? ""}`,
+              group: "Where rows go",
+              label: `${m.project} · ${m.task ?? "every task"} → ${m.label ?? m.erp_task}`,
+              wide: true,
+              trail: "✕ forget",
+              press: () => void save(withoutTaskMapping(c, m)),
+            }),
+          )
+        : [
+            {
+              id: "map-none",
+              group: "Where rows go",
+              label: "No tasks picked yet",
+              wide: true,
+              note: "you pick them the first time you send a day (ctrl+s)",
+            },
+          ]),
+      {
+        id: "sign-out",
+        group: "Sign-in",
+        label: "Sign out",
+        button: "neutral",
+        press: () => void disconnectErp(),
+      },
+    ];
+  }
+
+  // ── Sign-ins ───────────────────────────────────────────────────────────────
+
+  async function connectGoogle() {
+    if (!state || !config) return;
+    setBusy("google");
+    setError(null);
+    try {
+      if (!state.googleConnected) {
+        await actions.connectGoogle();
+        setState((s) => (s ? { ...s, googleConnected: true } : s));
+      }
+      await save(withSource(config, { type: "google-calendar", calendars: ["primary"] }, true));
+    } catch (err) {
+      setError(`Google sign-in didn't finish: ${(err as Error).message}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function connectErp() {
+    if (!config) return;
+    const address = site.value.trim() || erpHost(config);
     if (!address) return setError("Type your ERP's address, e.g. erp.example.com");
     setBusy("erp");
     setError(null);
@@ -172,8 +709,9 @@ export function Setup({
     } finally {
       setBusy(null);
     }
-  };
-  const disconnectErp = async () => {
+  }
+
+  async function disconnectErp() {
     setBusy("erp");
     setError(null);
     try {
@@ -184,349 +722,42 @@ export function Setup({
     } finally {
       setBusy(null);
     }
-  };
-
-  const connectGoogle = async () => {
-    setBusy("google");
-    setError(null);
-    try {
-      if (!state.googleConnected) {
-        await actions.connectGoogle();
-        setState((s) => (s ? { ...s, googleConnected: true } : s));
-      }
-      await save(withSource(config, { type: "google-calendar", calendars: ["primary"] }, true));
-    } catch (err) {
-      setError(`Google sign-in didn't finish: ${(err as Error).message}`);
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const blocks: Block[] = [
-    {
-      id: "google",
-      group: "calendar",
-      title: "Google Calendar",
-      on: has("google-calendar"),
-      line:
-        busy === "google"
-          ? "finish in your browser…"
-          : has("google-calendar")
-            ? "meetings you kept"
-            : "tick to sign in",
-      tick: () =>
-        has("google-calendar")
-          ? void save(
-              withSource(config, { type: "google-calendar", calendars: ["primary"] }, false),
-            )
-          : void connectGoogle(),
-    },
-    ...(has("calendar")
-      ? [
-          {
-            id: "ics",
-            group: "calendar",
-            title: "Calendar feed",
-            on: true,
-            line: "private link · in config.toml",
-            dead: true,
-          },
-        ]
-      : []),
-    {
-      id: "claude",
-      group: "coding sessions",
-      title: "Claude Code",
-      on: has("claude-code"),
-      dead: !state.claude.found && !has("claude-code"),
-      ...(state.claude.found ? { panel: "claude" as const } : {}),
-      line: !state.claude.found
-        ? "no sessions found"
-        : has("claude-code")
-          ? `${included} of ${projects.length} projects`
-          : "tick to read sessions",
-      tick: () => void save(withSource(config, { type: "claude-code" }, !has("claude-code"))),
-    },
-    agentBlock("pi", "Pi", state.pi.found),
-    agentBlock("codex", "Codex", state.codex.found),
-    {
-      id: "github",
-      group: "code",
-      title: "GitHub",
-      on: has("github"),
-      dead: !state.github.found && !has("github"),
-      line: !state.github.found
-        ? "run gh auth login first"
-        : has("github")
-          ? "your PRs and reviews"
-          : "tick to read PRs",
-      tick: () => void save(withSource(config, { type: "github" }, !has("github"))),
-    },
-    {
-      id: "erp",
-      group: "timesheet",
-      title: "ERP (next-pms)",
-      on: erpOn,
-      panel: "erp",
-      line:
-        busy === "erp"
-          ? "finish in your browser…"
-          : erpOn
-            ? (erpHost ?? "")
-            : erpHost
-              ? `signed out · ${erpHost}`
-              : "tick to connect",
-      tick: () => (erpOn ? void disconnectErp() : setPanel("erp")),
-    },
-  ];
-
-  function agentBlock(type: "pi" | "codex", title: string, found: string | null): Block {
-    return {
-      id: type,
-      group: "coding sessions",
-      title,
-      on: has(type),
-      dead: !found && !has(type),
-      line: !found ? "no sessions found" : has(type) ? "sessions" : "tick to read sessions",
-      tick: () => void save(withSource(config, { type }, !has(type))),
-    };
-  }
-
-  const q = search.value.toLowerCase();
-  const shown = projects.filter(
-    (p) => p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q),
-  );
-  const target = durationMinutes(config.day.target);
-  const [from, to] = config.day.working_hours.split("-") as [string, string];
-  const [start, end] = [clockMinutes(from), clockMinutes(to)];
-  const round = durationMinutes(config.day.round_to);
-  const ai = config.ai.backend === "none" ? "none" : "claude";
-
-  return (
-    <Dialog title="Setup" width={width} screen={screen} onClose={onClose}>
-      <Text color={T.muted}>Tick what Clockout reads. Nothing leaves this machine.</Text>
-      <Box height={1} />
-      <Box flexWrap="wrap" columnGap={1} width={inner}>
-        {blocks.map((b) => (
-          <SourceBlock
-            key={b.id}
-            b={b}
-            busy={busy === b.id}
-            expanded={!!b.panel && panel === b.panel}
-            onPress={() =>
-              b.panel && (b.on || b.panel === "erp")
-                ? setPanel((p) => (p === b.panel ? null : (b.panel ?? null)))
-                : b.tick?.()
-            }
-          />
-        ))}
-      </Box>
-
-      {open ? (
-        <Box flexDirection="column" marginTop={1} width={inner}>
-          <Box backgroundColor={T.element} paddingX={1}>
-            <Text color={T.faint}>⌕ </Text>
-            {search.value ? (
-              <Text color={T.text}>
-                {search.value}
-                <Text inverse> </Text>
-              </Text>
-            ) : (
-              <Text color={T.muted}>
-                <Text inverse>S</Text>earch Claude Code projects
-              </Text>
-            )}
-          </Box>
-          {shown.slice(0, Math.max(3, screen.height - 30)).map((p) => {
-            const isOn = !excluded.includes(p.folder);
-            const toggle = () =>
-              void save(
-                withClaudeExclude(
-                  config,
-                  isOn ? [...excluded, p.folder] : excluded.filter((f) => f !== p.folder),
-                ),
-              );
-            return (
-              <Clickable key={p.folder} onClick={toggle}>
-                {(hover) => (
-                  <Box backgroundColor={hover ? T.element : undefined} paddingX={1} width={inner}>
-                    <Box width={3}>
-                      <Text color={isOn ? T.primary : T.faint}>{isOn ? "✓" : "○"}</Text>
-                    </Box>
-                    <Box flexGrow={1} flexShrink={1}>
-                      <Text color={isOn ? T.text : T.muted} wrap="truncate-end">
-                        {p.name}
-                        <Text color={T.faint}> {p.path}</Text>
-                      </Text>
-                    </Box>
-                    <Text color={T.faint}>
-                      {p.recent ? `${p.recent} this week · ` : ""}
-                      {p.sessions} session{p.sessions === 1 ? "" : "s"}
-                    </Text>
-                  </Box>
-                )}
-              </Clickable>
-            );
-          })}
-          {shown.length === 0 ? (
-            <Text color={T.muted}> No project matches “{search.value}”.</Text>
-          ) : null}
-        </Box>
-      ) : null}
-
-      {panel === "erp" ? (
-        <ErpPanel
-          width={inner}
-          config={config}
-          connected={erpOn}
-          {...(state.erp.user ? { user: state.erp.user } : {})}
-          busy={busy === "erp"}
-          typed={site.value}
-          onConnect={() => void connectErp()}
-          onDisconnect={() => void disconnectErp()}
-          onForget={(m) => void save(withoutTaskMapping(config, m))}
-        />
-      ) : null}
-
-      <Box height={1} />
-      <Row label="Daily target">
-        <Button
-          label="−"
-          onClick={() =>
-            void save(withDay(config, { target: durationText(Math.max(60, target - 30)) }))
-          }
-        />
-        <Box width={7} justifyContent="center">
-          <Text color={T.text} bold>
-            {hm(target)}
-          </Text>
-        </Box>
-        <Button
-          label="+"
-          onClick={() =>
-            void save(withDay(config, { target: durationText(Math.min(16 * 60, target + 30)) }))
-          }
-        />
-        <Text color={T.faint}> the bar behind the logo fills towards this</Text>
-      </Row>
-      <Row label="AI helper">
-        <Button
-          label="Claude Code"
-          tone={ai === "claude" ? "primary" : "neutral"}
-          onClick={() => void save(withAi(config, "auto"))}
-        />
-        <Button
-          label="No AI"
-          tone={ai === "none" ? "primary" : "neutral"}
-          onClick={() => void save(withAi(config, "none"))}
-        />
-        <Text color={T.faint}>
-          {state.aiFound || ai === "none"
-            ? " writes summaries and reads what you type"
-            : " needs the claude CLI on your PATH"}
-        </Text>
-      </Row>
-
-      <Box marginTop={1}>
-        <Clickable onClick={() => setMore((m) => !m)}>
-          {(hover) => <Text color={hover ? T.text : T.muted}>{more ? "▾ More" : "▸ More"}</Text>}
-        </Clickable>
-      </Box>
-      {more ? (
-        <>
-          <Row label="Working hours">
-            <Button label="−" onClick={() => setHours(Math.max(0, start - 30), end)} />
-            <Text color={T.text}>{clockText(start)}</Text>
-            <Button label="+" onClick={() => setHours(Math.min(end - 60, start + 30), end)} />
-            <Text color={T.muted}> to </Text>
-            <Button label="−" onClick={() => setHours(start, Math.max(start + 60, end - 30))} />
-            <Text color={T.text}>{clockText(end)}</Text>
-            <Button label="+" onClick={() => setHours(start, Math.min(23 * 60 + 30, end + 30))} />
-          </Row>
-          <Row label="Round to">
-            {ROUNDING.map((r) => (
-              <Button
-                key={r}
-                label={`${r}m`}
-                tone={round === r ? "primary" : "neutral"}
-                onClick={() => void save(withDay(config, { round_to: durationText(r) }))}
-              />
-            ))}
-          </Row>
-        </>
-      ) : null}
-      {error ? (
-        <Box marginTop={1}>
-          <Text color={T.danger} wrap="wrap">
-            {error}
-          </Text>
-        </Box>
-      ) : null}
-    </Dialog>
-  );
-
-  function setHours(a: number, b: number) {
-    void save(withDay(config, { working_hours: `${clockText(a)}-${clockText(b)}` }));
   }
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <Box gap={1} alignItems="center">
-      <Box width={15}>
-        <Text color={T.muted}>{label}</Text>
-      </Box>
-      {children}
-    </Box>
-  );
+function claudeSource(config: Config) {
+  const s = config.sources.find((x) => x.type === "claude-code");
+  return s?.type === "claude-code" ? s : undefined;
 }
 
-function SourceBlock({
-  b,
-  busy,
-  expanded,
-  onPress,
+function erpHost(config: Config): string | null {
+  return config.timesheet ? new URL(config.timesheet.url).host : null;
+}
+
+// ── Pieces ───────────────────────────────────────────────────────────────────
+
+function NavItem({
+  label,
+  active,
+  focused,
+  onClick,
 }: {
-  b: Block;
-  busy: boolean;
-  expanded: boolean;
-  onPress: () => void;
+  label: string;
+  active: boolean;
+  focused: boolean;
+  onClick: () => void;
 }) {
   return (
-    <Clickable onClick={b.dead ? undefined : onPress} width={22} flexShrink={0}>
+    <Clickable onClick={onClick}>
       {(hover) => (
         <Box
-          width={22}
-          flexDirection="column"
-          borderStyle="round"
-          borderColor={expanded ? T.text : b.on ? T.primary : hover && !b.dead ? T.muted : T.border}
-          backgroundColor={T.panel}
-          borderBackgroundColor={T.panel}
+          width={NAV - 1}
           paddingX={1}
+          backgroundColor={focused || hover ? T.element : undefined}
         >
-          <Text color={T.faint}>
-            {b.group}
-            {b.panel && (b.on || b.panel === "erp") ? (expanded ? "  ▴" : "  ▾") : ""}
-          </Text>
-          <Box>
-            <Clickable onClick={b.dead ? undefined : b.tick}>
-              {(h) =>
-                busy ? (
-                  <Spinner />
-                ) : (
-                  <Text color={b.on ? T.primary : b.dead ? T.faint : h ? T.text : T.muted}>
-                    {b.on ? "✓" : "○"}
-                  </Text>
-                )
-              }
-            </Clickable>
-            <Text color={b.dead && !b.on ? T.faint : T.text} bold={b.on} wrap="truncate-end">
-              {" "}
-              {b.title}
-            </Text>
-          </Box>
-          <Text color={b.on ? T.muted : T.faint} wrap="truncate-end">
-            {b.line}
+          <Text color={active ? T.primary : T.faint}>{active ? "▍" : " "}</Text>
+          <Text color={active || hover ? T.text : T.muted} bold={active}>
+            {label}
           </Text>
         </Box>
       )}
@@ -534,85 +765,192 @@ function SourceBlock({
   );
 }
 
-/**
- * The ERP under its block: the address to sign in to, or where days go and which task each
- * project's rows are sent to. Tasks are picked when you send a day, or by saying so.
- */
-function ErpPanel({
+function RowView({
+  row: r,
   width,
-  config,
-  connected,
-  user,
-  busy,
-  typed,
-  onConnect,
-  onDisconnect,
-  onForget,
+  selected,
+  onSelect,
 }: {
+  row: Row;
   width: number;
-  config: Config;
-  connected: boolean;
-  user?: string;
-  busy: boolean;
-  typed: string;
-  onConnect: () => void;
-  onDisconnect: () => void;
-  onForget: (m: TaskMapping) => void;
+  selected: boolean;
+  onSelect: () => void;
 }) {
-  const host = config.timesheet ? new URL(config.timesheet.url).host : null;
-  const map = config.timesheet?.map ?? [];
-  if (!connected)
-    return (
-      <Box flexDirection="column" marginTop={1} width={width}>
-        <Box backgroundColor={T.element} paddingX={1}>
-          <Text color={T.faint}>ERP address </Text>
-          {busy ? (
-            <Text color={T.muted}>
-              <Spinner /> finish signing in in your browser…
-            </Text>
-          ) : (
-            <Typed value={typed} placeholder={host ?? "erp.example.com"} />
-          )}
-        </Box>
-        <Box gap={1} marginTop={1}>
-          <Button label="Sign in ↵" tone="primary" onClick={busy ? undefined : onConnect} />
-          <Text color={T.faint}>
-            opens your browser · Clockout only reads and writes your own timesheet entries
-          </Text>
-        </Box>
-      </Box>
-    );
+  const live = !r.dead;
+  // A click on the line opens a page when there is one (and the source is on), else presses.
+  // Steppers, choices and trailing actions only act through their own buttons.
+  const onLine = () => {
+    onSelect();
+    if (!live) return;
+    if (r.opens && r.on) return r.opens();
+    if (!r.step && !r.options && !r.trail) r.press?.();
+  };
   return (
-    <Box flexDirection="column" marginTop={1} width={width}>
-      <Box gap={1}>
-        <Text color={T.text}>
-          Days go to <Text bold>{host}</Text>
-          {user ? <Text color={T.muted}> as {user}</Text> : null}
-        </Text>
-        <Box flexGrow={1} />
-        <Button label="Sign out" onClick={busy ? undefined : onDisconnect} />
-      </Box>
-      {map.length === 0 ? (
-        <Text color={T.muted}>
-          No tasks picked yet. You pick one per project the first time you send a day (ctrl+s).
-        </Text>
-      ) : (
-        map.map((m) => (
-          <Box key={`${m.project}|${m.task ?? ""}`} paddingX={1} width={width}>
-            <Box flexGrow={1} flexShrink={1}>
-              <Text color={T.text} wrap="truncate-end">
-                {m.project}
-                <Text color={T.muted}>{m.task ? ` · ${m.task}` : " · every task"}</Text>
-                <Text color={T.faint}> → </Text>
-                {m.label ?? m.erp_task}
+    <Clickable onClick={onLine}>
+      {(hover) => (
+        <Box
+          width={width}
+          paddingX={1}
+          gap={1}
+          backgroundColor={selected || (hover && canChange(r)) ? T.element : undefined}
+        >
+          {r.on !== undefined ? (
+            <Clickable onClick={live ? r.press : undefined}>
+              {(h) =>
+                r.busy ? (
+                  <Spinner />
+                ) : (
+                  <Text color={r.on ? T.primary : !live ? T.faint : h ? T.text : T.muted}>
+                    {r.on ? "✓" : "○"}
+                  </Text>
+                )
+              }
+            </Clickable>
+          ) : null}
+          {r.button ? (
+            <Button label={r.label} tone={r.button} focused={selected} onClick={r.press} />
+          ) : (
+            <Box width={r.wide ? undefined : LABEL} flexShrink={r.wide && r.trail ? 1 : 0}>
+              <Text
+                color={!live && !r.on ? T.faint : T.text}
+                bold={r.on === true || selected}
+                wrap="truncate-end"
+              >
+                {r.label}
               </Text>
             </Box>
-            <Clickable onClick={() => onForget(m)}>
-              {(h) => <Text color={h ? T.danger : T.faint}> ✕ forget</Text>}
-            </Clickable>
+          )}
+          {r.step ? (
+            <>
+              <Button label="−" onClick={() => r.step?.(-1)} />
+              <Box width={7} flexShrink={0} justifyContent="center">
+                <Text color={T.text} bold>
+                  {r.value}
+                </Text>
+              </Box>
+              <Button label="+" onClick={() => r.step?.(1)} />
+            </>
+          ) : r.value !== undefined ? (
+            <Box flexShrink={0} paddingLeft={1}>
+              <Text color={T.text} wrap="truncate-end">
+                {r.value}
+              </Text>
+            </Box>
+          ) : null}
+          {r.options?.map((o) => (
+            <Button
+              key={o.label}
+              label={o.label}
+              tone={o.on ? "primary" : "neutral"}
+              onClick={o.pick}
+            />
+          ))}
+          {r.input ? (
+            r.busy ? (
+              <Spinner />
+            ) : (
+              <Box backgroundColor={T.elementHi} paddingX={1} flexShrink={1}>
+                <Typed value={r.input.value} placeholder={r.input.placeholder} />
+              </Box>
+            )
+          ) : null}
+          <Box flexGrow={1} flexShrink={1}>
+            <Text color={T.faint} wrap="truncate-end">
+              {r.note ?? ""}
+            </Text>
           </Box>
-        ))
+          {r.trail ? (
+            <Clickable onClick={r.press} flexShrink={0}>
+              {(h) => <Text color={h ? T.danger : selected ? T.muted : T.faint}>{r.trail}</Text>}
+            </Clickable>
+          ) : null}
+          {r.opens && r.on ? <Text color={selected || hover ? T.text : T.muted}>›</Text> : null}
+        </Box>
       )}
+    </Clickable>
+  );
+}
+
+/** Claude Code's projects, each tickable, with a search for long lists. */
+function ClaudeProjects({
+  width,
+  projects,
+  shown,
+  excluded,
+  search,
+  picked,
+  onBack,
+  onToggle,
+}: {
+  width: number;
+  projects: ClaudeProject[];
+  shown: ClaudeProject[];
+  excluded: string[];
+  search: string;
+  picked: number;
+  onBack: () => void;
+  onToggle: (p: ClaudeProject) => void;
+}) {
+  const on = projects.filter((p) => !excluded.includes(p.folder)).length;
+  return (
+    <Box flexDirection="column" width={width}>
+      <Box marginBottom={1} gap={1}>
+        <Clickable onClick={onBack}>
+          {(h) => <Text color={h ? T.text : T.muted}>‹ Sources</Text>}
+        </Clickable>
+        <Text color={T.faint}>/</Text>
+        <Text color={T.text} bold>
+          Claude Code projects
+        </Text>
+        <Box flexGrow={1} />
+        <Text color={T.faint}>
+          {on} of {projects.length} on
+        </Text>
+      </Box>
+      <Box backgroundColor={T.element} paddingX={1} marginBottom={1}>
+        <Text color={T.faint}>⌕ </Text>
+        {search ? (
+          <Text color={T.text}>
+            {search}
+            <Text inverse> </Text>
+          </Text>
+        ) : (
+          <Text color={T.muted}>
+            <Text inverse>S</Text>earch Claude Code projects
+          </Text>
+        )}
+      </Box>
+      {shown.map((p, i) => {
+        const isOn = !excluded.includes(p.folder);
+        return (
+          <Clickable key={p.folder} onClick={() => onToggle(p)}>
+            {(hover) => (
+              <Box
+                backgroundColor={i === picked || hover ? T.element : undefined}
+                paddingX={1}
+                width={width}
+              >
+                <Box width={3} flexShrink={0}>
+                  <Text color={isOn ? T.primary : T.faint}>{isOn ? "✓" : "○"}</Text>
+                </Box>
+                <Box flexGrow={1} flexShrink={1}>
+                  <Text color={isOn ? T.text : T.muted} wrap="truncate-end">
+                    {p.name}
+                    <Text color={T.faint}> {p.path}</Text>
+                  </Text>
+                </Box>
+                <Box flexShrink={0} marginLeft={1}>
+                  <Text color={T.faint}>
+                    {p.recent ? `${p.recent} this week · ` : ""}
+                    {p.sessions} session{p.sessions === 1 ? "" : "s"}
+                  </Text>
+                </Box>
+              </Box>
+            )}
+          </Clickable>
+        );
+      })}
+      {shown.length === 0 ? <Text color={T.muted}> No project matches “{search}”.</Text> : null}
     </Box>
   );
 }

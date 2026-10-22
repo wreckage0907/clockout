@@ -326,18 +326,112 @@ describe("setup from the chat bar", () => {
 });
 
 describe("setup", () => {
-  it("ctrl+p opens it over the screen with tickable sources, and esc closes it", async () => {
-    const { ui } = open();
-    await until(ui.lastFrame, "6h of 8h");
-    ui.stdin.write("\u0010");
-    await until(ui.lastFrame, "Tick what Clockout reads");
+  const RIGHT = "\u001b[C";
+  const LEFT = "\u001b[D";
+  const ESC = "\u001b";
+
+  async function openSetup(opts: Parameters<typeof fakeActions>[0] = {}) {
+    const app = open(opts);
+    await until(app.ui.lastFrame, "6h of 8h");
+    app.ui.stdin.write("\u0010"); // ctrl+p
+    await until(app.ui.lastFrame, "What Clockout reads");
+    return app;
+  }
+  const lastSaved = (calls: { saved: unknown[] }) => calls.saved.at(-1) as Config | undefined;
+
+  it("ctrl+p opens it on the sources, every coding agent listed, and esc closes it", async () => {
+    const { ui } = await openSetup();
     const frame = ui.lastFrame() ?? "";
-    expect(frame).toContain("Google Calendar");
+    for (const section of ["Sources", "Day", "AI helper", "Projects", "ERP"])
+      expect(frame).toContain(section);
+    expect(frame).toContain("2 of 2 projects");
+    expect(frame).toContain("2 projects in ~/.pi/agent/sessions");
+    expect(frame).toMatch(/Codex\s+no sessions found/);
     expect(frame).toContain("tick to sign in");
-    expect(frame).toContain("Pi");
-    expect(frame).toContain("no sessions found"); // Codex isn't on this machine
-    ui.stdin.write("\u001b");
+    ui.stdin.write(ESC);
     await tick();
-    expect(ui.lastFrame()).not.toContain("Tick what Clockout reads");
+    expect(ui.lastFrame()).not.toContain("What Clockout reads");
+  });
+
+  it("ticks a source from the keyboard, skipping one that isn't on this machine", async () => {
+    const { ui, calls } = await openSetup();
+    ui.stdin.write(RIGHT); // into the rows: Claude Code
+    await tick();
+    await down(ui, 1); // Pi
+    ui.stdin.write(" ");
+    await until(ui.lastFrame, "✓ Pi");
+    expect(lastSaved(calls)?.sources.map((s) => s.type)).toContain("pi");
+    await down(ui, 1); // Codex has no sessions, so this lands on Google Calendar
+    ui.stdin.write(" ");
+    await until(ui.lastFrame, "meetings you kept");
+    expect(lastSaved(calls)?.sources.map((s) => s.type)).toContain("google-calendar");
+    expect(lastSaved(calls)?.sources.map((s) => s.type)).not.toContain("codex");
+  });
+
+  it("changes the day's numbers with the arrow keys", async () => {
+    const { ui, calls } = await openSetup();
+    await down(ui, 1); // Day
+    await until(ui.lastFrame, "How the day is counted");
+    ui.stdin.write(RIGHT); // into the rows: Daily target
+    await tick();
+    ui.stdin.write(RIGHT);
+    await until(ui.lastFrame, "8h 30m");
+    expect(lastSaved(calls)?.day.target).toBe("8h30m");
+    await down(ui, 3); // Starts, Ends, Round to
+    ui.stdin.write(LEFT);
+    await tick();
+    expect(lastSaved(calls)?.day.round_to).toBe("5m");
+    await down(ui, 1); // Idle cutoff
+    ui.stdin.write(RIGHT);
+    await tick();
+    expect(lastSaved(calls)?.day.idle_cutoff).toBe("30m");
+  });
+
+  it("shows what's set by saying it: task names and project rules", async () => {
+    const { ui } = await openSetup();
+    await down(ui, 3); // Projects
+    await until(ui.lastFrame, "DEFAULT TASKS");
+    const frame = ui.lastFrame() ?? "";
+    expect(frame).toMatch(/Coding\s+Development/);
+    expect(frame).toMatch(/Reviews\s+Code Review/);
+    expect(frame).toContain("PROJECT RULES");
+    expect(frame).toContain("saying it in the chat bar");
+  });
+
+  it("opens Claude Code's projects with enter, filters them by typing, and esc goes back", async () => {
+    const { ui, calls } = await openSetup();
+    ui.stdin.write(RIGHT);
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Search Claude Code projects");
+    ui.stdin.write("clock");
+    await until(ui.lastFrame, "⌕ clock");
+    expect(ui.lastFrame()).not.toContain("acme-api");
+    ui.stdin.write(" ");
+    await until(ui.lastFrame, "1 of 2 on");
+    expect(lastSaved(calls)?.sources.find((s) => s.type === "claude-code")).toMatchObject({
+      exclude: ["-Users-dev-code-clockout"],
+    });
+    ui.stdin.write(ESC); // clears the search
+    await until(ui.lastFrame, "acme-api");
+    ui.stdin.write(ESC); // back to the sources
+    await until(ui.lastFrame, "What Clockout reads");
+    expect(ui.lastFrame()).toContain("1 of 2 projects");
+  });
+
+  it("signs in to the ERP from the keyboard", async () => {
+    const { ui, calls } = await openSetup();
+    for (let i = 0; i < 4; i++) {
+      ui.stdin.write("\u001b[B");
+      await tick();
+    }
+    await until(ui.lastFrame, "ERP address");
+    ui.stdin.write("\r"); // into the rows: the address
+    await tick();
+    ui.stdin.write("erp.example.com");
+    await until(ui.lastFrame, "erp.example.com");
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Days go to erp.example.com");
+    expect(calls.signedIn).toEqual(["erp.example.com"]);
   });
 });

@@ -105,7 +105,7 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 - [x] Pi source: `~/.pi/agent/sessions` (prompts and `!` commands, assistant turns, session names)
 - [x] Codex source: `~/.codex/sessions` rollouts (`user_message` prompts, model output, git info; subagents skipped)
-- [ ] Setup palette: sections on the left (Sources, Day, AI, ERP), the chosen one's settings on the right; keyboard and mouse; nothing hidden under "More"
+- [x] Setup palette: sections on the left (Sources, Day, AI, ERP), the chosen one's settings on the right; keyboard and mouse; nothing hidden under "More"
 
 ## Day 11 — Export and demo
 

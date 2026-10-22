@@ -59,7 +59,7 @@ node dist/cli.js               # review today
 | **Ctrl+Y** (or **Copy sheet**) | Copy the timesheet, tab-separated, once no meeting is waiting |
 | **Ctrl+S** (or **Send to ERP**) | Send the day to your ERP: shows what would be added, updated or removed first; **Enter** sends |
 | **Ctrl+Z** | Undo |
-| **Ctrl+P** (or **Setup**) | Setup: tick sources (Google Calendar, Claude Code and which of its projects, GitHub), sign in to your ERP and see which task each project goes to, daily target, AI helper, working hours, rounding |
+| **Ctrl+P** (or **Setup**) | Setup, in sections: **Sources** (Claude Code and which of its projects, Pi, Codex, Google Calendar, GitHub), **Day** (daily target, working hours, rounding, idle cutoff), **AI helper**, **Projects** (task names and project rules), **ERP** (sign in, which task each project goes to). Arrow keys or the mouse |
 | click the date | Pick another day; **PgUp** / **PgDn** step a day |
 | **Esc** | Back home · **Ctrl+C** quits |
 

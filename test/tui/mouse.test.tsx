@@ -134,8 +134,8 @@ describe("mouse input", () => {
     );
     await until(lastFrame, "6h of 8h");
     click(events, find(lastFrame() ?? "", "Setup"));
-    await until(lastFrame, "Tick what Clockout reads");
-    expect(lastFrame()).toContain("Tick what Clockout reads");
+    await until(lastFrame, "What Clockout reads");
+    expect(lastFrame()).toContain("What Clockout reads");
     click(events, find(lastFrame() ?? "", "Claude Code"));
     await until(lastFrame, "Search Claude Code projects");
     expect(lastFrame()).toContain("Search Claude Code projects");
@@ -182,9 +182,11 @@ describe("mouse input", () => {
     );
     await until(lastFrame, "6h of 8h");
     stdin.write("\u0010"); // ctrl+p
-    await until(lastFrame, "tick to connect");
-    click(events, find(lastFrame() ?? "", "ERP (next-pms)"));
+    await until(lastFrame, "What Clockout reads");
+    click(events, find(lastFrame() ?? "", " ERP "));
     await until(lastFrame, "ERP address");
+    click(events, find(lastFrame() ?? "", "ERP address"));
+    await tick();
     stdin.write("erp.example.com");
     await until(lastFrame, "erp.example.com");
     stdin.write("\r");
@@ -221,15 +223,15 @@ describe("mouse input", () => {
     );
     await until(lastFrame, "6h of 8h");
     click(events, find(lastFrame() ?? "", "Setup"));
-    await until(lastFrame, "Tick what Clockout reads");
-    click(events, find(lastFrame() ?? "", "ERP (next-pms)"));
+    await until(lastFrame, "What Clockout reads");
+    click(events, find(lastFrame() ?? "", " ERP "));
     await until(lastFrame, "Acme API build");
     expect(lastFrame()).toContain("acme/api · every task → Acme API build");
     click(events, find(lastFrame() ?? "", "✕ forget"));
     await until(lastFrame, "No tasks picked yet");
     expect(calls.saved.at(-1)).toMatchObject({ timesheet: { map: [] } });
     click(events, find(lastFrame() ?? "", "Sign out"));
-    await until(lastFrame, "signed out · erp.example.com");
+    await until(lastFrame, "Signed out · erp.example.com");
     expect(calls.signedOut).toBe(1);
   });
 
@@ -274,11 +276,11 @@ describe("mouse input", () => {
     await until(lastFrame, "Oct 2026");
     stdin.write("\u0010"); // ctrl+p
     await tick();
-    expect(lastFrame()).not.toContain("Tick what Clockout reads");
+    expect(lastFrame()).not.toContain("What Clockout reads");
     stdin.write("\u001b"); // esc closes the picker…
     await until(lastFrame, "Setup");
     stdin.write("\u0010"); // …and now ctrl+p opens setup
-    await until(lastFrame, "Tick what Clockout reads");
-    expect(lastFrame()).toContain("Tick what Clockout reads");
+    await until(lastFrame, "What Clockout reads");
+    expect(lastFrame()).toContain("What Clockout reads");
   });
 });
