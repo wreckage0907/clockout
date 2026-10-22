@@ -1,0 +1,26 @@
+{"timestamp":"2026-10-16T07:00:00.000Z","type":"session_meta","payload":{"id":"0b2c3d4e-0000-4000-8000-000000000001","timestamp":"2026-10-16T07:00:00.000Z","cwd":"/Users/dev/work/acme-api","originator":"codex-tui","cli_version":"0.0.0","source":"cli","thread_source":"user","model_provider":"example","base_instructions":{"text":"…"},"git":{"branch":"fix/rate-limit","commit_hash":"0000000","repository_url":"git@github.com:acme/api.git"}}}
+{"timestamp":"2026-10-16T07:00:00.000Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"<environment_context>…</environment_context>"}]}}
+{"timestamp":"2026-10-16T07:00:00.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>…</environment_context>"}]}}
+{"timestamp":"2026-10-16T07:01:00.000Z","type":"turn_context","payload":{"turn_id":"turn","cwd":"/Users/dev/work/acme-api","model":"example-model","approval_policy":"on-request","sandbox_policy":{"type":"workspace-write"},"summary":"auto"}}
+{"timestamp":"2026-10-16T07:01:00.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn"}}
+{"timestamp":"2026-10-16T07:01:00.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Rate limit failed logins per IP"}]}}
+{"timestamp":"2026-10-16T07:01:00.000Z","type":"event_msg","payload":{"type":"user_message","message":"Rate limit failed logins per IP","images":[],"local_images":[],"text_elements":[]}}
+{"timestamp":"2026-10-16T07:01:20.000Z","type":"response_item","payload":{"type":"reasoning","summary":[],"encrypted_content":"…"}}
+{"timestamp":"2026-10-16T07:01:20.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{}","call_id":"c1"}}
+{"timestamp":"2026-10-16T07:01:20.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"ok"}}
+{"timestamp":"2026-10-16T07:01:20.000Z","type":"event_msg","payload":{"type":"token_count","info":null}}
+{"timestamp":"2026-10-16T07:04:00.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done."}]}}
+{"timestamp":"2026-10-16T07:04:00.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Done."}}
+{"timestamp":"2026-10-16T07:04:00.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn"}}
+{not json
+{"timestamp":"2026-10-16T07:15:00.000Z","type":"turn_context","payload":{"turn_id":"turn","cwd":"/Users/dev/work/acme-api/web","model":"example-model","approval_policy":"on-request","sandbox_policy":{"type":"workspace-write"},"summary":"auto"}}
+{"timestamp":"2026-10-16T07:15:00.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn"}}
+{"timestamp":"2026-10-16T07:15:00.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Show the lockout message on the login form"}]}}
+{"timestamp":"2026-10-16T07:15:00.000Z","type":"event_msg","payload":{"type":"user_message","message":"Show the lockout message on the login form","images":[],"local_images":[],"text_elements":[]}}
+{"timestamp":"2026-10-16T07:15:30.000Z","type":"response_item","payload":{"type":"reasoning","summary":[],"encrypted_content":"…"}}
+{"timestamp":"2026-10-16T07:15:30.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{}","call_id":"c1"}}
+{"timestamp":"2026-10-16T07:15:30.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"ok"}}
+{"timestamp":"2026-10-16T07:15:30.000Z","type":"event_msg","payload":{"type":"token_count","info":null}}
+{"timestamp":"2026-10-16T07:20:00.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done."}]}}
+{"timestamp":"2026-10-16T07:20:00.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Done."}}
+{"timestamp":"2026-10-16T07:20:00.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn"}}

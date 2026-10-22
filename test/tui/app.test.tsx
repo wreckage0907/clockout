@@ -334,7 +334,8 @@ describe("setup", () => {
     const frame = ui.lastFrame() ?? "";
     expect(frame).toContain("Google Calendar");
     expect(frame).toContain("tick to sign in");
-    expect(frame).toContain("coming soon");
+    expect(frame).toContain("Pi");
+    expect(frame).toContain("no sessions found"); // Codex isn't on this machine
     ui.stdin.write("\u001b");
     await tick();
     expect(ui.lastFrame()).not.toContain("Tick what Clockout reads");

@@ -69,6 +69,8 @@ export function settingsContext(config: Config, facts: SettingsFacts) {
   return {
     sources: {
       "claude-code": has("claude-code"),
+      pi: has("pi"),
+      codex: has("codex"),
       github: has("github"),
       "google-calendar": has("google-calendar"),
       google_signed_in: facts.googleConnected,

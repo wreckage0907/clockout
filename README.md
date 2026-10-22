@@ -1,6 +1,6 @@
 # Clockout
 
-Turns your day (Claude Code sessions, GitHub PRs, reviews, issues and comments, and calendar meetings) into a ready-to-paste timesheet. You fix it by voice: dictate "the gap after lunch was lunch, I skipped the design sync" and Clockout proposes the edits.
+Turns your day (Claude Code, Pi and Codex sessions, GitHub PRs, reviews, issues and comments, and calendar meetings) into a ready-to-paste timesheet. You fix it by voice: dictate "the gap after lunch was lunch, I skipped the design sync" and Clockout proposes the edits.
 
 The AI work runs on the Claude Code subscription you already have. No API key needed, and it still works with no AI at all.
 
@@ -33,13 +33,14 @@ node dist/cli.js init
 ## Use it on your own day
 
 ```sh
-node dist/cli.js init          # finds Claude Code and your gh login, asks for your calendar link
+node dist/cli.js init          # finds Claude Code, Pi, Codex and your gh login, asks for your calendar link
 node dist/cli.js               # review today
 ```
 
 `init` writes `~/.config/clockout/config.toml`. It uses:
 
 - **Claude Code** sessions in `~/.claude/projects` (found automatically).
+- **Pi** sessions in `~/.pi/agent/sessions` and **Codex** sessions in `~/.codex/sessions` (found automatically; `PI_CODING_AGENT_DIR` and `CODEX_HOME` are respected).
 - **GitHub**: `gh auth login`, or a `GITHUB_TOKEN`.
 - **Google Calendar**: sign in once with `clockout connect google` (read-only). It reads your RSVPs, so declined meetings drop out and unanswered ones become questions. First time only: [create a Google sign-in client](docs/google-setup.md) (5 minutes).
 - Or any calendar's private ICS address, if your account allows one.

@@ -1,0 +1,11 @@
+{"timestamp":"2026-10-16T07:20:00.000Z","type":"session_meta","payload":{"id":"0b2c3d4e-0000-4000-8000-000000000002","timestamp":"2026-10-16T07:20:00.000Z","cwd":"/Users/dev/work/acme-api","originator":"codex_exec","cli_version":"0.0.0","source":{"subagent":"review"},"thread_source":"subagent","model_provider":"example","base_instructions":{"text":"…"},"parent_thread_id":"0b2c3d4e-0000-4000-8000-000000000001","git":{"branch":"fix/rate-limit","repository_url":"git@github.com:acme/api.git"}}}
+{"timestamp":"2026-10-16T07:20:00.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn"}}
+{"timestamp":"2026-10-16T07:20:00.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Review the diff"}]}}
+{"timestamp":"2026-10-16T07:20:00.000Z","type":"event_msg","payload":{"type":"user_message","message":"Review the diff","images":[],"local_images":[],"text_elements":[]}}
+{"timestamp":"2026-10-16T07:20:10.000Z","type":"response_item","payload":{"type":"reasoning","summary":[],"encrypted_content":"…"}}
+{"timestamp":"2026-10-16T07:20:10.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{}","call_id":"c1"}}
+{"timestamp":"2026-10-16T07:20:10.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"ok"}}
+{"timestamp":"2026-10-16T07:20:10.000Z","type":"event_msg","payload":{"type":"token_count","info":null}}
+{"timestamp":"2026-10-16T07:22:00.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done."}]}}
+{"timestamp":"2026-10-16T07:22:00.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Done."}}
+{"timestamp":"2026-10-16T07:22:00.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn"}}

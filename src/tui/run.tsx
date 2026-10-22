@@ -23,8 +23,10 @@ import { localDate } from "../core/time";
 import { commitEdits, undoEdit } from "../corrections";
 import { applyPush, preparePush } from "../push";
 import { listClaudeProjects } from "../sources/claude-code/paths";
+import { codex } from "../sources/codex";
 import { detectGitHub } from "../sources/github/token";
 import { connectGoogle, googleClient } from "../sources/google-calendar/oauth";
+import { pi } from "../sources/pi";
 import { openTarget } from "../targets";
 import type { Target } from "../targets/types";
 import { App, type AppActions, type SendActions } from "./App";
@@ -163,8 +165,10 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
     },
     setup: {
       async state() {
-        const [projects, github, cli, google, erpCreds] = await Promise.all([
+        const [projects, piFound, codexFound, github, cli, google, erpCreds] = await Promise.all([
           claudeProjects(),
+          pi.detect(ctx),
+          codex.detect(ctx),
           detectGitHub(ctx),
           detectClaudeCli(),
           loadGoogleCredentials().catch(() => null),
@@ -178,6 +182,8 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
           config,
           googleConnected: google !== null,
           claude: { found: projects.length > 0, projects },
+          pi: { found: piFound?.summary ?? null },
+          codex: { found: codexFound?.summary ?? null },
           github: { found: github !== null },
           aiFound: cli !== null,
           erp: {

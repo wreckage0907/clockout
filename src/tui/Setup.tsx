@@ -21,6 +21,9 @@ export interface SetupState {
   config: Config;
   googleConnected: boolean;
   claude: { found: boolean; projects: ClaudeProject[] };
+  /** Pi and Codex session logs on this machine: what `detect()` said, or null. */
+  pi: { found: string | null };
+  codex: { found: string | null };
   github: { found: boolean };
   /** The `claude` CLI is installed, so the AI helper can work. */
   aiFound: boolean;
@@ -244,22 +247,8 @@ export function Setup({
           : "tick to read sessions",
       tick: () => void save(withSource(config, { type: "claude-code" }, !has("claude-code"))),
     },
-    {
-      id: "codex",
-      group: "coding sessions",
-      title: "Codex",
-      on: false,
-      line: "coming soon",
-      dead: true,
-    },
-    {
-      id: "opencode",
-      group: "coding sessions",
-      title: "opencode",
-      on: false,
-      line: "coming soon",
-      dead: true,
-    },
+    agentBlock("pi", "Pi", state.pi.found),
+    agentBlock("codex", "Codex", state.codex.found),
     {
       id: "github",
       group: "code",
@@ -290,6 +279,18 @@ export function Setup({
       tick: () => (erpOn ? void disconnectErp() : setPanel("erp")),
     },
   ];
+
+  function agentBlock(type: "pi" | "codex", title: string, found: string | null): Block {
+    return {
+      id: type,
+      group: "coding sessions",
+      title,
+      on: has(type),
+      dead: !found && !has(type),
+      line: !found ? "no sessions found" : has(type) ? "sessions" : "tick to read sessions",
+      tick: () => void save(withSource(config, { type }, !has(type))),
+    };
+  }
 
   const q = search.value.toLowerCase();
   const shown = projects.filter(

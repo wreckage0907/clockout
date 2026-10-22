@@ -105,10 +105,10 @@ Read from local files; nothing to set up. Never read auth or token files.
 | Agent | Reads | MVP |
 |---|---|---|
 | Claude Code | `~/.claude/projects/*/*.jsonl` — `user` prompts = human activity, `ai-title` = title, `cwd` / `gitBranch` on events | ✓ |
-| Codex | `~/.codex/state_5.sqlite` `threads` (cwd, title, branch, remote, times) + `sessions/**/rollout-*.jsonl` | ✓ |
+| Codex | `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` — `event_msg` `user_message` = human activity (the `user` / `developer` messages sent to the model hold injected context and don't count); `response_item`s = agent work; `cwd` from `session_meta` / `turn_context`, branch and repo from `session_meta.git`. Subagent threads (`thread_source = "subagent"`) are skipped. No title: the `threads` table's title is the whole first prompt. `.jsonl.zst` rollouts aren't read yet | ✓ |
 | Antigravity | `~/.gemini/antigravity-cli/conversation_summaries.db` (title, workspace, last user input time; covers IDE conversations too) | ✓ |
 | opencode | `~/.local/share/opencode/opencode.db` `session_v2` | ✓ |
-| pi | `~/.pi/agent/sessions/*/*.jsonl` | ✓ |
+| Pi | `$PI_CODING_AGENT_DIR/sessions/*/*.jsonl` (default `~/.pi/agent`) — `session` header has `cwd`; `message` role `user` (with text) and `bashExecution` (a `!` command) = human activity, `assistant` = agent work, `toolResult` ignored; title only from a name you gave the session (`session_info`). No branch in the log | ✓ |
 | Copilot CLI | `~/.copilot/session-store.db` `sessions`, `turns` | stretch |
 | Gemini CLI, Goose, Crush, Amp, Kiro, Cline, Cursor | see RESEARCH.md | later |
 | Anything else | `command` / `jsonl` source, or a hook that appends to Clockout's JSONL | ✓ |
@@ -194,6 +194,12 @@ backend = "auto"     # auto | claude-code | codex | copilot | opencode | pi | an
 [[sources]]
 type = "claude-code"
 exclude = []         # Claude Code project folders to leave out
+
+[[sources]]
+type = "pi"          # sessions_dir = "…" to read somewhere other than ~/.pi/agent/sessions
+
+[[sources]]
+type = "codex"       # sessions_dir = "…" to read somewhere other than ~/.codex/sessions
 
 [[sources]]
 type = "github"

@@ -7,12 +7,16 @@ import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths, tildify } from "../config/paths";
 import { type ConfigInput, isTimeZone, type SourceConfig } from "../config/schema";
 import { detectClaudeCode } from "../sources/claude-code/paths";
+import { codex } from "../sources/codex";
 import { detectGitHub } from "../sources/github/token";
+import { pi } from "../sources/pi";
 import type { Detected } from "../sources/types";
 import { runConnect } from "./connect";
 
 export interface Detections {
   claudeCode: Detected | null;
+  pi: Detected | null;
+  codex: Detected | null;
   github: Detected | null;
   claudeCli: string | null;
 }
@@ -30,6 +34,8 @@ export interface InitAnswers {
 export function buildConfig(answers: InitAnswers, found: Detections): ConfigInput {
   const sources: SourceConfig[] = [];
   if (found.claudeCode) sources.push({ type: "claude-code" });
+  if (found.pi) sources.push({ type: "pi" });
+  if (found.codex) sources.push({ type: "codex" });
   if (found.github) sources.push({ type: "github" });
   if (answers.icsUrl) sources.push({ type: "calendar", method: "ics", url: answers.icsUrl });
   return {
@@ -71,21 +77,27 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
   const spin = p.spinner();
   spin.start("Looking for your tools");
   const ctx = { homeDir: home, env };
-  const [claudeCode, github, claudeCli, gitName, gitEmail] = await Promise.all([
-    detectClaudeCode(ctx),
-    detectGitHub(ctx),
-    detectClaudeCli(env),
-    gitConfig("user.name"),
-    gitConfig("user.email"),
-  ]);
+  const [claudeCode, piFound, codexFound, github, claudeCli, gitName, gitEmail] = await Promise.all(
+    [
+      detectClaudeCode(ctx),
+      pi.detect(ctx),
+      codex.detect(ctx),
+      detectGitHub(ctx),
+      detectClaudeCli(env),
+      gitConfig("user.name"),
+      gitConfig("user.email"),
+    ],
+  );
   spin.stop("Checked your tools");
-  const found: Detections = { claudeCode, github, claudeCli };
+  const found: Detections = { claudeCode, pi: piFound, codex: codexFound, github, claudeCli };
 
   p.log.message(
     [
       claudeCode
         ? `✓ Claude Code sessions: ${claudeCode.summary}`
         : "✗ Claude Code sessions: none found",
+      ...(piFound ? [`✓ Pi sessions: ${piFound.summary}`] : []),
+      ...(codexFound ? [`✓ Codex sessions: ${codexFound.summary}`] : []),
       github
         ? `✓ GitHub: ${github.summary}`
         : "✗ GitHub: not logged in. Run `gh auth login`, then `clockout init` again.",

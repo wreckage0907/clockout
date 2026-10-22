@@ -101,6 +101,12 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Private calendar links and tokens never reach the AI; plain connect / disconnect without it
 - [x] Review screen: settings proposals, sign-ins from the app, ERP task search and picker, last turns for follow-ups
 
+## More agents, better setup
+
+- [x] Pi source: `~/.pi/agent/sessions` (prompts and `!` commands, assistant turns, session names)
+- [x] Codex source: `~/.codex/sessions` rollouts (`user_message` prompts, model output, git info; subagents skipped)
+- [ ] Setup palette: sections on the left (Sources, Day, AI, ERP), the chosen one's settings on the right; keyboard and mouse; nothing hidden under "More"
+
 ## Day 11 — Export and demo
 
 - [x] Clipboard, Markdown, CSV, TSV, JSON: date, project, task, hours, description (same work merged into one row)

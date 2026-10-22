@@ -21,8 +21,12 @@ const erpTask = z
   .describe("Send a project's rows to an ERP task from now on");
 
 const source = z
-  .object({ op: z.literal("source"), source: z.enum(["claude-code", "github"]), on: z.boolean() })
-  .describe("Read Claude Code sessions or GitHub activity, or stop");
+  .object({
+    op: z.literal("source"),
+    source: z.enum(["claude-code", "pi", "codex", "github"]),
+    on: z.boolean(),
+  })
+  .describe("Read Claude Code, Pi or Codex sessions, or GitHub activity, or stop");
 const claudeProjects = z
   .object({
     op: z.literal("claude_projects"),
@@ -114,6 +118,7 @@ export const settingOpSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("calendar_feed"), url: z.string().min(1) }),
 ]);
 export type SettingOp = z.infer<typeof settingOpSchema>;
+type SourceOp = z.infer<typeof source>;
 
 /** Sign-ins and an ERP task still to choose: the caller does these. */
 export type SettingEffect =
@@ -250,6 +255,13 @@ export function applySettings(
   return { config: valid.success ? valid.data : next, effects, errors };
 }
 
+const SOURCE_LABELS: Record<SourceOp["source"], string> = {
+  "claude-code": "Claude Code sessions",
+  pi: "Pi sessions",
+  codex: "Codex sessions",
+  github: "GitHub",
+};
+
 /** One line per operation, for the proposal panel. */
 export function describeSettings(ops: readonly SettingOp[]): string[] {
   return ops.map(describeSetting);
@@ -259,7 +271,7 @@ function describeSetting(op: SettingOp): string {
   const onOff = (on: boolean) => (on ? "Read" : "Stop reading");
   switch (op.op) {
     case "source":
-      return `${onOff(op.on)} ${op.source === "github" ? "GitHub" : "Claude Code sessions"}`;
+      return `${onOff(op.on)} ${SOURCE_LABELS[op.source]}`;
     case "claude_projects":
       return `${op.on ? "Read" : "Leave out"} Claude Code project${op.names.length === 1 ? "" : "s"} ${op.names.join(", ")}`;
     case "day": {

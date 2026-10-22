@@ -1,0 +1,22 @@
+{"timestamp":"2026-10-16T18:15:00.000Z","type":"session_meta","payload":{"id":"0b2c3d4e-0000-4000-8000-000000000003","timestamp":"2026-10-16T18:15:00.000Z","cwd":"/Users/dev/scratch","originator":"codex-tui","cli_version":"0.0.0","source":"cli","thread_source":"user","model_provider":"example","base_instructions":{"text":"…"}}}
+{"timestamp":"2026-10-16T18:16:00.000Z","type":"turn_context","payload":{"turn_id":"turn","cwd":"/Users/dev/scratch","model":"example-model","approval_policy":"on-request","sandbox_policy":{"type":"workspace-write"},"summary":"auto"}}
+{"timestamp":"2026-10-16T18:16:00.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn"}}
+{"timestamp":"2026-10-16T18:16:00.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Write a script that renames the photos by date"}]}}
+{"timestamp":"2026-10-16T18:16:00.000Z","type":"event_msg","payload":{"type":"user_message","message":"Write a script that renames the photos by date","images":[],"local_images":[],"text_elements":[]}}
+{"timestamp":"2026-10-16T18:16:20.000Z","type":"response_item","payload":{"type":"reasoning","summary":[],"encrypted_content":"…"}}
+{"timestamp":"2026-10-16T18:16:20.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{}","call_id":"c1"}}
+{"timestamp":"2026-10-16T18:16:20.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"ok"}}
+{"timestamp":"2026-10-16T18:16:20.000Z","type":"event_msg","payload":{"type":"token_count","info":null}}
+{"timestamp":"2026-10-16T18:19:00.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done."}]}}
+{"timestamp":"2026-10-16T18:19:00.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Done."}}
+{"timestamp":"2026-10-16T18:19:00.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn"}}
+{"timestamp":"2026-10-16T18:40:00.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn"}}
+{"timestamp":"2026-10-16T18:40:00.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Skip files that already have a date"}]}}
+{"timestamp":"2026-10-16T18:40:00.000Z","type":"event_msg","payload":{"type":"user_message","message":"Skip files that already have a date","images":[],"local_images":[],"text_elements":[]}}
+{"timestamp":"2026-10-16T18:40:30.000Z","type":"response_item","payload":{"type":"reasoning","summary":[],"encrypted_content":"…"}}
+{"timestamp":"2026-10-16T18:40:30.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{}","call_id":"c1"}}
+{"timestamp":"2026-10-16T18:40:30.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"ok"}}
+{"timestamp":"2026-10-16T18:40:30.000Z","type":"event_msg","payload":{"type":"token_count","info":null}}
+{"timestamp":"2026-10-16T18:42:00.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done."}]}}
+{"timestamp":"2026-10-16T18:42:00.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Done."}}
+{"timestamp":"2026-10-16T18:42:00.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn"}}

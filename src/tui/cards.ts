@@ -15,6 +15,8 @@ import { projectColor } from "./theme";
 
 const SOURCE_NAMES: Record<string, string> = {
   "claude-code": "Claude Code",
+  pi: "Pi",
+  codex: "Codex",
   github: "GitHub",
   calendar: "Calendar",
   "google-calendar": "Google Calendar",

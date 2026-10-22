@@ -27,6 +27,21 @@ describe("applySettings", () => {
     expect(r.config.sources.map((s) => s.type)).toEqual(["claude-code"]);
   });
 
+  it("turns on Pi and Codex sessions", () => {
+    const r = applySettings(config, [
+      { op: "source", source: "pi", on: true },
+      { op: "source", source: "codex", on: true },
+    ]);
+    expect(r.errors).toEqual([]);
+    expect(r.config.sources.map((s) => s.type)).toEqual(["claude-code", "github", "pi", "codex"]);
+    expect(
+      describeSettings([
+        { op: "source", source: "pi", on: true },
+        { op: "source", source: "codex", on: false },
+      ]),
+    ).toEqual(["Read Pi sessions", "Stop reading Codex sessions"]);
+  });
+
   it("leaves Claude Code projects out by name, and back in", () => {
     const out = applySettings(
       config,

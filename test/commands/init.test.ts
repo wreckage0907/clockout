@@ -11,6 +11,8 @@ const answers = {
 };
 const everything: Detections = {
   claudeCode: { summary: "3 projects" },
+  pi: { summary: "2 projects" },
+  codex: { summary: "5 sessions" },
   github: { summary: "logged in with the gh CLI" },
   claudeCli: "2.1.302",
 };
@@ -20,6 +22,8 @@ describe("buildConfig", () => {
     const c = buildConfig({ ...answers, icsUrl: "https://calendar.example/basic.ics" }, everything);
     expect(c.sources).toEqual([
       { type: "claude-code" },
+      { type: "pi" },
+      { type: "codex" },
       { type: "github" },
       { type: "calendar", method: "ics", url: "https://calendar.example/basic.ics" },
     ]);
@@ -27,7 +31,13 @@ describe("buildConfig", () => {
   });
 
   it("leaves out tools that weren't found and a skipped calendar", () => {
-    const c = buildConfig(answers, { claudeCode: null, github: null, claudeCli: null });
+    const c = buildConfig(answers, {
+      claudeCode: null,
+      pi: null,
+      codex: null,
+      github: null,
+      claudeCli: null,
+    });
     expect(c.sources).toEqual([]);
     expect(configSchema.safeParse(c).success).toBe(true);
   });

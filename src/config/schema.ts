@@ -33,6 +33,18 @@ const claudeCodeSource = z.object({
   exclude: z.array(z.string().min(1)).optional(),
 });
 
+const piSource = z.object({
+  type: z.literal("pi"),
+  /** Defaults to $PI_CODING_AGENT_DIR/sessions or ~/.pi/agent/sessions. */
+  sessions_dir: z.string().optional(),
+});
+
+const codexSource = z.object({
+  type: z.literal("codex"),
+  /** Defaults to $CODEX_HOME/sessions or ~/.codex/sessions. */
+  sessions_dir: z.string().optional(),
+});
+
 const githubSource = z.object({
   type: z.literal("github"),
 });
@@ -55,6 +67,8 @@ const googleCalendarSource = z.object({
 
 export const sourceConfig = z.discriminatedUnion("type", [
   claudeCodeSource,
+  piSource,
+  codexSource,
   githubSource,
   calendarSource,
   googleCalendarSource,
