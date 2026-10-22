@@ -87,9 +87,12 @@ export async function openDay(
 
   const fresh = await collect(date, config, opts.ctx, opts.sources);
   const freshSources = new Set(fresh.activities.map((a) => a.source));
+  // Only sources still turned on: one you turned off takes its evidence with it.
+  const configured = new Set<string>(config.sources.map((s) => s.type));
   const carried = (existing?.activities ?? []).filter(
     (a) =>
-      !fresh.ok.has(a.source) || (!freshSources.has(a.source) && DELETES_OLD_LOGS.has(a.source)),
+      configured.has(a.source) &&
+      (!fresh.ok.has(a.source) || (!freshSources.has(a.source) && DELETES_OLD_LOGS.has(a.source))),
   );
   const activities = [...fresh.activities, ...carried];
   const draft = buildDay(date, activities, config);

@@ -36,6 +36,16 @@ describe("openDay", () => {
     expect(again.stored.day.blocks).toEqual(first.stored.day.blocks);
   });
 
+  it("drops a source's evidence once you turn it off", async () => {
+    const s = await store();
+    const first = await openDay(FIXTURE_DATE, config, s, { ctx: ctx(claudeDir) });
+    expect(first.stored.activities.some((a) => a.source === "claude-code")).toBe(true);
+    const off = fixtureConfig({ sources: [] });
+    const again = await openDay(FIXTURE_DATE, off, s, { ctx: ctx(claudeDir), refresh: true });
+    expect(again.stored.activities).toEqual([]);
+    expect(again.stored.day.blocks.filter((b) => b.kind === "work")).toEqual([]);
+  });
+
   it("shows the corrected day instead of rebuilding it, unless asked to refresh", async () => {
     const s = await store();
     const { stored } = await openDay(FIXTURE_DATE, config, s, { ctx: ctx(claudeDir) });
