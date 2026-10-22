@@ -71,7 +71,6 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Calm review screen (2025 redesign): no timeline strip or shortcut dump — block list, questions/evidence under their rows, `/` command menu and khal-style day picker in the input
 - [x] Bracketed paste (`usePaste`); newlines never auto-submit
 - [x] Proposed changes shown as a diff; `y` / `n` / `u`
-- [ ] Wispr tested in Terminal, iTerm2, Ghostty, VS Code terminal (needs a human: manual test)
 
 ## Redesign — home, day cards, setup
 
@@ -89,7 +88,6 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] `clockout push [date] --dry-run --yes`, task picker in the terminal
 - [x] Review screen: ctrl+s / **Send to ERP**, task picker, plan panel, Enter sends
 - [x] Tested live against a local next-pms site (sign-in, send, update, hand-added entries, disconnect)
-- [ ] Try it on rtCamp's ERP (staging first)
 - [x] Remove a card by hand (✕ / ctrl+d; typed keys go to the chat bar, so not `d`)
 - [ ] An `ignore` project rule (from the review of the personal-project case)
 - [x] ERP in Setup: sign in by address, who you are, task mappings (forget one), sign out
@@ -113,7 +111,6 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 - [x] npm trusted publishing workflow on version tags (needs one-time setup on npmjs.com)
 - [ ] `clockout-cli@0.1.0` published
-- [ ] Generate real timesheets for the build
 
 ## Day 13–14 — Submission
 
