@@ -1,5 +1,5 @@
 import { Box, Text, useInput } from "ink";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { changes, describeItem, type PushItem, type PushPlan, type PushRow } from "../core/push";
 import type { RemoteTask } from "../targets/types";
 import { Clickable } from "./clickable";
@@ -117,9 +117,17 @@ export function TaskPicker({
   const name = row.project.split("/").pop() ?? row.project;
   const draft = useDraft(true, initial);
   const [tasks, setTasks] = useState<RemoteTask[] | null>(null);
+  /**
+   * Typed since the shown tasks were found: Enter waits for the search to catch up. A ref, as
+   * keys typed in one burst arrive before the screen (and `query`) catch up.
+   */
+  const typing = useRef(true);
+  const answered = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sel, setSel] = useState(0);
   const query = draft.value.trim();
+  // Typed and deleted back to words already searched: those results stand.
+  if (answered.current === query) typing.current = false;
   const canReset = reset !== undefined;
 
   useEffect(() => {
@@ -130,6 +138,8 @@ export function TaskPicker({
           .then((found) => {
             if (!live) return;
             setTasks(found);
+            answered.current = query;
+            typing.current = false;
             setError(null);
             // Typing means looking for a task, so the first result is the one picked.
             setSel(query && canReset ? 1 : 0);
@@ -153,12 +163,13 @@ export function TaskPicker({
     if (key.upArrow) return setSel((s) => Math.max(0, s - 1));
     if (key.downArrow) return setSel((s) => Math.min(shown.length - 1 + first, s + 1));
     if (key.return) {
+      if (typing.current) return;
       if (reset && sel === 0) return reset.onPick();
       const t = shown[sel - first];
       if (t) onPick(t);
       return;
     }
-    draft.edit(ch, key);
+    if (draft.edit(ch, key)) typing.current = true;
   });
 
   const width = Math.min(84, screen.width - 4);

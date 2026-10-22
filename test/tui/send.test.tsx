@@ -163,9 +163,14 @@ describe("which ERP task a card goes to", () => {
     );
     expect(ui.lastFrame()).not.toContain("↺ Back to");
     ui.stdin.write("bug");
-    // Wait for the search: until then the project's task is still listed first.
-    for (let i = 0; i < 80 && (ui.lastFrame() ?? "").includes("API maintenance · Acme"); i++)
-      await tick();
+    ui.stdin.write("\r"); // too soon: the list still answers the empty search
+    await tick();
+    expect(calls.commits).toEqual([]);
+    // Wait for the search's own results: before them the project's task is listed first.
+    const filtered = (f = ui.lastFrame() ?? "") =>
+      f.includes("Bug fixing · Acme") && !f.includes("API maintenance · Acme");
+    for (let i = 0; i < 80 && !filtered(); i++) await tick();
+    expect(filtered()).toBe(true);
     ui.stdin.write("\r");
     await until(ui.lastFrame, "→ Bug fixing");
     expect(calls.mapped).toEqual([]); // the project keeps its task
