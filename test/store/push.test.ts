@@ -108,9 +108,11 @@ describe("sending a day", () => {
     const store = await setup();
     const pushed = [{ key: "k", id: "e1", parent: "TS-1", task: "TASK-DEV" }];
     await store.save({ ...fixtureStored, pushed, pushedAt: "2026-10-16T18:00:00Z" });
+    // No sources run: nothing reaches GitHub or the calendar's address.
     const { stored } = await openDay(FIXTURE_DATE, config, store, {
       ctx: { homeDir: "/nonexistent", env: {} },
       refresh: true,
+      sources: () => undefined,
     });
     expect(stored.pushed).toEqual(pushed);
     expect(stored.pushedAt).toBe("2026-10-16T18:00:00Z");
