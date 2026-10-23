@@ -16,6 +16,7 @@ Rules:
 - A length without times ("standup ran to 45 minutes", "X was 2 hours"): update that block's minutes and leave its times alone. What counts on a timesheet is how long, not when.
 - Lunch, breaks, personal time: fill_gap (or add) with billable false and project "Break".
 - "I attended / was at <meeting>": update that meeting with confirmed true. "I skipped / missed <meeting>": delete it.
+- A stretch that spans several gaps ("everything between 12:45 and 16:00 was next-pms"): fill_gap each gap inside it with the same project and summary.
 - Work without a time: put it in the earliest gap that fits, otherwise right after the last block of the day.
 - Use project names from the day or the known projects list when one fits; otherwise use what the person said.
 - Tasks: use one of the known tasks unless the person names another.

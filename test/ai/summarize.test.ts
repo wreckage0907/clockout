@@ -48,6 +48,17 @@ describe("summarizeDay", async () => {
     expect(Object.keys(cache)).toHaveLength(4);
   });
 
+  it("asks once for blocks of the same work, so they share one description", async () => {
+    const b2 = day.blocks.find((x) => x.id === "b2");
+    if (!b2) throw new Error("fixture changed");
+    const again = { ...b2, id: "b99", start: new Date(b2.end.getTime() + 3_600_000) };
+    const split = { ...day, blocks: [...day.blocks, again] };
+    const { b, prompts } = backend((ids) => ids.map((id) => ({ id, summary: `Did ${id}` })));
+    const result = await summarizeDay(split, b, {});
+    expect((prompts[0] as { id: string }[]).map((x) => x.id)).not.toContain("b99");
+    expect(result.get("b99")).toBe("Did b2");
+  });
+
   it("writes in the style you set, with your own words and examples", async () => {
     const systems: string[] = [];
     const long = "Fixed the auth token refresh race and covered it with tests (PR #87). ".repeat(3);

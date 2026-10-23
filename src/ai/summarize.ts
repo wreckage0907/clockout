@@ -31,6 +31,7 @@ Write one description per block id:
 - ${LENGTH[style.length].rule}; ${FORMAT[style.format]}.
 - Keep PR numbers as "(PR #n)" when a PR was opened or reviewed in the block.
 - Only use facts in the evidence. No guesses, no caveats, no mention of what you can't see.
+- Blocks of the same work (same session or PR) get the same description, word for word.
 - Plain text, no quotes, no trailing period.${own}`;
 }
 
@@ -93,17 +94,21 @@ export async function summarizeDay(
   style: DescriptionStyle = DEFAULT_STYLE,
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
-  const todo: Block[] = [];
+  // Blocks with the same evidence are one question, so they get one description and stay one
+  // timesheet row however the AI words it.
+  const todo = new Map<string, Block[]>();
   for (const b of day.blocks) {
     if (b.kind === "meeting" || b.evidence.length === 0) continue;
-    const hit = cache[blockSignature(b, style)];
+    const signature = blockSignature(b, style);
+    const hit = cache[signature];
     if (hit) result.set(b.id, hit);
-    else todo.push(b);
+    else todo.set(signature, [...(todo.get(signature) ?? []), b]);
   }
-  if (todo.length === 0) return result;
+  if (todo.size === 0) return result;
 
+  const asked = [...todo].flatMap(([signature, [b]]) => (b ? [{ signature, b }] : []));
   const prompt = JSON.stringify(
-    todo.map((b) => ({ id: b.id, ...evidenceOf(b) })),
+    asked.map(({ b }) => ({ id: b.id, ...evidenceOf(b) })),
     null,
     2,
   );
@@ -112,13 +117,13 @@ export async function summarizeDay(
     prompt,
     schema: outputFor(style),
   });
-  const wanted = new Map(todo.map((b) => [b.id, b]));
+  const wanted = new Map(asked.map((a) => [a.b.id, a.signature]));
   for (const { id, summary } of summaries) {
-    const b = wanted.get(id);
-    if (!b) continue;
+    const signature = wanted.get(id);
+    if (signature === undefined) continue;
     const clean = summary.trim().replace(/\.$/, "");
-    result.set(id, clean);
-    cache[blockSignature(b, style)] = clean;
+    for (const b of todo.get(signature) ?? []) result.set(b.id, clean);
+    cache[signature] = clean;
   }
   return result;
 }

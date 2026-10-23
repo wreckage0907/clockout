@@ -186,6 +186,32 @@ describe("buildDay rules", () => {
     ]);
   });
 
+  it("asks what a long gap was, naming the work around it, and offers lunch only around midday", () => {
+    const short = fixtureConfig({
+      day: { working_hours: "10:00-19:00", idle_cutoff: "20m", round_to: "15m", target: "8h" },
+    });
+    const day = buildDay(
+      D,
+      [
+        prompt("10:00"),
+        prompt("10:15"),
+        prompt("12:45"),
+        prompt("13:30"),
+        prompt("16:00", { repo: "acme/web", sessionId: "s2" }),
+        prompt("16:15", { repo: "acme/web", sessionId: "s2" }),
+        prompt("17:30", { repo: "acme/web", sessionId: "s2" }),
+      ],
+      short,
+    );
+    expect(day.questions.map((q) => q.text)).toEqual([
+      "Nothing recorded 10:20–12:45 (2h25). What were you working on? You were on acme/api before and after.",
+      "Nothing recorded 12:50–13:30. Lunch, a break, or work?",
+      "Nothing recorded 13:35–16:00 (2h25). What were you working on? You were on acme/api before it and acme/web after.",
+      "Nothing recorded 16:20–17:30. A break, or work?",
+      "Nothing recorded 17:35–19:00. A break, or work?",
+    ]);
+  });
+
   it("drops declined meetings with a note and clips meetings at midnight", () => {
     const day = buildDay(
       D,

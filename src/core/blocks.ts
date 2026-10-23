@@ -1,7 +1,7 @@
 import { type Config, durationMinutes } from "../config/schema";
 import { ignoredBy, resolveProject, ruleTask } from "./projects";
 import { heuristicSummary } from "./summarize";
-import { atLocalTime, dayRange, localTime, MINUTE } from "./time";
+import { atLocalTime, dayRange, formatDuration, localTime, MINUTE, minutesBetween } from "./time";
 import type { Activity, Block, Day, Gap, Question } from "./types";
 
 /** Reading the agent's reply, or the time after a review comment, before the next action. */
@@ -13,6 +13,10 @@ const SLIVER = 5 * MINUTE;
 /** Gaps at least this long get a question. */
 export const ASK_GAP_MINUTES = 30;
 const ASK_GAP = ASK_GAP_MINUTES * MINUTE;
+/** Gaps at least this long are never just lunch: the question asks what the work was. */
+const LONG_GAP_MINUTES = 120;
+/** Local times a gap has to touch for lunch to be a likely answer. */
+const LUNCH = ["12:00", "15:00"] as const;
 /** This many of your actions during an accepted meeting suggest you skipped it. */
 const BUSY_IN_MEETING = 2;
 
@@ -199,7 +203,7 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
       kind: "gap",
       text: agent
         ? `Nothing from you ${localTime(g.start, tz)}–${localTime(g.end, tz)}, but an agent was working in ${agent.project} for ${Math.round(agent.minutes)} min. Were you on it, or away?`
-        : gapQuestionText(g, tz),
+        : gapQuestionText(g, tz, blocks),
       gapId: g.id,
     });
   }
@@ -391,8 +395,31 @@ export function computeGaps(date: string, blocks: readonly Block[], config: Conf
   return gaps;
 }
 
-export function gapQuestionText(g: Gap, tz: string): string {
-  return `Nothing recorded ${localTime(g.start, tz)}–${localTime(g.end, tz)}. Lunch, a break, or work?`;
+/**
+ * What to ask about a gap. A long one asks what you were working on, naming the work around it;
+ * a short one offers a break (lunch only around midday) or work.
+ */
+export function gapQuestionText(g: Gap, tz: string, blocks: readonly Block[] = []): string {
+  const [from, to] = [localTime(g.start, tz), localTime(g.end, tz)];
+  const minutes = minutesBetween(g.start, g.end);
+  if (minutes >= LONG_GAP_MINUTES) {
+    const work = blocks.filter((b) => b.kind !== "meeting" && b.billable);
+    const before = work.filter((b) => b.end <= g.start).at(-1)?.project;
+    const after = work.find((b) => b.start >= g.end)?.project;
+    const around =
+      before && before === after
+        ? ` You were on ${before} before and after.`
+        : before && after
+          ? ` You were on ${before} before it and ${after} after.`
+          : before
+            ? ` You were on ${before} before it.`
+            : after
+              ? ` You were on ${after} after it.`
+              : "";
+    return `Nothing recorded ${from}–${to} (${formatDuration(minutes)}). What were you working on?${around}`;
+  }
+  const lunch = from < LUNCH[1] && to > LUNCH[0];
+  return `Nothing recorded ${from}–${to}. ${lunch ? "Lunch, a break, or work?" : "A break, or work?"}`;
 }
 
 /** The project an agent spent most time in during [from, to), if it ran for at least a third of it. */

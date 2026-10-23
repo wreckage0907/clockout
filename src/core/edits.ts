@@ -266,7 +266,8 @@ export function applyEdits(day: Day, ops: readonly EditOp[], config: Config): Ed
     .map((g) => ({
       kind: "gap",
       gapId: g.id,
-      text: oldGapText.get(`${g.start.getTime()}-${g.end.getTime()}`) ?? gapQuestionText(g, tz),
+      text:
+        oldGapText.get(`${g.start.getTime()}-${g.end.getTime()}`) ?? gapQuestionText(g, tz, blocks),
     }));
 
   return {

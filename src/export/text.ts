@@ -1,13 +1,16 @@
 import { styleText } from "node:util";
 import type { Config } from "../config/schema";
 import { formatDuration, localTime, minutesBetween } from "../core/time";
-import { blockHours, dayTotals } from "../core/timesheet";
+import { dayTotals, timesheetRows } from "../core/timesheet";
 import type { Day } from "../core/types";
 import { formatHours } from "./formats";
 
 type Style = Parameters<typeof styleText>[0];
 
-/** The day as a terminal table: blocks and gaps in time order, then questions and notes. */
+/**
+ * The day as a terminal table: blocks and gaps in time order, then the timesheet rows (which add
+ * up to the header's total), questions and notes.
+ */
 export function renderDay(day: Day, config: Config, color = process.stdout.isTTY): string {
   const s = (style: Style, text: string) => (color ? styleText(style, text) : text);
   const tz = day.timezone;
@@ -45,19 +48,26 @@ export function renderDay(day: Day, config: Config, color = process.stdout.isTTY
     }
     const b = r.block;
     if (!b) continue;
-    const hours = b.confirmed && b.billable ? blockHours(b, config) : undefined;
     const mark = !b.confirmed ? s("yellow", "?") : !b.billable ? s("dim", "–") : " ";
     const line = [
       `${mark}${b.id.padStart(4)}`,
       `${t(b.start)}–${t(b.end)}`,
       formatDuration(minutesBetween(b.start, b.end)),
-      hours === undefined ? "     " : `${formatHours(hours)}h`,
       b.project.slice(0, projectWidth).padEnd(projectWidth),
       `${b.summary}${b.task !== config.tasks.work && b.task !== b.project ? s("dim", ` · ${b.task}`) : ""}`,
     ].join("  ");
     lines.push(b.confirmed && b.billable ? line : s("dim", line));
   }
 
+  const sheet = timesheetRows(day, config);
+  if (sheet.length) {
+    lines.push("", s("bold", "Timesheet"));
+    for (const r of sheet) {
+      lines.push(
+        `  ${`${formatHours(r.hours)}h`.padStart(6)}  ${r.project.slice(0, projectWidth).padEnd(projectWidth)}  ${r.description}`,
+      );
+    }
+  }
   if (day.questions.length) {
     lines.push("", s("yellow", "Questions"));
     for (const q of day.questions) lines.push(`  ${q.id}  ${q.text}`);
