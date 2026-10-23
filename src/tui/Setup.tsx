@@ -7,10 +7,12 @@ import {
   withAi,
   withClaudeExclude,
   withDay,
+  withDescriptions,
   withoutTaskMapping,
   withSource,
 } from "../config/edit";
 import { type Config, durationMinutes } from "../config/schema";
+import { FORMAT_WORDS } from "../config/setting-ops";
 import type { ClaudeProject } from "../sources/claude-code/paths";
 import { Clickable } from "./clickable";
 import { Button, Dialog, Spinner, Typed, useDraft } from "./kit";
@@ -390,7 +392,7 @@ export function Setup({
       case "ai":
         return "Writes the descriptions and reads what you type in the chat bar. It gets titles, branch names and commit subjects, never code or your prompts.";
       case "projects":
-        return 'Change these by saying it in the chat bar, e.g. "anything in acme/api is Acme Website" or "call meetings Calls".';
+        return 'Change these by saying it in the chat bar, e.g. "anything in acme/api is Acme Website", "leave out my dotfiles" or "call meetings Calls".';
       case "erp": {
         const host = erpHost(config);
         if (state.erp.connected && host)
@@ -596,6 +598,44 @@ export function Setup({
         value: c.ai.model,
         note: on ? "ai.model in config.toml" : "off: descriptions come from titles",
       },
+      {
+        id: "d-format",
+        group: "Descriptions",
+        label: "Starts with",
+        dead: !on,
+        options: (["imperative", "past", "continuous"] as const).map((f) => ({
+          label: `${FORMAT_WORDS[f]} …`,
+          on: c.descriptions.format === f,
+          pick: () => void save(withDescriptions(c, { format: f })),
+        })),
+      },
+      {
+        id: "d-length",
+        label: "Length",
+        dead: !on,
+        options: (["short", "medium", "long"] as const).map((l) => ({
+          label: l[0]?.toUpperCase() + l.slice(1),
+          on: c.descriptions.length === l,
+          pick: () => void save(withDescriptions(c, { length: l })),
+        })),
+        note: { short: "3–8 words", medium: "one sentence", long: "one or two sentences" }[
+          c.descriptions.length
+        ],
+      },
+      {
+        id: "d-instructions",
+        label: "Your words",
+        value: c.descriptions.instructions ?? "none",
+        note: 'say it, e.g. "put the ticket key first"',
+      },
+      {
+        id: "d-examples",
+        label: "Examples",
+        value: c.descriptions.examples?.length
+          ? `${c.descriptions.examples.length} to match`
+          : "none",
+        note: 'say "write them like: …"',
+      },
     ];
   }
 
@@ -612,14 +652,15 @@ export function Setup({
           id: `rule-${i}`,
           group: "Project rules",
           label: p.name,
-          value: [
-            p.match.repo ? `repo ${p.match.repo}` : "",
-            p.match.title ? `title /${p.match.title}/` : "",
-            p.match.attendee_domain ? `meetings with ${p.match.attendee_domain}` : "",
-          ]
-            .filter(Boolean)
-            .join(", "),
-          ...(p.task ? { note: `→ ${p.task}` } : {}),
+          value:
+            [
+              p.match?.repo ? `repo ${p.match.repo}` : "",
+              p.match?.title ? `title /${p.match.title}/` : "",
+              p.match?.attendee_domain ? `meetings with ${p.match.attendee_domain}` : "",
+            ]
+              .filter(Boolean)
+              .join(", ") || "this project",
+          ...(p.ignore ? { note: "left out" } : p.task ? { note: `→ ${p.task}` } : {}),
         }))
       : [
           {

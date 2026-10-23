@@ -25,6 +25,8 @@ Rules:
 
 Settings (what Clockout reads and how it counts), from "settings" in the input:
 - Turning sources on or off, Claude Code projects to read or leave out (use names from claude_projects), daily target, working hours, rounding, time zone, default task names, the AI helper, and project rules ("anything in acme/api is Acme Website").
+- Leaving a project out ("leave out my dotfiles", "don't count my personal project", "ignore the gym on my calendar"): project_rule with ignore true, named after the project as it is on the day (or matching a repo or title when they give one). It works for every source; claude_projects only when they mean Claude Code's own project list.
+- How descriptions are written ("write them in past tense", "make descriptions longer", "always put the ticket key first", "write them like: …"): descriptions, with only what they asked to change. Their own instructions go in their words; examples are descriptions they give as a model.
 - Durations are like "7h30m", "45m"; working hours "HH:MM-HH:MM".
 - Google Calendar and the ERP need a sign-in in the browser: use connect (with the ERP's address when they give one) and disconnect. Never ask for passwords, tokens or private calendar links.
 - "Send <project> to <task>" or "log <project> against <task>": erp_task with the words they used to name the task as search.
@@ -87,9 +89,11 @@ export function settingsContext(config: Config, facts: SettingsFacts) {
     timezone: config.me.timezone,
     task_names: config.tasks,
     ai_helper: config.ai.backend !== "none",
+    descriptions: config.descriptions,
     project_rules: config.projects.map((p) => ({
       name: p.name,
       ...(p.task ? { task: p.task } : {}),
+      ...(p.ignore ? { ignore: true } : {}),
       ...p.match,
     })),
     erp: config.timesheet

@@ -88,24 +88,35 @@ export const sourceConfig = z.discriminatedUnion("type", [
   googleCalendarSource,
 ]);
 
-const projectRule = z.object({
-  name: z.string().min(1),
-  /** Default task for this project's work blocks. */
-  task: z.string().min(1).optional(),
-  match: z
-    .object({
-      /** "owner/name" */
-      repo: z.string().optional(),
-      /** Regular expression tested against meeting and session titles. */
-      title: z.string().optional(),
-      /** e.g. "acme.com": meetings with attendees from this domain. */
-      attendee_domain: z.string().optional(),
-    })
-    .refine(
-      (m) => m.repo || m.title || m.attendee_domain,
-      "give at least one of repo, title, attendee_domain",
-    ),
-});
+const projectRule = z
+  .object({
+    name: z.string().min(1),
+    /** Default task for this project's work blocks. */
+    task: z.string().min(1).optional(),
+    /**
+     * Leave this project off the day, work and meetings, e.g. a personal one. Without `match`
+     * it leaves out the project with this name, however it was found.
+     */
+    ignore: z.boolean().optional(),
+    match: z
+      .object({
+        /** "owner/name" */
+        repo: z.string().optional(),
+        /** Regular expression tested against meeting and session titles. */
+        title: z.string().optional(),
+        /** e.g. "acme.com": meetings with attendees from this domain. */
+        attendee_domain: z.string().optional(),
+      })
+      .refine(
+        (m) => m.repo || m.title || m.attendee_domain,
+        "give at least one of repo, title, attendee_domain",
+      )
+      .optional(),
+  })
+  .refine((r) => r.match || r.ignore, {
+    error: "give a match (repo, title or attendee_domain), or ignore = true",
+    path: ["match"],
+  });
 
 /** Which ERP task a Clockout project (and optionally task) goes to. */
 const taskMapping = z.object({
@@ -179,6 +190,19 @@ export const configSchema = z.object({
       model: z.string().min(1).default("haiku"),
     })
     .prefault({}),
+  /** How the AI writes each row's description. Without the AI, titles are used as they are. */
+  descriptions: z
+    .object({
+      /** "Fix …" (imperative), "Fixed …" (past) or "Fixing …" (continuous). */
+      format: z.enum(["imperative", "past", "continuous"]).default("imperative"),
+      /** short: 3–8 words; medium: one sentence; long: one or two sentences. */
+      length: z.enum(["short", "medium", "long"]).default("short"),
+      /** Your own words for the AI, e.g. "put the ticket key first". */
+      instructions: z.string().min(1).max(500).optional(),
+      /** Descriptions you've written before; the AI matches their style. */
+      examples: z.array(z.string().min(1).max(200)).max(5).optional(),
+    })
+    .prefault({}),
   sources: z.array(sourceConfig).default([]),
   projects: z.array(projectRule).default([]),
   /** Where `clockout push` sends the day. Connect with `clockout connect erp <url>`. */
@@ -192,6 +216,7 @@ export type Config = z.output<typeof configSchema>;
 export type SourceConfig = z.output<typeof sourceConfig>;
 export type TimesheetTarget = z.output<typeof timesheetTarget>;
 export type TaskMapping = z.output<typeof taskMapping>;
+export type DescriptionStyle = Config["descriptions"];
 
 export function durationMinutes(s: string): number {
   const m = durationPattern.exec(s);

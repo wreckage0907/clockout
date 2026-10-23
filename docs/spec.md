@@ -71,9 +71,9 @@ What counts on a timesheet is how long each thing took, not when, so the screen 
 - **Slash commands**: a `/` opens a menu over the chat bar that narrows as you type; ↑↓ choose, Tab fills in, Enter runs, a click runs. `/refresh`, `/connect erp <address>` / `google`, `/disconnect erp` / `google` (shown as a proposal first, like saying it), `/send`, `/copy [md | csv]`, `/undo`, `/add`, `/today`, `/yesterday`, `/date <day>` (a weekday, `-3` or `2026-10-16`), `/setup [sources | day | ai | projects | erp]`, `/help`. They do what the keys and buttons do, without the AI: text starting with `/` (or a dictated "slash …") never goes to it, and one that can't be read stays in the bar with what's wrong. Plain "refresh" and "connect erp …" keep working.
 - **Corrections**: anything else typed that isn't a length goes to the AI, which returns edit operations; they're shown as a proposal and applied on Enter. Ctrl+Z undoes.
 - **Refresh**: corrections are replayed on newer activity when every drafted block is still in place. When they can't be, the day keeps your corrections and says so, with a **Rebuild the day** button. "refresh" (or "rebuild the day", "start over"; no AI needed) in the chat bar does the same: it drafts the day again from the latest activity, after asking first if that drops corrections. `--refresh` does it from the command line.
-- **Setup by chat** ([ADR 0007](adr/0007-setup-from-the-chat-bar.md)): the same bar takes settings ("connect my ERP at erp.example.com", "leave out my personal project", "my target is 7h30", "send acme/api to the hackathon task"). The AI returns settings operations, shown as a proposal like corrections; on Enter they're applied, validated like config.toml and saved, and the day is drafted again if they affect it. Sign-ins open the browser. An ERP task is searched locally and the picker opens if there's more than one match. A pasted private calendar link is handled without the AI; text that looks like a token is refused and nothing is sent. "connect erp <address>" and "disconnect google" work without the AI. The last three turns go along, so follow-ups work.
+- **Setup by chat** ([ADR 0007](adr/0007-setup-from-the-chat-bar.md)): the same bar takes settings ("connect my ERP at erp.example.com", "leave out my personal project" (an ignore rule), "write descriptions in past tense", "my target is 7h30", "send acme/api to the hackathon task"). The AI returns settings operations, shown as a proposal like corrections; on Enter they're applied, validated like config.toml and saved, and the day is drafted again if they affect it. Sign-ins open the browser. An ERP task is searched locally and the picker opens if there's more than one match. A pasted private calendar link is handled without the AI; text that looks like a token is refused and nothing is sent. "connect erp <address>" and "disconnect google" work without the AI. The last three turns go along, so follow-ups work.
 - **Send**: ctrl+s (or **Send to ERP**) sends the day to the timesheet system; see "Sending the day" below.
-- **Setup**: sections on the left, the chosen one's settings on the right; ↑↓ moves, → or Enter goes into a section, ←→ changes a value, Space or Enter ticks, Esc goes back; everything is clickable too. **Sources**: coding agents (Claude Code opens a searchable page of its projects, each tickable; Pi; Codex; opencode; Antigravity), calendar (Google Calendar signs in; a private feed shows as read-only), code (GitHub); a tool that isn't on this machine is greyed out. **Day**: daily target, working hours, rounding, idle cutoff, time zone. **AI helper**: on or off, and the model. **Projects**: default task names and project rules, shown with how to change them in the chat bar. **ERP**: an address field to sign in (browser), or once signed in the site, who you are and which ERP task each project goes to (✕ forgets one, so it's asked again on the next send) with Sign out. Saved to config.toml as you go.
+- **Setup**: sections on the left, the chosen one's settings on the right; ↑↓ moves, → or Enter goes into a section, ←→ changes a value, Space or Enter ticks, Esc goes back; everything is clickable too. **Sources**: coding agents (Claude Code opens a searchable page of its projects, each tickable; Pi; Codex; opencode; Antigravity), calendar (Google Calendar signs in; a private feed shows as read-only), code (GitHub); a tool that isn't on this machine is greyed out. **Day**: daily target, working hours, rounding, idle cutoff, time zone. **AI helper**: on or off, the model, and how descriptions are written (starts with Fix / Fixed / Fixing, short / medium / long; your own instructions and examples are set by saying them). **Projects**: default task names and project rules (an ignore rule shows as "left out"), shown with how to change them in the chat bar. **ERP**: an address field to sign in (browser), or once signed in the site, who you are and which ERP task each project goes to (✕ forgets one, so it's asked again on the next send) with Sign out. Saved to config.toml as you go.
 
 ## 5. Sources
 
@@ -192,6 +192,12 @@ target = "8h"        # hours you aim to log; the review screen fills towards it
 [ai]
 backend = "auto"     # auto | claude-code | codex | copilot | opencode | pi | antigravity | ollama | api | none
 
+[descriptions]       # how the AI writes descriptions; without it, titles are used as they are
+format = "imperative" # imperative "Fix …" | past "Fixed …" | continuous "Fixing …"
+length = "short"     # short (3–8 words) | medium (one sentence) | long (one or two sentences)
+instructions = "Put the ticket key first"   # optional, your own words (≤ 500 characters)
+examples = ["ABC-12 Fixed the login redirect loop"]   # optional, up to 5 to match the style of
+
 [[sources]]
 type = "claude-code"
 exclude = []         # Claude Code project folders to leave out
@@ -224,6 +230,10 @@ run = "my-tracker export --json"
 [[projects]]
 name = "Acme API"
 match = { repo = "acme/api", title = "(?i)acme", attendee_domain = "acme.com" }
+
+[[projects]]
+name = "dotfiles"    # ignore: leave this project off the day (work, agent turns, meetings)
+ignore = true        # without match it's the project with this name; with one, what it matches
 ```
 
 ## 8. How it works
@@ -234,10 +244,10 @@ collect → store → resolve projects → blocks → attendance → summarize �
 
 1. **Collect** from each configured source for the date range.
 2. **Store** in local SQLite (`~/.local/share/clockout/`). Days survive agents deleting their logs; corrections are saved.
-3. **Resolve projects**: `[[projects]]` rules → git remote → repo root → `cwd`. Ticket keys from branch names. Meetings: links/ticket keys in the description → title rules → attendee domain → past corrections for the same series → AI pick from the project list.
+3. **Resolve projects**: `[[projects]]` rules → git remote → repo root → `cwd`. A project an `ignore` rule names is dropped before blocks are built, with a note under the day. Ticket keys from branch names. Meetings: links/ticket keys in the description → title rules → attendee domain → past corrections for the same series → AI pick from the project list.
 4. **Blocks**: merge activity on the same project + branch/PR; a gap longer than `idle_cutoff` splits a block. Duration comes from **your** activity (prompts, commits, reviews), not agent runtime. Review blocks: cluster of comment/submit times, plus up to 15 min of reading before the first one where nothing else claims that time. A session where you try out a PR you reviewed (it ran on the PR's branch, by name or fetched as `pr-2305`, or its title names the PR) is part of the review. A comment on an issue joins whatever you were doing in that project then, or is its own short block. Calendar wins on overlap. Round to `round_to`.
 5. **Attendance**: accepted → count; tentative / no response → ask; declined → drop; no attendees → count. Dense prompts or commits during an accepted meeting → ask "skipped or multitasking?". Never drop a meeting silently.
-6. **Summarize**: one verb-first line per block, ≤ 8 words. AI backend if available, else aiTitle → PR title → commit subject → branch name.
+6. **Summarize**: one verb-first line per block, ≤ 8 words by default; `[descriptions]` sets the verb form, the length, your own instructions and examples. AI backend if available, else aiTitle → PR title → commit subject → branch name (the style only applies to the AI's). A style other than the default is part of the summary cache key, so changing it writes them again.
 7. **Gaps**: unaccounted time inside working hours.
 8. **Review**: type or dictate. The AI returns operations (`add`, `update`, `delete`, `split`, `merge`, `fill_gap`, `clarify`), never a rewritten sheet. Clockout validates them, shows the diff, applies on `y`, and supports undo.
 9. **Export**: one row per block with **date, project, task, hours, description** — the fields most timesheet forms ask for. Clipboard, Markdown, CSV, JSON. Task comes from config rules (by activity kind, e.g. meeting → "Meetings", review → "Code Review", or a default per project) and can be changed by voice. After the MVP: user-defined export templates (own columns and formats) and documented presets for common timesheet tools.

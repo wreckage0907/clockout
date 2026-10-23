@@ -527,6 +527,24 @@ describe("setup", () => {
     expect(lastSaved(calls)?.day.idle_cutoff).toBe("30m");
   });
 
+  it("sets how descriptions are written in the AI helper section", async () => {
+    const { ui, calls } = await openSetup();
+    await down(ui, 2); // AI helper
+    await until(ui.lastFrame, "Writes the descriptions");
+    expect(ui.lastFrame()).toContain("Fix …");
+    expect(ui.lastFrame()).toContain("3–8 words");
+    ui.stdin.write(RIGHT); // into the rows: Helper
+    await tick();
+    await down(ui, 1); // Starts with (Model can't be changed here, so it's skipped)
+    ui.stdin.write(RIGHT);
+    await tick();
+    expect(lastSaved(calls)?.descriptions.format).toBe("past");
+    await down(ui, 1); // Length
+    ui.stdin.write(RIGHT);
+    await until(ui.lastFrame, "one sentence");
+    expect(lastSaved(calls)?.descriptions.length).toBe("medium");
+  });
+
   it("shows what's set by saying it: task names and project rules", async () => {
     const { ui } = await openSetup();
     await down(ui, 3); // Projects

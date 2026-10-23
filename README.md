@@ -79,6 +79,8 @@ Things you can say:
 Setup works the same way: say what to change, check the proposal, press Enter.
 
 - "connect my ERP at erp.example.com" (signs in in your browser)
+- "leave out my dotfiles" (an ignore rule: that project's work and meetings never reach the day)
+- "write descriptions in past tense, one sentence each" or "always put the ticket key first"
 - "stop reading my personal project" · "turn off GitHub"
 - "my target is seven and a half hours, round to 30 minutes"
 - "send acme api to the hackathon task"
@@ -124,6 +126,12 @@ meeting = "Meetings"
 backend = "auto"                     # auto | claude-code | none
 model = "haiku"
 
+[descriptions]                       # how the AI writes each row (without it, titles are used)
+format = "imperative"                # imperative "Fix …" | past "Fixed …" | continuous "Fixing …"
+length = "short"                     # short (3–8 words) | medium (one sentence) | long (two sentences)
+# instructions = "Put the ticket key first"
+# examples = ["ABC-12 Fixed the login redirect loop"]
+
 [[sources]]
 type = "claude-code"
 # exclude = ["-Users-ada-personal"]   # project folders to leave out (Setup writes this)
@@ -143,6 +151,10 @@ client_secret = "GOCSPX-…"
 name = "Acme API"
 task = "Backend"
 match = { repo = "acme/api", title = "(?i)acme", attendee_domain = "acme.com" }
+
+[[projects]]                         # leave a project off the day, from every source
+name = "dotfiles"                    # without match: the project with this name, as on its cards
+ignore = true
 
 [timesheet]                          # where `push` / ctrl+s sends the day; added by `clockout connect erp`
 type = "next-pms"                    # Frappe/ERPNext with rtCamp's next-pms

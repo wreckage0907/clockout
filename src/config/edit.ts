@@ -33,6 +33,14 @@ export function withAi(config: Config, backend: Config["ai"]["backend"]): Config
   return { ...config, ai: { ...config.ai, backend } };
 }
 
+/** Changes how descriptions are written; an empty `instructions` or `examples` removes them. */
+export function withDescriptions(config: Config, change: Partial<Config["descriptions"]>): Config {
+  const next = { ...config.descriptions, ...change };
+  if (!next.instructions?.trim()) delete next.instructions;
+  if (!next.examples?.length) delete next.examples;
+  return { ...config, descriptions: next };
+}
+
 /** 450 → "7h30m", the duration format config.toml uses. */
 export function durationText(minutes: number): string {
   const h = Math.floor(minutes / 60);

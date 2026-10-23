@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { withAi, withClaudeExclude, withDay, withSource, withTaskMapping } from "./edit";
+import {
+  withAi,
+  withClaudeExclude,
+  withDay,
+  withDescriptions,
+  withSource,
+  withTaskMapping,
+} from "./edit";
 import { type Config, configSchema } from "./schema";
 
 // Settings changes said in the chat bar. The AI returns these operations; it never writes the
@@ -62,6 +69,29 @@ const taskNames = z
 const ai = z
   .object({ op: z.literal("ai"), on: z.boolean() })
   .describe("Turn the AI helper on or off");
+const descriptions = z
+  .object({
+    op: z.literal("descriptions"),
+    format: z
+      .enum(["imperative", "past", "continuous"])
+      .optional()
+      .describe('"Fix …", "Fixed …" or "Fixing …"'),
+    length: z
+      .enum(["short", "medium", "long"])
+      .optional()
+      .describe("short: 3–8 words; medium: one sentence; long: one or two sentences"),
+    instructions: z
+      .string()
+      .max(500)
+      .optional()
+      .describe('Their own instructions, in their words; "" removes them'),
+    examples: z
+      .array(z.string().min(1).max(200))
+      .max(5)
+      .optional()
+      .describe("Descriptions they wrote before, to match the style of; [] removes them"),
+  })
+  .describe("How the AI writes each timesheet row's description");
 const projectRule = z
   .object({
     op: z.literal("project_rule"),
@@ -70,8 +100,16 @@ const projectRule = z
     repo: z.string().optional().describe('"owner/name"'),
     title: z.string().optional().describe("Regular expression for meeting and session titles"),
     attendee_domain: z.string().optional().describe('e.g. "acme.com"'),
+    ignore: z
+      .boolean()
+      .optional()
+      .describe(
+        "Leave matching work and meetings off the day; with no repo, title or domain, the project with this name",
+      ),
   })
-  .describe("Add or replace a rule that puts matching work under a project name");
+  .describe(
+    "Add or replace a rule that puts matching work under a project name, or leaves it out (ignore)",
+  );
 const removeProjectRule = z
   .object({ op: z.literal("remove_project_rule"), name: z.string().min(1) })
   .describe("Remove the project rules with this name");
@@ -94,6 +132,7 @@ export const aiSettingOpSchema = z.discriminatedUnion("op", [
   timezone,
   taskNames,
   ai,
+  descriptions,
   projectRule,
   removeProjectRule,
   connect,
@@ -108,6 +147,7 @@ export const settingOpSchema = z.discriminatedUnion("op", [
   timezone,
   taskNames,
   ai,
+  descriptions,
   projectRule,
   removeProjectRule,
   connect,
@@ -190,13 +230,23 @@ export function applySettings(
       case "ai":
         next = withAi(next, op.on ? "auto" : "none");
         break;
+      case "descriptions": {
+        const { op: _, ...style } = op;
+        next = withDescriptions(next, defined(style));
+        break;
+      }
       case "project_rule": {
         const match = {
           ...(op.repo ? { repo: op.repo } : {}),
           ...(op.title ? { title: op.title } : {}),
           ...(op.attendee_domain ? { attendee_domain: op.attendee_domain } : {}),
         };
-        const rule = { name: op.name, ...(op.task ? { task: op.task } : {}), match };
+        const rule = {
+          name: op.name,
+          ...(op.task ? { task: op.task } : {}),
+          ...(op.ignore ? { ignore: true } : {}),
+          ...(Object.keys(match).length ? { match } : {}),
+        };
         const others = next.projects.filter(
           (p) => !(p.name === op.name && sameMatch(p.match, match)),
         );
@@ -257,6 +307,9 @@ export function applySettings(
   return { config: valid.success ? valid.data : next, effects, errors };
 }
 
+/** How each description format starts, for display. */
+export const FORMAT_WORDS = { imperative: "Fix", past: "Fixed", continuous: "Fixing" } as const;
+
 const SOURCE_LABELS: Record<SourceOp["source"], string> = {
   "claude-code": "Claude Code sessions",
   pi: "Pi sessions",
@@ -297,12 +350,30 @@ function describeSetting(op: SettingOp): string {
     }
     case "ai":
       return op.on ? "Turn the AI helper on" : "Turn the AI helper off";
+    case "descriptions": {
+      const parts = [
+        op.format ? `start with “${FORMAT_WORDS[op.format]} …”` : "",
+        op.length ? `${op.length} length` : "",
+        op.instructions === undefined
+          ? ""
+          : op.instructions.trim()
+            ? `follow “${op.instructions.trim()}”`
+            : "no instructions of your own",
+        op.examples === undefined
+          ? ""
+          : op.examples.length
+            ? `match ${op.examples.length} example${op.examples.length === 1 ? "" : "s"}`
+            : "no examples",
+      ].filter(Boolean);
+      return parts.length ? `Descriptions: ${parts.join(", ")}` : "No change to descriptions";
+    }
     case "project_rule": {
       const what = [
         op.repo ? `repo ${op.repo}` : "",
         op.title ? `titles like /${op.title}/` : "",
         op.attendee_domain ? `meetings with ${op.attendee_domain}` : "",
       ].filter(Boolean);
+      if (op.ignore) return `Leave out ${what.join(", ") || op.name}, work and meetings`;
       return `${what.join(", ") || "Matching work"} → project ${op.name}${op.task ? ` (${op.task})` : ""}`;
     }
     case "remove_project_rule":
@@ -332,7 +403,10 @@ function same(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
-function sameMatch(a: Record<string, string | undefined>, b: Record<string, string | undefined>) {
+function sameMatch(
+  a: Record<string, string | undefined> = {},
+  b: Record<string, string | undefined> = {},
+) {
   return (["repo", "title", "attendee_domain"] as const).every(
     (k) => (a[k] ?? "") === (b[k] ?? ""),
   );

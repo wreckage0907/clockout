@@ -1,22 +1,58 @@
 import { z } from "zod";
+import type { DescriptionStyle } from "../config/schema";
 import { prNumber } from "../core/summarize";
 import type { Block, Day } from "../core/types";
 import type { LlmBackend } from "./types";
 
-const SYSTEM = `You write timesheet descriptions. For each block of work you get the evidence: coding-session titles, pull requests, branches, reviewed PRs, issues opened or commented on.
+const FORMAT: Record<DescriptionStyle["format"], string> = {
+  imperative: 'start with an imperative verb ("Fix", "Add", "Review", "Investigate")',
+  past: 'start with a past-tense verb ("Fixed", "Added", "Reviewed", "Investigated")',
+  continuous: 'start with an -ing verb ("Fixing", "Adding", "Reviewing", "Investigating")',
+};
+const LENGTH: Record<DescriptionStyle["length"], { rule: string; max: number }> = {
+  short: { rule: "3 to 8 words", max: 120 },
+  medium: { rule: "one sentence of 8 to 15 words", max: 200 },
+  long: { rule: "one or two sentences, up to 30 words in all", max: 400 },
+};
+const DEFAULT_STYLE: DescriptionStyle = { format: "imperative", length: "short" };
+
+/** The instructions for a style: the fixed rules, then the person's own words and examples. */
+function systemFor(style: DescriptionStyle): string {
+  const own = [
+    style.instructions
+      ? `\nTheir own instructions, followed unless they break the rules above:\n${style.instructions}`
+      : "",
+    style.examples?.length
+      ? `\nDescriptions they wrote before. Match their style, not their content:\n${style.examples.map((e) => `- ${e}`).join("\n")}`
+      : "",
+  ].join("");
+  return `You write timesheet descriptions. For each block of work you get the evidence: coding-session titles, pull requests, branches, reviewed PRs, issues opened or commented on.
 Write one description per block id:
-- 3 to 8 words, start with a past-tense or imperative verb ("Fix", "Add", "Review", "Investigate").
+- ${LENGTH[style.length].rule}; ${FORMAT[style.format]}.
 - Keep PR numbers as "(PR #n)" when a PR was opened or reviewed in the block.
 - Only use facts in the evidence. No guesses, no caveats, no mention of what you can't see.
-- Plain text, no quotes, no trailing period.`;
+- Plain text, no quotes, no trailing period.${own}`;
+}
 
-const output = z.object({
-  summaries: z.array(z.object({ id: z.string(), summary: z.string().min(1).max(120) })),
-});
+function outputFor(style: DescriptionStyle) {
+  const max = LENGTH[style.length].max;
+  return z.object({
+    summaries: z.array(z.object({ id: z.string(), summary: z.string().min(1).max(max) })),
+  });
+}
 
-/** Evidence that identifies a block's content; equal signatures can reuse a cached summary. */
-export function blockSignature(b: Block): string {
-  return JSON.stringify(evidenceOf(b));
+/**
+ * Evidence that identifies a block's content, and the style when it isn't the default; equal
+ * signatures can reuse a cached summary, so changing the style writes them again.
+ */
+export function blockSignature(b: Block, style: DescriptionStyle = DEFAULT_STYLE): string {
+  const evidence = evidenceOf(b);
+  const custom =
+    style.format !== DEFAULT_STYLE.format ||
+    style.length !== DEFAULT_STYLE.length ||
+    !!style.instructions ||
+    !!style.examples?.length;
+  return JSON.stringify(custom ? { evidence, style } : evidence);
 }
 
 function evidenceOf(b: Block) {
@@ -54,12 +90,13 @@ export async function summarizeDay(
   day: Day,
   backend: LlmBackend,
   cache: Record<string, string>,
+  style: DescriptionStyle = DEFAULT_STYLE,
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   const todo: Block[] = [];
   for (const b of day.blocks) {
     if (b.kind === "meeting" || b.evidence.length === 0) continue;
-    const hit = cache[blockSignature(b)];
+    const hit = cache[blockSignature(b, style)];
     if (hit) result.set(b.id, hit);
     else todo.push(b);
   }
@@ -70,14 +107,18 @@ export async function summarizeDay(
     null,
     2,
   );
-  const { summaries } = await backend.complete({ system: SYSTEM, prompt, schema: output });
+  const { summaries } = await backend.complete({
+    system: systemFor(style),
+    prompt,
+    schema: outputFor(style),
+  });
   const wanted = new Map(todo.map((b) => [b.id, b]));
   for (const { id, summary } of summaries) {
     const b = wanted.get(id);
     if (!b) continue;
     const clean = summary.trim().replace(/\.$/, "");
     result.set(id, clean);
-    cache[blockSignature(b)] = clean;
+    cache[blockSignature(b, style)] = clean;
   }
   return result;
 }

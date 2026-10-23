@@ -47,4 +47,44 @@ describe("summarizeDay", async () => {
     expect((prompts[0] as { id: string }[]).map((x) => x.id)).toEqual(["b3", "b5", "b8"]);
     expect(Object.keys(cache)).toHaveLength(4);
   });
+
+  it("writes in the style you set, with your own words and examples", async () => {
+    const systems: string[] = [];
+    const long = "Fixed the auth token refresh race and covered it with tests (PR #87). ".repeat(3);
+    const b: LlmBackend = {
+      id: "fake",
+      label: "fake",
+      async complete<T>(req: CompleteRequest<T>) {
+        systems.push(req.system ?? "");
+        const ids = (JSON.parse(req.prompt) as { id: string }[]).map((x) => x.id);
+        return req.schema.parse({ summaries: ids.map((id) => ({ id, summary: long })) });
+      },
+    };
+    const style = {
+      format: "past" as const,
+      length: "long" as const,
+      instructions: "Put the ticket key first",
+      examples: ["ABC-12 Fixed the login redirect loop"],
+    };
+    const result = await summarizeDay(day, b, {}, style);
+    expect(result.get("b2")).toBe(long.trim().replace(/\.$/, "")); // longer than a short one may be
+    expect(systems[0]).toContain("one or two sentences");
+    expect(systems[0]).toContain('past-tense verb ("Fixed"');
+    expect(systems[0]).toContain("Put the ticket key first");
+    expect(systems[0]).toContain("- ABC-12 Fixed the login redirect loop");
+
+    const { b: short } = backend((ids) => ids.map((id) => ({ id, summary: long })));
+    await expect(summarizeDay(day, short, {})).rejects.toThrow();
+  });
+
+  it("writes cached descriptions again when the style changes, and only then", () => {
+    const b2 = day.blocks.find((x) => x.id === "b2");
+    if (!b2) throw new Error("fixture changed");
+    const plain = blockSignature(b2);
+    expect(blockSignature(b2, { format: "imperative", length: "short" })).toBe(plain);
+    expect(blockSignature(b2, { format: "past", length: "short" })).not.toBe(plain);
+    expect(
+      blockSignature(b2, { format: "imperative", length: "short", instructions: "x" }),
+    ).not.toBe(plain);
+  });
 });

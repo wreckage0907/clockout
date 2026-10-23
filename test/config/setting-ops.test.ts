@@ -117,11 +117,46 @@ describe("applySettings", () => {
     ).toEqual([]);
   });
 
-  it("needs at least one thing for a project rule to match", () => {
+  it("needs at least one thing for a project rule to match, unless it leaves the project out", () => {
     const r = applySettings(config, [{ op: "project_rule", name: "Acme" }]);
     expect(r.errors).toEqual([
-      "projects.0.match: give at least one of repo, title, attendee_domain",
+      "projects.0.match: give a match (repo, title or attendee_domain), or ignore = true",
     ]);
+    const ignore: SettingOp = { op: "project_rule", name: "dotfiles", ignore: true };
+    const left = applySettings(config, [ignore]);
+    expect(left.errors).toEqual([]);
+    expect(left.config.projects).toEqual([{ name: "dotfiles", ignore: true }]);
+    expect(describeSettings([ignore])).toEqual(["Leave out dotfiles, work and meetings"]);
+    expect(
+      describeSettings([{ op: "project_rule", name: "Personal", repo: "ada/blog", ignore: true }]),
+    ).toEqual(["Leave out repo ada/blog, work and meetings"]);
+  });
+
+  it("changes how descriptions are written, and takes your own words back out", () => {
+    const op: SettingOp = {
+      op: "descriptions",
+      format: "past",
+      length: "medium",
+      instructions: "Put the ticket key first",
+    };
+    const r = applySettings(config, [op]);
+    expect(r.errors).toEqual([]);
+    expect(r.config.descriptions).toEqual({
+      format: "past",
+      length: "medium",
+      instructions: "Put the ticket key first",
+    });
+    expect(describeSettings([op])).toEqual([
+      "Descriptions: start with “Fixed …”, medium length, follow “Put the ticket key first”",
+    ]);
+    const cleared = applySettings(r.config, [
+      { op: "descriptions", instructions: "", examples: [] },
+    ]);
+    expect(cleared.config.descriptions).toEqual({ format: "past", length: "medium" });
+    expect(
+      applySettings(config, [{ op: "descriptions", examples: ["Fixed the login loop"] }]).config
+        .descriptions.examples,
+    ).toEqual(["Fixed the login loop"]);
   });
 
   it("names task defaults and the AI helper", () => {

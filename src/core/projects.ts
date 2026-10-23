@@ -24,8 +24,15 @@ export function ruleTask(a: Activity, rules: readonly Rule[]): string | undefine
   return rules.find((r) => matches(r, a))?.task;
 }
 
+/** The `ignore` rule's name if one leaves this project off the day. */
+export function ignoredBy(project: string, rules: readonly Rule[]): string | undefined {
+  const p = project.toLowerCase();
+  return rules.find((r) => r.ignore && r.name.toLowerCase() === p)?.name;
+}
+
 function matches(rule: Rule, a: Activity): boolean {
   const m = rule.match;
+  if (!m) return false;
   if (m.repo && a.repo && a.repo.toLowerCase() === m.repo.toLowerCase()) return true;
   if (m.title && a.title && safeRegex(m.title)?.test(a.title)) return true;
   if (m.attendee_domain && a.attendees) {

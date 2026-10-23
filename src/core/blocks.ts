@@ -1,5 +1,5 @@
 import { type Config, durationMinutes } from "../config/schema";
-import { resolveProject, ruleTask } from "./projects";
+import { ignoredBy, resolveProject, ruleTask } from "./projects";
 import { heuristicSummary } from "./summarize";
 import { atLocalTime, dayRange, localTime, MINUTE } from "./time";
 import type { Activity, Block, Day, Gap, Question } from "./types";
@@ -39,13 +39,20 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
   const notes: string[] = [];
   const questions: Omit<Question, "id">[] = [];
 
+  const ignored = new Set<string>();
   const acts = activities
     .filter((a) => {
       const s = a.start.getTime();
       const e = a.end?.getTime() ?? s;
       return a.kind === "meeting" ? s < to && e > from : s >= from && s < to;
     })
-    .map((a) => ({ ...a, project: resolveProject(a, config.projects) }));
+    .map((a) => ({ ...a, project: resolveProject(a, config.projects) }))
+    .filter((a) => {
+      const rule = ignoredBy(a.project, config.projects);
+      if (rule) ignored.add(rule);
+      return !rule;
+    });
+  if (ignored.size) notes.push(`Left out ${[...ignored].join(", ")}: your project rules ignore it`);
 
   // Meetings
   const meetings = dedupeMeetings(acts.filter((a) => a.kind === "meeting" && a.end));

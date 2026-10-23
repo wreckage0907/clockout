@@ -200,6 +200,65 @@ describe("buildDay rules", () => {
   });
 });
 
+describe("ignore rules", () => {
+  const base = fixtureConfig();
+
+  it("leave out a project by its name, however it was found, with a note", () => {
+    const config = { ...base, projects: [{ name: "dotfiles", ignore: true }] };
+    const day = buildDay(
+      D,
+      [
+        prompt("10:00"),
+        prompt("11:00", { repo: undefined, cwd: "/Users/ada/src/dotfiles", sessionId: "s2" }),
+        prompt("11:10", { repo: undefined, cwd: "/Users/ada/src/Dotfiles", sessionId: "s2" }),
+      ],
+      config,
+    );
+    expect(day.blocks.map((b) => b.project)).toEqual(["acme/api"]);
+    expect(day.notes).toEqual(["Left out dotfiles: your project rules ignore it"]);
+  });
+
+  it("leave out what a rule matches: a repo's work, a meeting by its title", () => {
+    const config = {
+      ...base,
+      projects: [
+        { name: "Personal", ignore: true, match: { repo: "ada/blog" } },
+        { name: "Gym", ignore: true, match: { title: "(?i)^gym$" } },
+      ],
+    };
+    const day = buildDay(
+      D,
+      [
+        prompt("10:00"),
+        prompt("11:00", { repo: "ada/blog", sessionId: "s2" }),
+        meeting("13:00", "14:00", { title: "GYM", attendees: [] }),
+        meeting("15:00", "15:30"),
+      ],
+      config,
+    );
+    expect(rows(day).map((r) => r.split(" | ")[0])).toEqual([
+      "10:00-10:05 work acme/api",
+      "15:00-15:30 meeting Meetings",
+    ]);
+    expect(day.notes).toEqual(["Left out Personal, Gym: your project rules ignore it"]);
+  });
+
+  it("an agent working in an ignored project doesn't make a gap question about it", () => {
+    const config = { ...base, projects: [{ name: "ada/blog", ignore: true }] };
+    const turn: Activity = {
+      source: "test",
+      kind: "agent_turn",
+      actor: "agent",
+      start: at("10:30"),
+      end: at("11:30"),
+      repo: "ada/blog",
+      sessionId: "s2",
+    };
+    const day = buildDay(D, [prompt("10:00"), turn, prompt("12:00")], config);
+    expect(day.questions.map((q) => q.text).join(" ")).not.toContain("ada/blog");
+  });
+});
+
 describe("timesheetRows", () => {
   it("merges blocks of the same work into one entry, rounding the total once", () => {
     const config = fixtureConfig();

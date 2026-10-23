@@ -67,6 +67,27 @@ describe("configSchema", () => {
     expect(issues({ ...minimal, projects: [{ name: "Acme", match: {} }] })).toEqual([
       "projects.0.match",
     ]);
+    expect(issues({ ...minimal, projects: [{ name: "Acme" }] })).toEqual(["projects.0.match"]);
+  });
+
+  it("writes short, verb-first descriptions unless told otherwise", () => {
+    expect(configSchema.parse(minimal).descriptions).toEqual({
+      format: "imperative",
+      length: "short",
+    });
+    expect(issues({ ...minimal, descriptions: { length: "epic" } })).toEqual([
+      "descriptions.length",
+    ]);
+  });
+
+  it("takes an ignore rule with or without a match", () => {
+    expect(issues({ ...minimal, projects: [{ name: "dotfiles", ignore: true }] })).toEqual([]);
+    expect(
+      issues({
+        ...minimal,
+        projects: [{ name: "Personal", ignore: true, match: { repo: "ada/blog" } }],
+      }),
+    ).toEqual([]);
   });
 });
 
