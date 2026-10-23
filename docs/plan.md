@@ -89,6 +89,7 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Review screen: ctrl+s / **Send to ERP**, task picker, plan panel, Enter sends
 - [x] Tested live against a local next-pms site (sign-in, send, update, hand-added entries, disconnect)
 - [x] Remove a card by hand (✕ / ctrl+d; typed keys go to the chat bar, so not `d`)
+- [x] Slash commands in the chat bar: a menu on `/`, `/refresh`, `/connect`, `/disconnect`, `/send`, `/copy`, `/undo`, `/add`, `/today`, `/yesterday`, `/date`, `/setup`, `/help`; never sent to the AI
 - [ ] An `ignore` project rule (from the review of the personal-project case)
 - [x] ERP in Setup: sign in by address, who you are, task mappings (forget one), sign out
 - [x] GitHub: issues opened, comments on issues and PRs, reading time before a review, trying out a reviewed PR counts as reviewing it, plain review wording on cards

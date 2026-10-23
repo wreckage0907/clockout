@@ -9,7 +9,7 @@ import { changes, mappingFor, type PushPlan, type PushRow } from "../core/push";
 import { addDays, parseDuration } from "../core/time";
 import { removeRowOps, sendRowOps, setRowMinutesOps, timesheetRows } from "../core/timesheet";
 import type { Day, EditOp } from "../core/types";
-import { toTsv } from "../export/formats";
+import { toCsv, toMarkdown, toTsv } from "../export/formats";
 import type { PushResult } from "../push";
 import type { StoredDay } from "../store/json-store";
 import type { RemoteTask } from "../targets/types";
@@ -25,6 +25,7 @@ import {
   longDate,
   mix,
   Pill,
+  SlashMenu,
   Spinner,
   Toast,
   useDraft,
@@ -34,6 +35,15 @@ import type { Choice } from "./questions";
 import { short } from "./questions";
 import { SendPanel, TaskPicker } from "./Send";
 import { Setup, type SetupActions } from "./Setup";
+import {
+  type CopyFormat,
+  matching,
+  parseSlash,
+  type SetupSection,
+  type Slash,
+  type SlashCommand,
+  slashText,
+} from "./slash";
 import { hm, projectColor, T } from "./theme";
 
 export interface AppActions {
@@ -125,6 +135,7 @@ export function App({
   const [date, setDate] = useState(initialDate);
   const [view, setView] = useState<"home" | "day">("home");
   const [setup, setSetup] = useState(false);
+  const [setupAt, setSetupAt] = useState<SetupSection>("sources");
   const [configChanged, setConfigChanged] = useState(false);
   const [reload, setReload] = useState(0);
   const [stored, setStored] = useState<StoredDay | null>(null);
@@ -146,6 +157,16 @@ export function App({
   const pill = useDraft(!setup && editing !== null);
   const offset = useRef(0);
   const refreshNext = useRef(false);
+  const [menuSel, setMenuSel] = useState(0);
+  // A "/" in the chat bar opens the command menu; it starts on the first match as you type.
+  const slashing =
+    slashText(draft.value) !== null && !overlay && !busy && !proposal && !sending && !editing;
+  const commands = slashing ? matching(draft.value) : [];
+  const menuAt = Math.min(menuSel, Math.max(0, commands.length - 1));
+  useEffect(() => {
+    void draft.value;
+    setMenuSel(0);
+  }, [draft.value]);
 
   useEffect(() => {
     void reload;
@@ -245,14 +266,18 @@ export function App({
       showToast("↶ Undone");
     } else showToast("Nothing to undo");
   };
-  const copy = async () => {
+  const copy = async (format: CopyFormat = "tsv") => {
     if (!day) return;
     if (asks) return showToast(`Answer the ${asks} meeting${asks === 1 ? "" : "s"} first`);
     const rows = timesheetRows(day, config);
     if (rows.length === 0) return showToast("Nothing to copy yet");
+    const as = { tsv: toTsv, md: toMarkdown, csv: toCsv }[format];
+    const kind = { tsv: "", md: " as Markdown", csv: " as CSV" }[format];
     try {
-      await actions.copy(toTsv(rows));
-      showToast(`✓ Copied ${rows.length} row${rows.length === 1 ? "" : "s"} · ${hm(minutes)}`);
+      await actions.copy(as(rows));
+      showToast(
+        `✓ Copied ${rows.length} row${rows.length === 1 ? "" : "s"}${kind} · ${hm(minutes)}`,
+      );
     } catch {
       showToast("Couldn't reach the clipboard. Use `clockout export` instead.");
     }
@@ -427,11 +452,58 @@ export function App({
     if (c && m !== null) setMinutes(c, m);
   };
 
+  const openSetup = (section: SetupSection = "sources") => {
+    setSetupAt(section);
+    setSetup(true);
+  };
+  /** A slash command: what a key or button does, or a sign-in, without asking the AI. */
+  const runSlash = (s: Slash, text: string) => {
+    if (s.name === "help") return draft.setValue("/");
+    if (s.name === "date") return goTo(s.date);
+    if (s.name === "setup") return openSetup(s.section);
+    if (s.name === "connect") {
+      const op: SettingOp = { op: "connect", service: s.service, ...(s.url ? { url: s.url } : {}) };
+      return void configure(
+        [op],
+        s.service === "erp" ? "Signed in to your ERP" : "Signed in to Google Calendar",
+      );
+    }
+    setView("day");
+    if (s.name === "refresh") return askRebuild();
+    if (s.name === "undo") return void undo();
+    if (s.name === "copy") return void copy(s.format);
+    if (s.name === "add") return day ? setOverlay("add") : undefined;
+    if (s.name === "send") {
+      if (!erp) return showToast("Sign in to your ERP first: /connect erp <address>");
+      return void startSend();
+    }
+    const settings: SettingOp[] = [{ op: "disconnect", service: s.service }];
+    setProposal({
+      text,
+      ops: [],
+      settings,
+      lines: describeSettings(settings),
+      reply: s.service === "erp" ? "Sign out of your ERP" : "Sign out of Google Calendar",
+    });
+  };
+  /** Picking a command from the menu: runs it, or fills it in when it needs more words. */
+  const pickCommand = (c: SlashCommand) => {
+    if (c.needsArgs) return draft.setValue(`/${c.name} `);
+    void send(`/${c.name}`);
+  };
+
   /**
-   * Typed or dictated words: a length for the selected card, or for the AI a correction to the
-   * day or a change to settings ("connect my ERP", "leave out my personal projects").
+   * Typed or dictated words: a slash command, a length for the selected card, or for the AI a
+   * correction to the day or a change to settings ("connect my ERP", "leave out my personal
+   * projects").
    */
   const send = async (text: string) => {
+    const slash = parseSlash(text, today);
+    if (slash) {
+      if ("error" in slash) return showToast(slash.error);
+      draft.setValue("");
+      return runSlash(slash.ok, text);
+    }
     if (!day) return;
     draft.setValue("");
     const typed = parseDuration(text);
@@ -476,7 +548,7 @@ export function App({
   useInput(
     (ch, key) => {
       if (overlay || busy) return; // an open picker or dialog owns the keys, ctrl+p included
-      if (key.ctrl && ch === "p") return setSetup(true);
+      if (key.ctrl && ch === "p") return openSetup();
       if (editing) {
         if (key.escape) return setEditing(null);
         if (key.return) return commitEdit();
@@ -493,6 +565,21 @@ export function App({
         if (key.escape) return setSending(null);
         return;
       }
+      if (slashing) {
+        if (key.upArrow || key.downArrow) {
+          const n = commands.length;
+          if (n) setMenuSel((menuAt + (key.upArrow ? -1 : 1) + n) % n);
+          return;
+        }
+        const c = commands[menuAt];
+        const words = /\s/.test(draft.value.trim());
+        if (key.tab) {
+          if (c && !words) draft.setValue(`/${c.name}${c.args ? " " : ""}`);
+          return;
+        }
+        if (key.return && c && !words) return pickCommand(c);
+        if (key.return) return void send(draft.value.trim());
+      }
       if (key.ctrl && ch === "s") return void startSend();
       if (key.ctrl && ch === "y") return void copy();
       if (key.ctrl && ch === "z") return void undo();
@@ -501,8 +588,9 @@ export function App({
       if (view === "home") {
         if (key.escape) return draft.setValue("");
         if (key.return) {
-          setView("day");
           const text = draft.value.trim();
+          if (slashText(text) !== null) return void send(text);
+          setView("day");
           if (text) void send(text);
           return;
         }
@@ -555,9 +643,10 @@ export function App({
   const dropDown = view === "home" && height - homeTop - HOME >= PICKER;
   const screen = { width, height };
 
+  const barW = view === "home" ? box : Math.min(width - 4, 104);
   const bar = (
     <ChatBar
-      width={view === "home" ? box : Math.min(width - 4, 104)}
+      width={barW}
       value={draft.value}
       busy={busy}
       placeholder={
@@ -578,7 +667,7 @@ export function App({
           {view === "day" && erp ? (
             <Button label="Send to ERP" tone="quiet" onClick={() => void startSend()} />
           ) : null}
-          <Button label="Setup" tone="quiet" onClick={() => setSetup(true)} />
+          <Button label="Setup" tone="quiet" onClick={() => openSetup()} />
         </>
       }
     />
@@ -599,6 +688,20 @@ export function App({
         onClose={() => setOverlay(null)}
       />
     ) : null;
+  const menuH = Math.max(1, commands.length) + 3;
+  const menuDown = view === "home" && height - homeTop - HOME >= menuH;
+  const menu = slashing ? (
+    <SlashMenu
+      commands={commands}
+      sel={menuAt}
+      typed={draft.value.trim()}
+      width={Math.min(barW - 2, 80)}
+      left={1}
+      top={menuDown ? 5 : undefined}
+      bottom={menuDown ? undefined : 5}
+      onPick={pickCommand}
+    />
+  ) : null;
   const dialogs = (
     <>
       {overlay === "add" && day ? (
@@ -640,6 +743,7 @@ export function App({
         <Setup
           actions={actions.setup}
           screen={screen}
+          start={setupAt}
           onConfig={(c) => {
             setConfig(c);
             setConfigChanged(true);
@@ -700,6 +804,7 @@ export function App({
         <Box flexDirection="column">
           {bar}
           {picker}
+          {menu}
         </Box>
         {dialogs}
         {toast ? <Toast text={toast} bottom={2} /> : null}
@@ -839,6 +944,7 @@ export function App({
       <Box flexDirection="column" marginBottom={1}>
         {bar}
         {picker}
+        {menu}
       </Box>
       {dialogs}
       {toast ? <Toast text={toast} bottom={7} /> : null}

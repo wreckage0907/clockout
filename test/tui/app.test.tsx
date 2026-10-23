@@ -325,6 +325,146 @@ describe("setup from the chat bar", () => {
   });
 });
 
+describe("slash commands", () => {
+  const UP = "\u001b[A";
+  const TAB = "\t";
+
+  it("/ opens a menu of every command, narrowed as you type, and esc clears it", async () => {
+    const { ui } = await openDay();
+    ui.stdin.write("/");
+    await until(ui.lastFrame, "tab fills in");
+    let frame = ui.lastFrame() ?? "";
+    for (const c of ["/refresh", "/connect", "/send", "/copy", "/setup", "/help"])
+      expect(frame).toContain(c);
+    ui.stdin.write("co");
+    await tick();
+    frame = ui.lastFrame() ?? "";
+    expect(frame).toContain("/connect");
+    expect(frame).toContain("/copy");
+    expect(frame).not.toContain("/refresh");
+    ui.stdin.write("\u001b");
+    await tick();
+    expect(ui.lastFrame()).not.toContain("tab fills in");
+  });
+
+  it("↑↓ choose in the menu instead of moving between cards, and enter runs the choice", async () => {
+    const { ui, calls } = await openDay();
+    ui.stdin.write("/co");
+    await tick();
+    ui.stdin.write(DOWN); // connect → copy
+    await tick();
+    ui.stdin.write(UP);
+    await tick();
+    ui.stdin.write(DOWN);
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Answer the 3 meetings first");
+    expect(ui.lastFrame()).toContain("Answer the 3 meetings first");
+    expect(calls.copied).toEqual([]);
+  });
+
+  it("tab fills in a command that needs more words, then enter runs it", async () => {
+    const { ui, calls } = await openDay();
+    ui.stdin.write("/conn");
+    await tick();
+    ui.stdin.write(TAB);
+    await tick();
+    expect(ui.lastFrame()).toContain("/connect ");
+    ui.stdin.write("erp erp.example.com");
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "✓ Signed in to your ERP");
+    expect(ui.lastFrame()).toContain("✓ Signed in to your ERP");
+    expect(calls.configured).toEqual([[{ op: "connect", service: "erp", url: "erp.example.com" }]]);
+  });
+
+  it("never sends a slash to the AI: an unknown command stays in the bar", async () => {
+    const said: string[] = [];
+    const { ui } = await openDay({
+      parse: async (t) => {
+        said.push(t);
+        return { ops: [], reply: "" };
+      },
+    });
+    ui.stdin.write(PASTE("/frobnicate the day"));
+    await tick();
+    expect(ui.lastFrame()).toContain("No command /frobnicate");
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Type / to see them");
+    expect(ui.lastFrame()).toContain("Type / to see them");
+    expect(said).toEqual([]);
+    expect(ui.lastFrame()).toContain("/frobnicate the day");
+  });
+
+  it("/refresh and a dictated “slash refresh” draft the day again", async () => {
+    const { ui, calls } = await openDay();
+    ui.stdin.write(PASTE("Slash refresh."));
+    await tick();
+    ui.stdin.write("\r");
+    for (let i = 0; i < 50 && calls.refreshes === 0; i++) await tick();
+    expect(calls.refreshes).toBe(1);
+  });
+
+  it("/date moves to another day and /today comes back, from home too", async () => {
+    const { ui, calls } = open();
+    await until(ui.lastFrame, "6h of 8h");
+    ui.stdin.write(PASTE("/date monday"));
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Mon, Oct 12");
+    expect(ui.lastFrame()).toContain("Mon, Oct 12");
+    expect(ui.lastFrame()).toContain("Tell me about your day"); // still home
+    ui.stdin.write(PASTE("/today"));
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Today · Fri, Oct 16");
+    expect(ui.lastFrame()).toContain("Today · Fri, Oct 16");
+    expect(calls.loads).toEqual([FIXTURE_DATE, "2026-10-12", FIXTURE_DATE]);
+  });
+
+  it("/setup opens setup at the section you name", async () => {
+    const { ui } = open();
+    await until(ui.lastFrame, "6h of 8h");
+    ui.stdin.write(PASTE("/setup day"));
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "How the day is counted");
+    expect(ui.lastFrame()).toContain("How the day is counted");
+  });
+
+  it("/send without an ERP says how to sign in", async () => {
+    const { ui } = await openDay();
+    ui.stdin.write(PASTE("/send"));
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "/connect erp <address>");
+    expect(ui.lastFrame()).toContain("/connect erp <address>");
+  });
+
+  it("/disconnect asks first, like saying it", async () => {
+    const { ui, calls } = await openDay();
+    ui.stdin.write(PASTE("/disconnect google"));
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Apply");
+    expect(ui.lastFrame()).toContain("Sign out of Google Calendar");
+    expect(calls.configured).toEqual([]);
+    ui.stdin.write("\r");
+    for (let i = 0; i < 50 && calls.configured.length === 0; i++) await tick();
+    expect(calls.configured).toEqual([[{ op: "disconnect", service: "google" }]]);
+  });
+
+  it("/help shows the menu", async () => {
+    const { ui } = await openDay();
+    ui.stdin.write(PASTE("/help"));
+    await tick();
+    ui.stdin.write("\r");
+    await tick();
+    expect(ui.lastFrame()).toContain("/refresh");
+    expect(ui.lastFrame()).toContain("tab fills in");
+  });
+});
+
 describe("setup", () => {
   const RIGHT = "\u001b[C";
   const LEFT = "\u001b[D";

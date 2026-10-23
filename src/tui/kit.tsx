@@ -3,6 +3,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { addDays, parseDuration } from "../core/time";
 import type { Segment } from "./cards";
 import { Clickable, Overlay } from "./clickable";
+import { COMMANDS, type SlashCommand } from "./slash";
 import { hm, T } from "./theme";
 
 // ── Colour ──────────────────────────────────────────────────────────────────
@@ -408,6 +409,85 @@ export function ChatBar({
         <Box gap={1}>{actions}</Box>
       </Box>
     </Box>
+  );
+}
+
+/**
+ * The commands a `/` in the chat bar could be, under or over the bar like the date picker. It
+ * never takes the keys: the chat bar keeps typing, and the app moves `sel` with ↑↓.
+ */
+export function SlashMenu({
+  commands,
+  sel,
+  typed,
+  width,
+  left,
+  top,
+  bottom,
+  onPick,
+}: {
+  commands: SlashCommand[];
+  sel: number;
+  /** What's typed, for "No command /…" when nothing matches. */
+  typed: string;
+  width: number;
+  left: number;
+  top?: number;
+  bottom?: number;
+  onPick: (c: SlashCommand) => void;
+}) {
+  const label = (c: SlashCommand) => `/${c.name}${c.args ? ` ${c.args}` : ""}`;
+  const nameW = Math.max(...COMMANDS.map((c) => label(c).length)) + 2;
+  return (
+    <Overlay
+      position="absolute"
+      left={left}
+      top={top}
+      bottom={bottom}
+      width={width}
+      flexDirection="column"
+      backgroundColor={T.panel}
+      borderStyle="round"
+      borderColor={T.border}
+      borderBackgroundColor={T.panel}
+      paddingX={1}
+    >
+      {commands.length === 0 ? (
+        <Text color={T.muted}>No command {typed.split(/\s+/)[0]} · ⌫ to see them all</Text>
+      ) : (
+        commands.map((c, i) => (
+          <Clickable key={c.name} onClick={() => onPick(c)}>
+            {(hover) => (
+              <Box
+                width={width - 4}
+                backgroundColor={i === sel ? T.elementHi : hover ? T.element : undefined}
+                paddingX={1}
+              >
+                <Box width={nameW} flexShrink={0}>
+                  <Text wrap="truncate-end">
+                    <Text color={i === sel ? T.primary : T.text} bold={i === sel}>
+                      /{c.name}
+                    </Text>
+                    {c.args ? <Text color={T.faint}> {c.args}</Text> : null}
+                  </Text>
+                </Box>
+                <Box flexGrow={1} flexShrink={1}>
+                  <Text color={T.muted} wrap="truncate-end">
+                    {c.about}
+                  </Text>
+                </Box>
+                {c.key ? (
+                  <Box flexShrink={0}>
+                    <Text color={T.faint}> {c.key}</Text>
+                  </Box>
+                ) : null}
+              </Box>
+            )}
+          </Clickable>
+        ))
+      )}
+      <Text color={T.faint}>↑↓ choose · tab fills in · enter runs · esc clears</Text>
+    </Overlay>
   );
 }
 

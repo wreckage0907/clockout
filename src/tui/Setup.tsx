@@ -14,6 +14,7 @@ import { type Config, durationMinutes } from "../config/schema";
 import type { ClaudeProject } from "../sources/claude-code/paths";
 import { Clickable } from "./clickable";
 import { Button, Dialog, Spinner, Typed, useDraft } from "./kit";
+import type { SetupSection } from "./slash";
 import { hm, T } from "./theme";
 
 /** What setup shows: the config, plus what's on this machine. */
@@ -45,7 +46,7 @@ export interface SetupActions {
   disconnectErp(): Promise<void>;
 }
 
-type SectionId = "sources" | "day" | "ai" | "projects" | "erp";
+type SectionId = SetupSection;
 
 const SECTIONS: { id: SectionId; label: string }[] = [
   { id: "sources", label: "Sources" },
@@ -114,11 +115,14 @@ const LABEL = 16;
 export function Setup({
   actions,
   screen,
+  start = "sources",
   onConfig,
   onClose,
 }: {
   actions: SetupActions;
   screen: { width: number; height: number };
+  /** The section it opens on. */
+  start?: SectionId;
   /** Called after each save with the new config. */
   onConfig: (config: Config) => void;
   onClose: () => void;
@@ -126,7 +130,7 @@ export function Setup({
   const [state, setState] = useState<SetupState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [section, setSection] = useState<SectionId>("sources");
+  const [section, setSection] = useState<SectionId>(start);
   const [focus, setFocus] = useState<"nav" | "rows">("nav");
   const [sel, setSel] = useState(0);
   const [page, setPage] = useState<"claude" | null>(null);

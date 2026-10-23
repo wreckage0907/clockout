@@ -53,6 +53,7 @@ node dist/cli.js               # review today
 | Key | Does |
 |---|---|
 | type or dictate, then **Enter** | Send a correction in plain words; review the proposed change, then **Enter** applies, **Esc** goes back to your words |
+| **/** | Commands, without the AI: `/refresh`, `/connect erp <address>` or `google`, `/disconnect`, `/send`, `/copy [md\|csv]`, `/undo`, `/add`, `/today`, `/yesterday`, `/date monday` (or `-3`, `2026-10-16`), `/setup [section]`, `/help`. The menu narrows as you type; **↑ ↓** choose, **Tab** fills in, **Enter** runs. Saying "slash refresh" works too |
 | **↑ ↓** | Select a card |
 | **Enter** on a card | Type its length: `1h 45`, `1:45`, `1.75`, `45m` (or type it into the chat bar) |
 | **-** / **+** | Shorten or lengthen the selected card by your rounding step |
