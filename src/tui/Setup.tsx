@@ -102,8 +102,12 @@ interface Row {
 }
 
 const canChange = (r: Row) => !r.dead && !!(r.press || r.step || r.options || r.opens || r.remove);
+/** A page opens unless its switch is off (Claude Code's projects with Claude Code off). */
+const openable = (r: Row) => !r.dead && !!r.opens && r.on !== false;
 
 const ROUNDING = [5, 15, 30];
+/** The longest description prompt config.toml takes. */
+const PROMPT_MAX = 2000;
 const IDLE = [10, 20, 30, 45];
 const NAV = 15;
 const LABEL = 16;
@@ -135,9 +139,10 @@ export function Setup({
   const [section, setSection] = useState<SectionId>(start);
   const [focus, setFocus] = useState<"nav" | "rows">("nav");
   const [sel, setSel] = useState(0);
-  const [page, setPage] = useState<"claude" | null>(null);
+  const [page, setPage] = useState<"claude" | "prompt" | null>(null);
   const [pick, setPick] = useState(0);
   const search = useDraft(page === "claude");
+  const prompt = useDraft(page === "prompt");
   const typingSite =
     section === "erp" && focus === "rows" && !state?.erp.connected && busy !== "erp";
   const site = useDraft(typingSite);
@@ -181,6 +186,12 @@ export function Setup({
     if (busy === "erp") return; // signing in: the browser has it
     if (key.ctrl && ch === "p") return onClose();
     if (page === "claude") return projectKeys(ch, key);
+    if (page === "prompt") {
+      if (key.escape) return setPage(null);
+      if (key.return) return void savePrompt();
+      prompt.edit(ch, key);
+      return;
+    }
     if (focus === "nav") {
       if (key.escape) return onClose();
       if (key.upArrow || key.downArrow) {
@@ -213,12 +224,12 @@ export function Setup({
       const d = key.leftArrow ? -1 : 1;
       if (row.step) return row.step(d);
       if (row.options) return chooseNext(row.options, d);
-      if (key.rightArrow && row.opens && row.on) return row.opens();
+      if (key.rightArrow && openable(row)) return row.opens?.();
       if (key.leftArrow) return setFocus("nav");
       return;
     }
     if (key.return) {
-      if (row.opens && row.on) return row.opens();
+      if (openable(row)) return row.opens?.();
       if (row.options) return chooseNext(row.options, 1);
       return row.press?.();
     }
@@ -256,6 +267,20 @@ export function Setup({
     if (search.edit(ch, key)) setPick(0);
   }
 
+  function openPrompt() {
+    prompt.setValue(config?.descriptions.instructions ?? "");
+    setPage("prompt");
+  }
+
+  async function savePrompt() {
+    if (!config) return;
+    const text = prompt.value.trim();
+    if (text.length > PROMPT_MAX)
+      return setError(`The prompt is ${text.length} characters; keep it to ${PROMPT_MAX}.`);
+    await save(withDescriptions(config, { instructions: text }));
+    setPage(null);
+  }
+
   function toggleProject(p: ClaudeProject) {
     if (!config) return;
     const isOn = !excluded.includes(p.folder);
@@ -286,13 +311,15 @@ export function Setup({
   const hint =
     page === "claude"
       ? "type to search · ↑↓ move · space tick · esc back"
-      : focus === "nav"
-        ? "↑↓ section · → or enter to change it · esc close"
-        : row?.input
-          ? "type the address · enter signs in · esc back"
-          : row?.remove
-            ? "↑↓ move · ⌫ forget · esc back"
-            : "↑↓ move · ←→ change · enter or space pick · esc back";
+      : page === "prompt"
+        ? "type or dictate · enter saves · ctrl+u clears · esc back without saving"
+        : focus === "nav"
+          ? "↑↓ section · → or enter to change it · esc close"
+          : row?.input
+            ? "type the address · enter signs in · esc back"
+            : row?.remove
+              ? "↑↓ move · ⌫ forget · esc back"
+              : "↑↓ move · ←→ change · enter or space pick · esc back";
 
   return (
     <Dialog title="Setup" width={width} screen={screen} onClose={onClose}>
@@ -322,7 +349,14 @@ export function Setup({
           borderColor={T.border}
           borderBackgroundColor={T.panel}
         >
-          {page === "claude" ? (
+          {page === "prompt" ? (
+            <PromptPage
+              width={paneWidth}
+              value={prompt.value}
+              onSave={() => void savePrompt()}
+              onBack={() => setPage(null)}
+            />
+          ) : page === "claude" ? (
             <ClaudeProjects
               width={paneWidth}
               projects={projects}
@@ -375,7 +409,7 @@ export function Setup({
             {hint}
           </Text>
         </Box>
-        <Text color={T.faint}>saved as you go</Text>
+        {page === "prompt" ? null : <Text color={T.faint}>saved as you go</Text>}
       </Box>
     </Dialog>
   );
@@ -623,10 +657,12 @@ export function Setup({
         ],
       },
       {
-        id: "d-instructions",
-        label: "Your words",
-        value: c.descriptions.instructions ?? "none",
-        note: 'say it, e.g. "put the ticket key first"',
+        id: "d-prompt",
+        label: "Prompt",
+        dead: !on,
+        value: c.descriptions.instructions ? clip(c.descriptions.instructions, 36) : "none",
+        note: c.descriptions.instructions ? "" : "describe how they should read",
+        opens: openPrompt,
       },
       {
         id: "d-examples",
@@ -843,7 +879,7 @@ function RowView({
   const onLine = () => {
     onSelect();
     if (!live) return;
-    if (r.opens && r.on) return r.opens();
+    if (openable(r)) return r.opens?.();
     if (!r.step && !r.options && !r.trail) r.press?.();
   };
   return (
@@ -925,10 +961,72 @@ function RowView({
               {(h) => <Text color={h ? T.danger : selected ? T.muted : T.faint}>{r.trail}</Text>}
             </Clickable>
           ) : null}
-          {r.opens && r.on ? <Text color={selected || hover ? T.text : T.muted}>›</Text> : null}
+          {openable(r) ? <Text color={selected || hover ? T.text : T.muted}>›</Text> : null}
         </Box>
       )}
     </Clickable>
+  );
+}
+
+/** At most `n` characters, with an ellipsis when cut. */
+function clip(text: string, n: number): string {
+  return text.length <= n ? text : `${text.slice(0, n - 1).trimEnd()}…`;
+}
+
+/**
+ * Your own prompt for the descriptions, in your words: what they should say and how they
+ * should read. Clockout's own rules (only facts from the evidence, plain text) still come first.
+ */
+function PromptPage({
+  width,
+  value,
+  onSave,
+  onBack,
+}: {
+  width: number;
+  value: string;
+  onSave: () => void;
+  onBack: () => void;
+}) {
+  const over = value.trim().length > PROMPT_MAX;
+  // Six lines of it; a longer prompt shows its end, where you're typing.
+  const room = Math.max(40, (width - 2) * 6);
+  const shown = value.length > room ? `…${value.slice(-room + 1)}` : value;
+  return (
+    <Box flexDirection="column" width={width}>
+      <Box marginBottom={1} gap={1}>
+        <Clickable onClick={onBack}>
+          {(h) => <Text color={h ? T.text : T.muted}>‹ AI helper</Text>}
+        </Clickable>
+        <Text color={T.faint}>/</Text>
+        <Text color={T.text} bold>
+          Description prompt
+        </Text>
+        <Box flexGrow={1} />
+        <Text color={over ? T.danger : T.faint}>
+          {value.trim().length} / {PROMPT_MAX}
+        </Text>
+      </Box>
+      <Box marginBottom={1} width={width}>
+        <Text color={T.muted} wrap="wrap">
+          Describe how each row's description should read: who reads your timesheet, what to lead
+          with, words to use or avoid. It goes to the AI with the titles and PRs; it still only
+          states facts from them.
+        </Text>
+      </Box>
+      <Box backgroundColor={T.element} paddingX={1} paddingY={1} width={width} minHeight={5}>
+        <Text wrap="wrap">
+          <Typed
+            value={shown}
+            placeholder="e.g. Lead with the ticket key from the branch. Write for a client who isn't technical: what changed for them, no jargon. Past tense."
+          />
+        </Text>
+      </Box>
+      <Box marginTop={1} gap={1}>
+        <Button label="Save ↵" tone="primary" onClick={onSave} />
+        <Button label="Back · esc" onClick={onBack} />
+      </Box>
+    </Box>
   );
 }
 

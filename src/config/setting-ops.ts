@@ -82,7 +82,7 @@ const descriptions = z
       .describe("short: 3–8 words; medium: one sentence; long: one or two sentences"),
     instructions: z
       .string()
-      .max(500)
+      .max(2000)
       .optional()
       .describe('Their own instructions, in their words; "" removes them'),
     examples: z

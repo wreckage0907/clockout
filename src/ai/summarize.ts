@@ -20,7 +20,7 @@ const DEFAULT_STYLE: DescriptionStyle = { format: "imperative", length: "short" 
 function systemFor(style: DescriptionStyle): string {
   const own = [
     style.instructions
-      ? `\nTheir own instructions, followed unless they break the rules above:\n${style.instructions}`
+      ? `\nTheir own prompt for how descriptions should read, followed unless it breaks the rules above:\n${style.instructions}`
       : "",
     style.examples?.length
       ? `\nDescriptions they wrote before. Match their style, not their content:\n${style.examples.map((e) => `- ${e}`).join("\n")}`

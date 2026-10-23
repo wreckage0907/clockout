@@ -94,6 +94,7 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] ERP in Setup: sign in by address, who you are, task mappings (forget one), sign out
 - [x] GitHub: issues opened, comments on issues and PRs, reading time before a review, trying out a reviewed PR counts as reviewing it, plain review wording on cards
 - [x] Description style settings (format, length, instructions, examples): `[descriptions]`, Setup's AI helper section, or said in the chat bar
+- [x] Description prompt: a page in Setup's AI helper section to type or dictate how descriptions should read (up to 2000 characters)
 
 ## Setup by chat
 

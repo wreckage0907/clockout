@@ -197,8 +197,8 @@ export const configSchema = z.object({
       format: z.enum(["imperative", "past", "continuous"]).default("imperative"),
       /** short: 3–8 words; medium: one sentence; long: one or two sentences. */
       length: z.enum(["short", "medium", "long"]).default("short"),
-      /** Your own words for the AI, e.g. "put the ticket key first". */
-      instructions: z.string().min(1).max(500).optional(),
+      /** Your own prompt for the AI: how descriptions should read, e.g. "put the ticket key first". */
+      instructions: z.string().min(1).max(2000).optional(),
       /** Descriptions you've written before; the AI matches their style. */
       examples: z.array(z.string().min(1).max(200)).max(5).optional(),
     })

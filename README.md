@@ -62,7 +62,7 @@ node dist/cli.js               # review today
 | **Ctrl+Y** (or **Copy sheet**) | Copy the timesheet, tab-separated, once no meeting is waiting |
 | **Ctrl+S** (or **Send to ERP**) | Send the day to your ERP: shows what would be added, updated or removed first; **Enter** sends |
 | **Ctrl+Z** | Undo |
-| **Ctrl+P** (or **Setup**) | Setup, in sections: **Sources** (Claude Code and which of its projects, Pi, Codex, opencode, Antigravity, Google Calendar, GitHub), **Day** (daily target, working hours, rounding, idle cutoff), **AI helper**, **Projects** (task names and project rules), **ERP** (sign in, which task each project goes to). Arrow keys or the mouse |
+| **Ctrl+P** (or **Setup**) | Setup, in sections: **Sources** (Claude Code and which of its projects, Pi, Codex, opencode, Antigravity, Google Calendar, GitHub), **Day** (daily target, working hours, rounding, idle cutoff), **AI helper** (on or off; how descriptions read: Fix / Fixed / Fixing, length, and a **Prompt** page to type or dictate your own), **Projects** (task names and project rules), **ERP** (sign in, which task each project goes to). Arrow keys or the mouse |
 | click the date | Pick another day; **PgUp** / **PgDn** step a day |
 | **Esc** | Back home · **Ctrl+C** quits |
 
@@ -129,7 +129,7 @@ model = "haiku"
 [descriptions]                       # how the AI writes each row (without it, titles are used)
 format = "imperative"                # imperative "Fix …" | past "Fixed …" | continuous "Fixing …"
 length = "short"                     # short (3–8 words) | medium (one sentence) | long (two sentences)
-# instructions = "Put the ticket key first"
+# instructions = "Lead with the ticket key. Write for a client, no jargon."   # your prompt, ≤ 2000 characters
 # examples = ["ABC-12 Fixed the login redirect loop"]
 
 [[sources]]

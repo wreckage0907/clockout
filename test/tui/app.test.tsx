@@ -545,6 +545,58 @@ describe("setup", () => {
     expect(lastSaved(calls)?.descriptions.length).toBe("medium");
   });
 
+  it("writes a description prompt on its own page: enter saves, esc leaves it as it was", async () => {
+    const { ui, calls } = await openSetup();
+    await down(ui, 2); // AI helper
+    await until(ui.lastFrame, "describe how they should read");
+    ui.stdin.write(RIGHT); // Helper
+    await tick();
+    await down(ui, 3); // Starts with, Length, Prompt
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Description prompt");
+    ui.stdin.write(PASTE("Lead with the ticket key.\nWrite for a client, no jargon."));
+    await tick();
+    expect(ui.lastFrame()).toContain("56 / 2000");
+    ui.stdin.write("\r");
+    for (let i = 0; i < 50 && !lastSaved(calls)?.descriptions.instructions; i++) await tick();
+    expect(lastSaved(calls)?.descriptions.instructions).toBe(
+      "Lead with the ticket key. Write for a client, no jargon.",
+    );
+    for (let i = 0; i < 50 && (ui.lastFrame() ?? "").includes("Description prompt"); i++)
+      await tick();
+    expect(ui.lastFrame()).not.toContain("Description prompt"); // back on the section
+    expect(ui.lastFrame()).toContain("Lead with the ticket key. Write for…");
+
+    ui.stdin.write("\r"); // open it again: it holds what was saved
+    await until(ui.lastFrame, "Description prompt");
+    ui.stdin.write("\u0015"); // ctrl+u clears
+    ui.stdin.write(PASTE("something else"));
+    await tick();
+    ui.stdin.write(ESC);
+    await tick();
+    expect(ui.lastFrame()).not.toContain("Description prompt");
+    expect(lastSaved(calls)?.descriptions.instructions).toBe(
+      "Lead with the ticket key. Write for a client, no jargon.",
+    );
+  });
+
+  it("won't save a description prompt longer than config.toml takes", async () => {
+    const { ui, calls } = await openSetup();
+    await down(ui, 2);
+    await until(ui.lastFrame, "describe how they should read");
+    ui.stdin.write(RIGHT);
+    await tick();
+    await down(ui, 3);
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Description prompt");
+    ui.stdin.write(PASTE("word ".repeat(450)));
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "keep it to 2000");
+    expect(ui.lastFrame()).toContain("keep it to 2000");
+    expect(calls.saved).toEqual([]);
+  });
+
   it("shows what's set by saying it: task names and project rules", async () => {
     const { ui } = await openSetup();
     await down(ui, 3); // Projects
