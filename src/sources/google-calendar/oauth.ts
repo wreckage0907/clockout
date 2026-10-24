@@ -9,6 +9,9 @@ export const GOOGLE_SCOPE = "https://www.googleapis.com/auth/calendar.events.rea
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
+/** Setup and troubleshooting, linked from error messages (docs/ isn't in the npm package). */
+export const GOOGLE_DOCS =
+  "https://github.com/wreckage0907/clockout/blob/main/docs/google-setup.md";
 
 /**
  * Clockout's own OAuth client, for "Desktop app" sign-in. A desktop client's secret can't be
@@ -32,7 +35,7 @@ export function googleClient(
     env.CLOCKOUT_GOOGLE_CLIENT_SECRET || config?.google?.client_secret || BUILT_IN.client_secret;
   if (!client_id || !client_secret) {
     throw new Error(
-      "No Google sign-in client is set up yet. Follow docs/google-setup.md (5 minutes, once), then run `clockout connect google` again.",
+      `No Google sign-in client is set up yet. Follow ${GOOGLE_DOCS} (5 minutes, once), then run \`clockout connect google\` again.`,
     );
   }
   return { client_id, client_secret };
@@ -47,6 +50,17 @@ const tokenResponse = z.object({
   scope: z.string().optional(),
   id_token: z.string().optional(),
 });
+
+/** What Google's token endpoint says when it refuses. */
+const tokenError = z.object({
+  error: z.string(),
+  error_description: z.string().optional(),
+});
+
+const unreachable = (cause: unknown) =>
+  new Error("Google Calendar: couldn't reach Google. Check your connection and try again.", {
+    cause,
+  });
 
 export function authUrl(
   client: GoogleClient,
@@ -95,7 +109,7 @@ export async function connectGoogle(
       open,
       service: "Google Calendar",
       describeError: googleError,
-      timedOut: "Sign-in timed out. Run `clockout connect google` again.",
+      timedOut: `Google Calendar: sign-in timed out. If Google showed an error page ("Access blocked", "redirect_uri_mismatch"), that's the cause: see Troubleshooting in ${GOOGLE_DOCS}. Otherwise run \`clockout connect google\` again.`,
       ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}),
     });
 
@@ -110,11 +124,24 @@ export async function connectGoogle(
         grant_type: "authorization_code",
         code_verifier: verifier,
       }),
+    }).catch((err: unknown) => {
+      throw unreachable(err);
     });
-    const body = tokenResponse.safeParse(await res.json().catch(() => null));
-    if (!res.ok || !body.success || !body.data.refresh_token) {
+    const json: unknown = await res.json().catch(() => null);
+    if (!res.ok) throw exchangeError(res.status, json);
+    const body = tokenResponse.safeParse(json);
+    if (!body.success) {
       throw new Error(
-        "Google didn't return a long-lived token. Run `clockout connect google` again.",
+        "Google Calendar: Google's answer to the sign-in wasn't readable. Run `clockout connect google` again.",
+        {
+          cause: new Error(body.error.message),
+        },
+      );
+    }
+    if (!body.data.refresh_token) {
+      throw new Error(
+        "Google Calendar: Google didn't return a lasting sign-in. Remove Clockout at https://myaccount.google.com/permissions, then run `clockout connect google` again.",
+        { cause: new Error("token response without refresh_token") },
       );
     }
     return { refreshToken: body.data.refresh_token, scope: body.data.scope ?? GOOGLE_SCOPE };
@@ -123,12 +150,63 @@ export async function connectGoogle(
   }
 }
 
-function googleError(error: string | null): string {
-  if (error === "access_denied") return "Access wasn't allowed, so nothing was connected.";
-  if (error === "admin_policy_enforced") {
-    return "Your Google Workspace admin blocks this app. See docs/google-setup.md for what to ask them.";
+/** Google's `error` (and description) from a refused token request, without anything secret. */
+function refusal(status: number, json: unknown): { error: string; cause: Error } {
+  const e = tokenError.safeParse(json);
+  const error = e.success ? e.data.error : "";
+  const desc = e.success && e.data.error_description ? `: ${e.data.error_description}` : "";
+  return { error, cause: new Error(`HTTP ${status} ${error || "(no error code)"}${desc}`) };
+}
+
+const WRONG_CLIENT = `Check client_id and client_secret under [google] in config.toml (or CLOCKOUT_GOOGLE_CLIENT_ID / CLOCKOUT_GOOGLE_CLIENT_SECRET): they must come from a "Desktop app" client. See ${GOOGLE_DOCS}`;
+
+/** Trading the sign-in code for a refresh token failed. */
+export function exchangeError(status: number, json: unknown): Error {
+  const { error, cause } = refusal(status, json);
+  const fail = (msg: string) => new Error(`Google Calendar: ${msg}`, { cause });
+  switch (error) {
+    case "invalid_client":
+    case "unauthorized_client":
+      return fail(`Google didn't accept Clockout's sign-in client (${error}). ${WRONG_CLIENT}`);
+    case "redirect_uri_mismatch":
+      return fail(`the sign-in client isn't a "Desktop app" client (${error}). ${WRONG_CLIENT}`);
+    case "invalid_grant":
+      return fail(
+        "the sign-in code expired or was already used. Run `clockout connect google` again.",
+      );
+    default:
+      return fail(
+        `Google refused the sign-in (${error || `HTTP ${status}`}). Run \`clockout connect google\` again.`,
+      );
   }
-  return `Google sign-in failed${error ? ` (${error})` : ""}.`;
+}
+
+export function googleError(error: string | null): string {
+  const fail = (msg: string) => `Google Calendar: ${msg}`;
+  switch (error) {
+    case "access_denied":
+      return fail(
+        `access wasn't allowed, so nothing was connected. If Google said the app hasn't completed verification, publish it or add your account as a test user (${GOOGLE_DOCS}, step 5).`,
+      );
+    case "admin_policy_enforced":
+      return fail(
+        `your Google Workspace admin blocks this app. See ${GOOGLE_DOCS} for what to ask them.`,
+      );
+    case "org_internal":
+      return fail(
+        `the sign-in client is "Internal" to another organization, so this account can't use it. Sign in with an account from that organization, or set the client's audience to External (${GOOGLE_DOCS}, step 3).`,
+      );
+    case "invalid_client":
+    case "unauthorized_client":
+      return fail(`Google didn't accept Clockout's sign-in client (${error}). ${WRONG_CLIENT}`);
+    case "redirect_uri_mismatch":
+    case "invalid_request":
+      return fail(`Google rejected the sign-in request (${error}). ${WRONG_CLIENT}`);
+    default:
+      return fail(
+        `sign-in failed${error ? ` (${error})` : ""}. Run \`clockout connect google\` again.`,
+      );
+  }
 }
 
 /** A short-lived access token from the stored refresh token. */
@@ -146,21 +224,32 @@ export async function accessToken(
       refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
-  }).catch(() => {
-    throw new Error("Google Calendar: couldn't reach Google.");
+  }).catch((err: unknown) => {
+    throw unreachable(err);
   });
-  const json = (await res.json().catch(() => null)) as { error?: string } | null;
-  if (!res.ok) {
-    if (json?.error === "invalid_grant") {
-      throw new Error(
-        "Google Calendar: the connection was revoked or expired. Run `clockout connect google` again.",
-      );
-    }
-    throw new Error(`Google Calendar: sign-in refresh failed (HTTP ${res.status}).`);
-  }
+  const json: unknown = await res.json().catch(() => null);
+  if (!res.ok) throw refreshError(res.status, json);
   const body = tokenResponse.safeParse(json);
-  if (!body.success) throw new Error("Google Calendar: unexpected token response.");
+  if (!body.success)
+    throw new Error("Google Calendar: Google's token answer wasn't readable. Try again shortly.", {
+      cause: new Error(body.error.message),
+    });
   return body.data.access_token;
+}
+
+/** Refreshing the stored sign-in failed. */
+export function refreshError(status: number, json: unknown): Error {
+  const { error, cause } = refusal(status, json);
+  const fail = (msg: string) => new Error(`Google Calendar: ${msg}`, { cause });
+  if (error === "invalid_grant")
+    return fail(
+      `the sign-in was revoked or expired. Run \`clockout connect google\` again. If this happens every week, your Google app is still in "Testing": publish it (${GOOGLE_DOCS}, step 5).`,
+    );
+  if (error === "invalid_client" || error === "unauthorized_client")
+    return fail(
+      `the sign-in client changed or was deleted since you connected (${error}). Run \`clockout connect google\` again.`,
+    );
+  return fail(`refreshing the sign-in failed (${error || `HTTP ${status}`}). Try again shortly.`);
 }
 
 export async function revoke(refreshToken: string, doFetch: Fetch = fetch): Promise<void> {

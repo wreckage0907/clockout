@@ -130,6 +130,8 @@ describe("github source", async () => {
   });
 
   it("explains an unexpected response", async () => {
-    await expect(collect({ data: { viewer: null } })).rejects.toThrow(/unexpected response/);
+    await expect(collect({ data: { viewer: null } })).rejects.toThrow(
+      /shape Clockout doesn.t know/,
+    );
   });
 });

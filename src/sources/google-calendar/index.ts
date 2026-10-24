@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type GoogleCredentials, loadGoogleCredentials } from "../../config/credentials";
 import type { Activity, Attendance } from "../../core/types";
 import type { Detected, Source } from "../types";
-import { accessToken, type Fetch, googleClient } from "./oauth";
+import { accessToken, type Fetch, GOOGLE_DOCS, googleClient } from "./oauth";
 
 export interface GoogleCalendarConfig {
   type: "google-calendar";
@@ -55,11 +55,14 @@ export function createGoogleCalendarSource(
     async *collect(range, cfg, ctx) {
       const creds = await credentials();
       if (!creds) throw new Error("Google Calendar: not connected. Run `clockout connect google`.");
-      const token = await accessToken(
-        googleClient(ctx.config, ctx.env),
-        creds.refresh_token,
-        doFetch,
-      );
+      const client = googleClient(ctx.config, ctx.env);
+      // A refresh token only works with the client it was issued to.
+      if (creds.client_id !== client.client_id)
+        throw new Error(
+          "Google Calendar: you connected with a different sign-in client than the one set up now. Run `clockout connect google` again.",
+          { cause: new Error("stored client_id differs from the configured client") },
+        );
+      const token = await accessToken(client, creds.refresh_token, doFetch);
       for (const calendarId of cfg.calendars) {
         let pageToken: string | undefined;
         do {
@@ -73,17 +76,15 @@ export function createGoogleCalendarSource(
           });
           const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${q}`;
           const res = await doFetch(url, { headers: { authorization: `Bearer ${token}` } }).catch(
-            () => {
-              throw new Error("Google Calendar: couldn't reach Google.");
+            (err: unknown) => {
+              throw new Error(
+                "Google Calendar: couldn't reach Google. Check your connection and try again.",
+                { cause: err },
+              );
             },
           );
-          if (!res.ok) {
-            throw new Error(
-              res.status === 404
-                ? `Google Calendar: no calendar "${calendarId}" on this account.`
-                : `Google Calendar: request failed (HTTP ${res.status}).`,
-            );
-          }
+          if (!res.ok)
+            throw eventsError(res.status, await res.json().catch(() => null), calendarId);
           const body = page.parse(await res.json());
           for (const raw of body.items) {
             const parsed = event.safeParse(raw);
@@ -100,6 +101,50 @@ export function createGoogleCalendarSource(
 }
 
 export const googleCalendar = createGoogleCalendarSource();
+
+/** Google's JSON error: `error.message`, and reasons in `errors[]` or `details[]`. */
+const apiError = z.object({
+  error: z.object({
+    message: z.string().optional(),
+    status: z.string().optional(),
+    errors: z.array(z.object({ reason: z.string().optional() })).optional(),
+    details: z.array(z.object({ reason: z.string().optional() })).optional(),
+  }),
+});
+
+/** A refused events request, with what to do about it. */
+export function eventsError(status: number, json: unknown, calendarId: string): Error {
+  const parsed = apiError.safeParse(json);
+  const e = parsed.success ? parsed.data.error : undefined;
+  const reasons = new Set(
+    [...(e?.errors ?? []), ...(e?.details ?? [])].flatMap((x) => (x.reason ? [x.reason] : [])),
+  );
+  const said = e?.message ?? "";
+  const cause = new Error(
+    `HTTP ${status}${reasons.size ? ` [${[...reasons].join(", ")}]` : ""}${said ? `: ${said}` : ""}`,
+  );
+  const fail = (msg: string) => new Error(`Google Calendar: ${msg}`, { cause });
+  const any = (...r: string[]) => r.some((x) => reasons.has(x));
+
+  if (status === 401)
+    return fail("Google no longer accepts the sign-in. Run `clockout connect google` again.");
+  if (any("accessNotConfigured", "SERVICE_DISABLED"))
+    return fail(
+      "the Google Calendar API is off for your Cloud project. Turn it on at https://console.cloud.google.com/apis/library/calendar-json.googleapis.com, wait a minute, and try again.",
+    );
+  if (any("insufficientPermissions", "ACCESS_TOKEN_SCOPE_INSUFFICIENT"))
+    return fail(
+      'calendar access wasn\'t allowed when you signed in. Run `clockout connect google` again and tick "View events on all your calendars".',
+    );
+  if (status === 429 || any("rateLimitExceeded", "userRateLimitExceeded", "RATE_LIMIT_EXCEEDED"))
+    return fail("Google is limiting requests right now. Try again in a minute.");
+  if (status === 404) return fail(`no calendar "${calendarId}" on this account.`);
+  if (status === 403)
+    return fail(
+      `Google refused to list your events${said ? ` (${said})` : ""}. See Troubleshooting in ${GOOGLE_DOCS}.`,
+    );
+  return fail(`request failed (HTTP ${status}${said ? `: ${said}` : ""}). Try again shortly.`);
+}
 
 type Event = z.infer<typeof event>;
 

@@ -2,7 +2,8 @@ import { graphql as octokitGraphql } from "@octokit/graphql";
 import { z } from "zod";
 import type { Activity } from "../../core/types";
 import type { Source } from "../types";
-import { detectGitHub, getGitHubToken } from "./token";
+import { describeGitHubError, partialData } from "./errors";
+import { detectGitHub, findGitHubToken, type GitHubToken } from "./token";
 
 export interface GitHubConfig {
   type: "github";
@@ -154,20 +155,32 @@ export function createGitHubSource(client?: GraphQLClient): Source<GitHubConfig>
     detect: detectGitHub,
     async *collect(range, _cfg, ctx) {
       let run = client;
+      let via: GitHubToken["via"] | undefined;
       if (!run) {
-        const found = await getGitHubToken(ctx.env);
-        if (!found)
-          throw new Error("GitHub: not logged in. Run `gh auth login` or set GITHUB_TOKEN.");
+        const found = await findGitHubToken(ctx.env);
+        if (!("token" in found)) throw new Error(found.problem, { cause: found.cause });
+        via = found.via;
         const gql = octokitGraphql.defaults({ headers: { authorization: `token ${found.token}` } });
         run = (query, variables) => gql(query, variables);
       }
-      const raw = await run(CONTRIBUTIONS_QUERY, {
-        from: range.from.toISOString(),
-        to: range.to.toISOString(),
-      });
+      let raw: unknown;
+      try {
+        raw = await run(CONTRIBUTIONS_QUERY, {
+          from: range.from.toISOString(),
+          to: range.to.toISOString(),
+        });
+      } catch (err) {
+        // GraphQL errors can come with the rest of the data; use it when it's all there.
+        const partial = response.safeParse(unwrap(partialData(err)));
+        if (!partial.success) throw describeGitHubError(err, via, ctx.config.me.timezone);
+        raw = partial.data;
+      }
       const parsed = response.safeParse(unwrap(raw));
       if (!parsed.success)
-        throw new Error("GitHub: unexpected response from the contributions API");
+        throw new Error(
+          "GitHub: the contributions API answered in a shape Clockout doesn't know. Update Clockout, or turn GitHub off in Setup for now.",
+          { cause: new Error(parsed.error.message) },
+        );
 
       const inRange = (d: Date) => d >= range.from && d < range.to;
       const { login, contributionsCollection: c, issueComments } = parsed.data.viewer;

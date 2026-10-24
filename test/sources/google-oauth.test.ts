@@ -68,12 +68,12 @@ describe("Google sign-in", () => {
       await fetch(`${new URL(url).searchParams.get("redirect_uri")}/?code=abc&state=forged`);
     };
     await expect(connectGoogle(client, wrongState, { fetch: fetch })).rejects.toThrow(
-      "Google sign-in failed",
+      "Google Calendar: sign-in failed",
     );
     const denied = async (url: string) => {
       await fetch(`${new URL(url).searchParams.get("redirect_uri")}/?error=access_denied`);
     };
-    await expect(connectGoogle(client, denied)).rejects.toThrow("Access wasn't allowed");
+    await expect(connectGoogle(client, denied)).rejects.toThrow("access wasn't allowed");
   });
 
   it("says to reconnect when the refresh token is revoked", async () => {

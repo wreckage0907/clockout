@@ -55,6 +55,27 @@ If sign-in stops with **"Access blocked"** or `admin_policy_enforced`, your Work
 
 Creating the project with your work account and choosing **Internal** in step 3 avoids this, if your organization lets you create Cloud projects.
 
+## Troubleshooting
+
+Every Google Calendar message starts with `Google Calendar:`, says what went wrong, and what to do. In more detail:
+
+| Message says | Why | Fix |
+|---|---|---|
+| No Google sign-in client is set up yet | There's no `[google]` client in config.toml | Do steps 1–2 above. |
+| Google didn't accept Clockout's sign-in client (`invalid_client`, `unauthorized_client`) | The client ID or secret is wrong, or the client was deleted | Copy both again from **Clients** in the Cloud console into `[google]`, or `CLOCKOUT_GOOGLE_CLIENT_ID` / `CLOCKOUT_GOOGLE_CLIENT_SECRET`. |
+| the sign-in client isn't a "Desktop app" client, Google rejected the sign-in request (`redirect_uri_mismatch`, `invalid_request`) | The client is a "Web application" (or another type), which needs fixed redirect addresses | Create a **Desktop app** client (step 6) and use its ID and secret. |
+| access wasn't allowed | You pressed Cancel, or Google showed "has not completed the Google verification process" | Sign in again and allow access. For the verification page, publish the app (step 5) or add your account under **Audience → Test users**. |
+| your Google Workspace admin blocks this app (`admin_policy_enforced`) | Your organization only allows approved apps | See [Work accounts](#work-accounts-google-workspace). |
+| the sign-in client is "Internal" to another organization (`org_internal`) | The Cloud project's audience is Internal, and you signed in with an account outside that organization | Sign in with an account from that organization, or set the audience to External (step 3). |
+| sign-in timed out | Nothing came back to Clockout within 5 minutes. Usually Google showed an error page instead ("Access blocked", "Error 400: redirect_uri_mismatch") | Match the error on that page to a row above, then run `clockout connect google` again. |
+| Google didn't return a lasting sign-in | Google skipped the refresh token, usually because Clockout was already allowed | Remove Clockout at [myaccount.google.com/permissions](https://myaccount.google.com/permissions), then connect again. |
+| the sign-in was revoked or expired | You removed access, or the app is still in "Testing" (sign-ins expire after 7 days) | Run `clockout connect google` again. If it happens every week, publish the app (step 5). |
+| you connected with a different sign-in client, the sign-in client changed or was deleted | `[google]` in config.toml now names another client than the one you signed in with | Run `clockout connect google` again. |
+| the Google Calendar API is off for your Cloud project | Step 2 was skipped, or the API was turned off | [Enable the Calendar API](https://console.cloud.google.com/apis/library/calendar-json.googleapis.com), wait a minute, try again. |
+| calendar access wasn't allowed when you signed in | The "View events on all your calendars" box was unticked on Google's consent screen | Run `clockout connect google` again and tick it. |
+| Google is limiting requests right now | Too many requests in a short time | Wait a minute. |
+| couldn't reach Google | No connection, a proxy or a firewall | Check your connection and try again. |
+
 ## What Clockout reads
 
 For each event in the day: title, start and end, whether it's cancelled, its type (out-of-office and working-location entries are skipped, focus time becomes a question), your RSVP, and the other attendees' emails (for project rules). Nothing is written to your calendar, and nothing leaves your machine except the requests to Google.
