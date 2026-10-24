@@ -78,7 +78,7 @@ src/files.ts      readable reasons a file couldn't be written
 - vitest. Tests live in `test/`, mirroring `src/`.
 - Sources: feed files from `test/fixtures/` (same layout as the real tool, e.g. `fixtures/claude/projects/<slug>/<id>.jsonl`). No live network or API calls.
 - TUI: `ink-testing-library`.
-- `test/e2e/` runs the built CLI as a separate process (`test/e2e/helpers.ts`): its own temp home, a PATH with only node, git and the shell (never your own agent CLIs or `gh`), sources from the fixtures, GitHub and the ERP as fake servers on 127.0.0.1. Check exit code, stdout and stderr separately.
+- `test/e2e/` runs the built CLI as a separate process (`test/e2e/helpers.ts`): its own temp home, a PATH with only node (never your own agent CLIs, nor the `gh` CI runners have), sources from the fixtures, GitHub and the ERP as fake servers on 127.0.0.1. Check exit code, stdout and stderr separately.
 - `pnpm smoke` packs the package, installs the tarball like npm users get it and runs the installed `clockout` (CI runs it too).
 - `pnpm coverage` counts every file in `src/`, loaded or not. Subprocess runs in `test/e2e/` don't count towards it.
 

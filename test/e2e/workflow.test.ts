@@ -98,11 +98,19 @@ describe("drafting a day", () => {
   });
 
   it("drafts the day from the other sources when one fails, and says which", async () => {
+    const rejecting = await fakeServer(() => ({
+      status: 401,
+      json: { message: "Bad credentials" },
+    }));
     const r = await sb.run(["day", DATE, "--json", "--no-ai", "--refresh"], {
-      env: { ...env, GITHUB_TOKEN: "", GITHUB_GRAPHQL_URL: "", PATH: sb.env.PATH ?? "" },
+      env: { GITHUB_TOKEN: "expired-token", GITHUB_GRAPHQL_URL: `${rejecting.origin}/graphql` },
     });
+    await rejecting.close();
     expect(r.code).toBe(0);
-    expect(r.stderr).toMatch(/^warning: GitHub: the GitHub CLI isn't installed/);
+    expect(r.stderr).toMatch(
+      /^warning: GitHub: .*GITHUB_TOKEN.* was rejected \(expired or revoked\)/,
+    );
+    expect(r.stderr).not.toContain("expired-token");
     expect((JSON.parse(r.stdout) as DayJson).rows.length).toBeGreaterThan(5);
   });
 });

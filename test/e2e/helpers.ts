@@ -7,8 +7,8 @@ import { join } from "node:path";
 import { buildDb } from "../helpers/sqlite-fixture";
 
 // The built CLI run as a separate process, the way people run it: its own home folder, no
-// network beyond fake servers on 127.0.0.1, and a PATH with only node, git and the shell, so
-// the developer's own agent CLIs and gh are never picked up.
+// network beyond fake servers on 127.0.0.1, and a PATH with only node on it, so nothing the
+// machine happens to have (the developer's agent CLIs, gh on CI runners) is ever picked up.
 
 export const bin = new URL("../../dist/cli.js", import.meta.url).pathname;
 export const fixtures = new URL("../fixtures/", import.meta.url).pathname;
@@ -38,7 +38,7 @@ export async function sandbox(): Promise<Sandbox> {
   const config = join(home, ".config", "clockout");
   const data = join(home, ".local", "share", "clockout");
   const env: Record<string, string> = {
-    PATH: `${binDir}:/usr/bin:/bin`,
+    PATH: binDir,
     HOME: home,
     XDG_CONFIG_HOME: join(home, ".config"),
     XDG_DATA_HOME: join(home, ".local", "share"),
