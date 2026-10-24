@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none" role="img" aria-labelledby="clockout-logo-title">
+  <title id="clockout-logo-title">Clockout</title>
+  <rect x="4" y="4" width="504" height="504" rx="116" fill="#141417" stroke="#3a3a42" stroke-width="8"/>
+  <circle cx="184" cy="256" r="104" stroke="#6ee7b7" stroke-width="30"/>
+  <path d="M184 196V256L229 291" stroke="#6ee7b7" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M326 176H420M326 256H420M326 336H420" stroke="#ececef" stroke-width="26" stroke-linecap="round"/>
+</svg>

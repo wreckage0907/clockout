@@ -1,209 +1,255 @@
-# Clockout
+<p align="center">
+  <img src="docs/images/banner.png" alt="Clockout — your day, already accounted for">
+</p>
 
-Turns your day (Claude Code, Pi, Codex, opencode and Antigravity sessions, GitHub PRs, reviews, issues and comments, and calendar meetings) into a ready-to-paste timesheet. You fix it by voice: dictate "the gap after lunch was lunch, I skipped the design sync" and Clockout proposes the edits.
+<p align="center">
+  <img alt="Node 22.12+" src="https://img.shields.io/badge/Node-22.12%2B-6ee7b7?style=flat-square">
+  <img alt="TypeScript 7" src="https://img.shields.io/badge/TypeScript-7-a78bfa?style=flat-square">
+  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-green?style=flat-square">
+</p>
 
-The AI work runs on the Claude Code subscription you already have. No API key needed, and it still works with no AI at all.
+<p align="center">
+  <samp>
+    Turn coding-agent sessions, GitHub activity and calendar events into a timesheet.<br>
+    Correct it by voice, then copy it or send it straight to your ERP.
+  </samp>
+</p>
 
-Built for the **#NoHandsChallenge** (WeMakeDevs × Wispr Flow).
+<samp>
 
-```
-  ◷ clockout · Fri, Oct 16 · draft · 5.75h · 5 questions · AI: Claude Code (haiku)
-  ▍  09:30–10:00 Meetings            Daily standup                          0h30
-      10:00–12:15 Acme API            Fix auth token refresh race (PR #87)   2h15
-      12:15–14:00 Nothing recorded 12:15–14:00. Lunch, a break, or work?
-      14:00–16:33 dev-example/clockout Build CSV export command (PR #48)     2h33
-    ? 15:00–15:30 Meetings            Design sync                            0h30
-      Did you attend "Design sync" (15:00–15:30)? You replied maybe.
-  ▏ Say it, or / for commands
-  ▏ skipped the design sync, and the gap after lunch was lunch
-```
+> The evidence of your work already exists. Clockout joins it into a day you can approve,
+> instead of asking you to reconstruct the day from memory.
 
-Type or dictate a correction, Clockout proposes the edits, you press y. `/` opens the command menu (pick a day, copy, undo); gaps and unanswered questions are shown as plain questions, not decoration.
+</samp>
 
-> Status: MVP. Not yet on npm; run it from a clone (below).
+<br>
 
-## Try it
+# ✨ Features
 
-```sh
-git clone https://github.com/wreckage0907/clockout && cd clockout
-corepack enable && pnpm install && pnpm build
-node dist/cli.js init
-```
+<table>
+  <tr>
+    <td width="50%" valign="top"><samp>
+      <b>Your tools become one workday</b>
+      <br><br>
+      Reads Claude Code, Codex, Pi, opencode and Antigravity sessions, GitHub pull requests,
+      reviews, issues and comments, plus Google Calendar or an ICS feed.
+    </samp></td>
+    <td width="50%" valign="top"><samp>
+      <b>Counts your time, not agent runtime</b>
+      <br><br>
+      Blocks grow from prompts, pull requests, reviews and meetings. Short pauses are bridged,
+      overlapping sessions resolve to the one you touched last, and calendar time wins.
+    </samp></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><samp>
+      <b>Say the correction. Approve the diff.</b>
+      <br><br>
+      Type or dictate “the gap after lunch was lunch” or “I skipped the design sync.”
+      Clockout proposes validated edits; Enter applies them and Ctrl+Z brings the old day back.
+    </samp></td>
+    <td width="50%" valign="top"><samp>
+      <b>A review screen built for finishing</b>
+      <br><br>
+      Edit a card's duration, answer meeting attendance, add missing time or remove a row.
+      Every action works from the keyboard or mouse, with slash commands for AI-free control.
+    </samp></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><samp>
+      <b>Rows that fit the form</b>
+      <br><br>
+      Export date, project, task, hours and description as Markdown, CSV, TSV or JSON.
+      Copy a day to the clipboard, print one day, or export a date range from scripts.
+    </samp></td>
+    <td width="50%" valign="top"><samp>
+      <b>Send only what changed</b>
+      <br><br>
+      Push reviewed rows to next-pms on Frappe/ERPNext. Clockout previews additions, updates
+      and removals, remembers task mappings, and leaves entries made in the ERP alone.
+    </samp></td>
+  </tr>
+</table>
 
-## Use it on your own day
+<br>
 
-```sh
-node dist/cli.js init          # finds your coding agents and gh login, asks for your calendar link
-node dist/cli.js               # review today
-```
+# ⚙️ Installation
 
-`init` writes `~/.config/clockout/config.toml`. It uses:
+<table>
+<tr>
+<td width="50%" valign="top">
 
-- **Claude Code** sessions in `~/.claude/projects` (found automatically).
-- **Pi** sessions in `~/.pi/agent/sessions` and **Codex** sessions in `~/.codex/sessions` (found automatically; `PI_CODING_AGENT_DIR` and `CODEX_HOME` are respected).
-- **opencode** sessions in `~/.local/share/opencode/opencode.db` (opencode 2; `XDG_DATA_HOME` is respected) and **Antigravity** CLI conversations in `~/.gemini/antigravity-cli` (the IDE's own conversations can't be read). Both need Node 22.13 or later.
-- **GitHub**: `gh auth login`, or a `GITHUB_TOKEN`.
-- **Google Calendar**: sign in once with `clockout connect google` (read-only). It reads your RSVPs, so declined meetings drop out and unanswered ones become questions. First time only: [create a Google sign-in client](docs/google-setup.md) (5 minutes).
-- Or any calendar's private ICS address, if your account allows one.
+<samp>
 
-## The review screen
+**📝 Prerequisites**
 
-`clockout` opens on today: the logo standing on the day's hours (each project fills its share of the band towards your daily target), the total (`5h 45m of 8h`), and the chat bar. Press **Enter** to open the day as cards, one per timesheet row: what it was, the project and task, where the time came from, and how long, in a big box you can click and type over. Meetings you haven't confirmed come as cards with **Attended** / **Skipped**; a dashed card adds time nothing recorded. Everything is clickable; the keyboard does it all too.
+1. **Node.js 22.12+** — use **22.13+** for opencode and Antigravity sources
+2. **pnpm 11** through Corepack
+3. At least one supported coding-agent, GitHub or calendar source
 
-| Key | Does |
-|---|---|
-| type or dictate, then **Enter** | Send a correction in plain words; review the proposed change, then **Enter** applies, **Esc** goes back to your words |
-| **/** | Commands, without the AI: `/refresh`, `/connect erp <address>` or `google`, `/disconnect`, `/send`, `/copy [md\|csv]`, `/undo`, `/add`, `/today`, `/yesterday`, `/date monday` (or `-3`, `2026-10-16`), `/setup [section]`, `/help`. The menu narrows as you type; **↑ ↓** choose, **Tab** fills in, **Enter** runs. Saying "slash refresh" works too |
-| **↑ ↓** | Select a card |
-| **Enter** on a card | Type its length: `1h 45`, `1:45`, `1.75`, `45m` (or type it into the chat bar) |
-| **-** / **+** | Shorten or lengthen the selected card by your rounding step |
-| **Ctrl+D** (or the card's **✕**) | Take the selected card off the day (Ctrl+Z brings it back) |
-| **Ctrl+T** (or the card's **→ task**) | Pick which ERP task the selected card goes to. The first pick for a project is for all its cards; after that, a different pick is for this card only |
-| **Ctrl+Y** (or **Copy sheet**) | Copy the timesheet, tab-separated; meetings you haven't answered are left out |
-| **Ctrl+S** (or **Send to ERP**) | Send the day to your ERP: shows what would be added, updated or removed first; **Enter** sends |
-| **Ctrl+Z** | Undo |
-| **Ctrl+P** (or **Setup**) | Setup, in sections: **Sources** (Claude Code and which of its projects, Pi, Codex, opencode, Antigravity, Google Calendar, GitHub), **Day** (daily target, working hours, rounding, idle cutoff), **AI helper** (on or off; how descriptions read: Fix / Fixed / Fixing, length, and a **Prompt** page to type or dictate your own), **Projects** (task names and project rules), **ERP** (sign in, which task each project goes to). Arrow keys or the mouse |
-| click the date | Pick another day; **PgUp** / **PgDn** step a day |
-| **Esc** | Back home · **Ctrl+C** quits |
+<br>
 
-A length you set counts exactly that on the timesheet; nothing else moves. Dictated text arrives as one paste, so a line break never sends it early.
+**🔮 Optional**
 
-Things you can say:
+- `gh auth login` — GitHub activity
+- `claude` — AI summaries and plain-language corrections on your Claude Code subscription
 
-- "the gap after lunch was lunch"
-- "I skipped the design sync, but I was at the Acme call"
-- "the standup ran to 45 minutes"
-- "add 30 minutes reviewing Sam's PR on acme"
-- "put the standup under Acme API, task Meetings"
+</samp>
 
-Setup works the same way: say what to change, check the proposal, press Enter.
+</td>
+<td width="50%" valign="top">
 
-- "connect my ERP at erp.example.com" (signs in in your browser)
-- "leave out my dotfiles" (an ignore rule: that project's work and meetings never reach the day)
-- "write descriptions in past tense, one sentence each" or "always put the ticket key first"
-- "stop reading my personal project" · "turn off GitHub"
-- "my target is seven and a half hours, round to 30 minutes"
-- "send acme api to the hackathon task"
-- paste your calendar's private ICS link: it's read on this machine and never sent to the AI
+<samp>
 
-## Commands
+**🪴 Usage**
 
-```sh
-clockout                       # review today (also: yesterday, day 2026-10-16, day -2)
-clockout today --plain         # print instead of opening the review screen
-clockout edit "the gap was lunch" [--date yesterday] [--dry-run]
-clockout undo [--date yesterday]
-clockout export [date] --format csv|md|tsv|json [--out file] [--from DATE --to DATE]
-clockout push [date] [--dry-run] [--yes]   # send the day to your ERP timesheet
-clockout connect google        # sign in once; disconnect google to revoke
-clockout connect erp https://erp.example.com   # sign in to your ERP; disconnect erp to revoke
-```
+1. Clone and build:
 
-`--no-ai` uses session, PR and meeting titles instead of AI summaries.
+       git clone https://github.com/wreckage0907/clockout
+       cd clockout
+       corepack enable
+       pnpm install
+       pnpm build
 
-The timesheet has one row per piece of work: **date, project, task, hours, description**. Hours are rounded to 15 minutes. Unconfirmed meetings and breaks are left out.
+2. Find your tools and create a config:
 
-## Config
+       node dist/cli.js init
 
-```toml
-[me]
-name = "Ada"
-emails = ["ada@company.com"]         # finds your RSVP in calendar invites
-timezone = "Asia/Kolkata"
+3. Review today:
 
-[day]
-working_hours = "09:30-18:30"        # gaps are only flagged inside these
-idle_cutoff = "20m"                  # a pause longer than this ends a block
-round_to = "15m"
-target = "8h"                        # the hours you aim to log; the bar fills towards it
+       node dist/cli.js
 
-[tasks]                              # task names for your timesheet
-work = "Development"
-review = "Code Review"
-meeting = "Meetings"
+</samp>
 
-[ai]
-backend = "auto"                     # auto | claude-code | none
-model = "haiku"
+</td>
+</tr>
+</table>
 
-[descriptions]                       # how the AI writes each row (without it, titles are used)
-format = "imperative"                # imperative "Fix …" | past "Fixed …" | continuous "Fixing …"
-length = "short"                     # short (3–8 words) | medium (one sentence) | long (two sentences)
-# instructions = "Lead with the ticket key. Write for a client, no jargon."   # your prompt, ≤ 2000 characters
-# examples = ["ABC-12 Fixed the login redirect loop"]
+<br>
 
-[[sources]]
-type = "claude-code"
-# exclude = ["-Users-ada-personal"]   # project folders to leave out (Setup writes this)
+# 🚀 Getting started
 
-[[sources]]
-type = "github"
+<samp>
 
-[[sources]]
-type = "google-calendar"             # added by `clockout connect google`
-calendars = ["primary"]
+| | Step | What happens |
+|---|---|---|
+| **1** | **Run `init`** | Clockout detects local agent logs, GitHub and Claude Code, then asks for your time zone, working hours and calendar. |
+| **2** | **Open the day** | Press Enter to expand the timesheet cards. Select with **↑ ↓**, edit a duration with **Enter**, and nudge it with **− / +**. |
+| **3** | **Say what is wrong** | Type or dictate a correction. Review the proposed operations, **Enter** to apply, **Esc** to revise, **Ctrl+Z** to undo. |
+| **4** | **Take the sheet** | **Ctrl+Y** copies tab-separated rows. Use `export` for a file, another format or a range of dates. |
+| **5** | **Pick another day** | Run `yesterday` or `day 2026-10-16`; in the review screen, click the date or use **PgUp / PgDn**. |
 
-[google]                             # your sign-in client: docs/google-setup.md
-client_id = "…apps.googleusercontent.com"
-client_secret = "GOCSPX-…"
-
-[[projects]]                         # map repos, titles or attendees to your timesheet's project names
-name = "Acme API"
-task = "Backend"
-match = { repo = "acme/api", title = "(?i)acme", attendee_domain = "acme.com" }
-
-[[projects]]                         # leave a project off the day, from every source
-name = "dotfiles"                    # without match: the project with this name, as on its cards
-ignore = true
-
-[timesheet]                          # where `push` / ctrl+s sends the day; added by `clockout connect erp`
-type = "next-pms"                    # Frappe/ERPNext with rtCamp's next-pms
-url = "https://erp.example.com"
-
-[[timesheet.map]]                    # which ERP task a project's rows go to (picked once in the app)
-project = "Acme API"
-# task = "Code Review"               # only rows with this task; leave out for the whole project
-erp_task = "TASK-2026-00088"
-label = "API maintenance"
-```
-
-## Sending to your ERP
-
-Instead of pasting rows, send the day straight into your timesheet. Supported now: Frappe/ERPNext sites running [next-pms](https://github.com/rtCamp/next-pms).
-
-1. `clockout connect erp https://erp.example.com` signs you in through the browser (OAuth; no password or API key is stored). The site's OAuth Settings must allow dynamic client registration.
-2. In the review screen press **Ctrl+S**. The first time a project is sent, pick its ERP task from a searchable list; it's remembered. To send one card somewhere else (two kinds of work in the same project), select it and press **Ctrl+T**.
-3. Clockout reads what's already logged for that day and shows the plan: `+` add, `~` update, `−` remove, `=` already sent, `!` can't (approved week, rejected entry), `·` added in the ERP by hand. **Enter** sends.
-
-Sending again only changes what changed. Entries you added in the ERP yourself are never touched, and approval stays in the ERP. From scripts: `clockout push yesterday --dry-run`, then `--yes`.
-
-## How time is counted
-
-- Time comes from what **you** did: prompts, PRs, review comments and meetings. A prompt counts until the agent's reply is read, so an agent running unattended for an hour doesn't become an hour of your time.
-- Pauses shorter than `idle_cutoff` are bridged. When two sessions overlap, the time goes to the one you touched last.
-- Accepted meetings take their time from work. Tentative and unanswered ones wait for you to confirm; declined ones are left out with a note. Blocks on your own calendar with no guests (lunch, gym, focus time) are asked about, not billed. If two accepted meetings overlap, only the first counts until you say otherwise.
-- Corrections stick: when you open a corrected day again, new activity is added under your corrections.
-
-## Privacy
-
-- Everything is read and stored on your machine (`~/.local/share/clockout`). No telemetry.
-- The AI sees session titles, branch names, PR titles and meeting names, never your prompts or code.
-- Clockout runs your own `claude` binary with tools off and never reads your credentials.
-- The config and the sign-ins (`credentials.json`: Google, ERP) are readable only by you. Calendar access is read-only.
-- Your ERP gets only what you send: date, task, hours and description per row, when you confirm.
-
-## Development
-
-Coding agents and contributors: start with [AGENTS.md](AGENTS.md).
+**One command, a finished sheet**
 
 ```sh
-pnpm install
-pnpm exec lefthook install
-pnpm check               # lint, typecheck, build, test, publint
+node dist/cli.js day 2026-10-16 --md --no-ai
 ```
 
-- [Spec](docs/spec.md) · [Plan](docs/plan.md) · [Decisions](docs/adr/) · [Research](docs/research.md)
+```text
+| Date | Project | Task | Hours | Description |
+|---|---|---|---:|---|
+| 2026-10-16 | acme-api | Development | 2.25 | Fix auth token refresh |
+| 2026-10-16 | clockout | Development | 2.50 | Build export command |
+| 2026-10-16 | acme-api | Development | 0.25 | Investigate flaky deploy |
+| | | **Total** | **5.00** | |
+```
 
-## License
+</samp>
 
-MIT
+<br>
+
+# 🧠 How it works
+
+<details>
+<summary><b>🧩 Evidence becomes time blocks</b></summary>
+<br>
+<samp>
+
+Each source emits timestamped activity. Clockout resolves its project, joins nearby work on
+the same project and branch or pull request, and splits blocks at the configured idle cutoff.
+A prompt counts until the agent's reply is read; an agent running unattended for an hour does
+not become an hour of your time. Accepted meetings take their time from overlapping work;
+tentative and unanswered meetings stay as questions.
+
+</samp>
+</details>
+
+<details>
+<summary><b>💬 Corrections stay under your control</b></summary>
+<br>
+<samp>
+
+The AI returns edit operations, never a rewritten timesheet. Core validation rejects invalid
+changes before you see the proposal. Your corrections are stored with the day and replayed
+when new activity arrives; refreshing keeps them whenever the original blocks still exist.
+Use `--no-ai` for titles and heuristic summaries instead.
+
+</samp>
+</details>
+
+<details>
+<summary><b>🧾 One row per piece of work</b></summary>
+<br>
+<samp>
+
+Project rules turn repositories, titles and attendee domains into your project names. Task
+rules separate development, reviews and meetings. Rows are rounded to your configured step,
+unconfirmed meetings and breaks are left out, and repeated exports merge the same work.
+Configuration lives in `~/.config/clockout/config.toml`; **Ctrl+P** opens setup in the app.
+
+</samp>
+</details>
+
+<br>
+
+# 🔌 Connections
+
+<samp>Connect a calendar for meetings and RSVPs, or an ERP to skip copy-paste entirely.</samp>
+
+<details>
+<summary><b>📅 Google Calendar or ICS</b></summary>
+<br>
+<samp>
+
+For Google Calendar, [create a desktop sign-in client](docs/google-setup.md), then run:
+
+```sh
+node dist/cli.js connect google
+```
+
+For any calendar with a private iCal address, choose **Paste a private calendar address (ICS)**
+during `init`. Accepted meetings count automatically; declined meetings drop out; tentative
+and unanswered meetings wait for your answer.
+
+</samp>
+</details>
+
+<details>
+<summary><b>↗️ next-pms on Frappe/ERPNext</b></summary>
+<br>
+<samp>
+
+Enable dynamic client registration in the site's OAuth Settings, then sign in through the browser:
+
+```sh
+node dist/cli.js connect erp https://erp.example.com
+```
+
+Press **Ctrl+S** in the review screen, pick an ERP task for each project, inspect the plan and
+press **Enter** to send. From scripts, preview and apply the same flow with:
+
+```sh
+node dist/cli.js push yesterday --dry-run
+node dist/cli.js push yesterday --yes
+```
+
+</samp>
+</details>
+
+<br>
+
+<hr>
+
+<p align="center">
+  <samp>MIT &middot; built for the <b>#NoHandsChallenge</b></samp>
+</p>
