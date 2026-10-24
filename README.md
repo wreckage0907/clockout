@@ -59,7 +59,7 @@ node dist/cli.js               # review today
 | **-** / **+** | Shorten or lengthen the selected card by your rounding step |
 | **Ctrl+D** (or the card's **✕**) | Take the selected card off the day (Ctrl+Z brings it back) |
 | **Ctrl+T** (or the card's **→ task**) | Pick which ERP task the selected card goes to. The first pick for a project is for all its cards; after that, a different pick is for this card only |
-| **Ctrl+Y** (or **Copy sheet**) | Copy the timesheet, tab-separated, once no meeting is waiting |
+| **Ctrl+Y** (or **Copy sheet**) | Copy the timesheet, tab-separated; meetings you haven't answered are left out |
 | **Ctrl+S** (or **Send to ERP**) | Send the day to your ERP: shows what would be added, updated or removed first; **Enter** sends |
 | **Ctrl+Z** | Undo |
 | **Ctrl+P** (or **Setup**) | Setup, in sections: **Sources** (Claude Code and which of its projects, Pi, Codex, opencode, Antigravity, Google Calendar, GitHub), **Day** (daily target, working hours, rounding, idle cutoff), **AI helper** (on or off; how descriptions read: Fix / Fixed / Fixing, length, and a **Prompt** page to type or dictate your own), **Projects** (task names and project rules), **ERP** (sign in, which task each project goes to). Arrow keys or the mouse |

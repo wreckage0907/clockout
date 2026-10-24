@@ -145,11 +145,12 @@ describe("day view", () => {
     expect(ui.lastFrame()).toContain("6h of 8h");
   });
 
-  it("won't copy while meetings are waiting", async () => {
+  it("copies while meetings are waiting, leaving them out and saying so", async () => {
     const { ui, calls } = await openDay();
     ui.stdin.write("\u0019"); // ctrl+y
-    await until(ui.lastFrame, "Answer the 3 meetings first");
-    expect(calls.copied).toEqual([]);
+    await until(ui.lastFrame, "3 meetings unanswered, left out");
+    expect(calls.copied).toHaveLength(1);
+    expect(calls.copied[0]).not.toContain("Design sync");
   });
 
   it("copies tab-separated rows, with the lengths you set, once nothing is waiting", async () => {
@@ -368,9 +369,8 @@ describe("slash commands", () => {
     ui.stdin.write(DOWN);
     await tick();
     ui.stdin.write("\r");
-    await until(ui.lastFrame, "Answer the 3 meetings first");
-    expect(ui.lastFrame()).toContain("Answer the 3 meetings first");
-    expect(calls.copied).toEqual([]);
+    await until(ui.lastFrame, "Copied");
+    expect(calls.copied).toHaveLength(1);
   });
 
   it("tab fills in a command that needs more words, then enter runs it", async () => {

@@ -268,15 +268,16 @@ export function App({
   };
   const copy = async (format: CopyFormat = "tsv") => {
     if (!day) return;
-    if (asks) return showToast(`Answer the ${asks} meeting${asks === 1 ? "" : "s"} first`);
     const rows = timesheetRows(day, config);
     if (rows.length === 0) return showToast("Nothing to copy yet");
     const as = { tsv: toTsv, md: toMarkdown, csv: toCsv }[format];
     const kind = { tsv: "", md: " as Markdown", csv: " as CSV" }[format];
     try {
       await actions.copy(as(rows));
+      // Meetings you haven't answered aren't on the sheet yet; say so rather than refuse.
+      const waiting = asks ? ` · ${asks} meeting${asks === 1 ? "" : "s"} unanswered, left out` : "";
       showToast(
-        `✓ Copied ${rows.length} row${rows.length === 1 ? "" : "s"}${kind} · ${hm(minutes)}`,
+        `✓ Copied ${rows.length} row${rows.length === 1 ? "" : "s"}${kind} · ${hm(minutes)}${waiting}`,
       );
     } catch {
       showToast("Couldn't reach the clipboard. Use `clockout export` instead.");
