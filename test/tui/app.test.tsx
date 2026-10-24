@@ -719,7 +719,8 @@ describe("setup", () => {
       { id: "claude-code" as const, name: "Claude Code" },
       { id: "codex" as const, name: "Codex" },
     ];
-    const { ui, calls } = await openSetup({ setup: { helpers } });
+    // Saving takes a while, as writing the file does: a second → before it's done still counts.
+    const { ui, calls } = await openSetup({ setup: { helpers }, saveDelay: 50 });
     await down(ui, 2); // AI helper
     await until(ui.lastFrame, "using Claude Code");
     for (const label of ["Auto", "Claude Code", "Codex", "No AI"])
@@ -728,9 +729,10 @@ describe("setup", () => {
     await tick();
     ui.stdin.write(RIGHT); // → Claude Code
     await tick();
-    ui.stdin.write(RIGHT); // → Codex
-    await tick();
-    expect(lastSaved(calls)?.ai.backend).toBe("codex");
+    ui.stdin.write(RIGHT); // → Codex, before Claude Code is saved
+    for (let i = 0; i < 50 && calls.saved.length < 2; i++)
+      await new Promise((r) => setTimeout(r, 10));
+    expect((calls.saved as Config[]).map((c) => c.ai.backend)).toEqual(["claude-code", "codex"]);
   });
 
   it("writes a description prompt on its own page: enter saves, esc leaves it as it was", async () => {

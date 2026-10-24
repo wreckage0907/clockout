@@ -164,11 +164,16 @@ export function Setup({
 
   const save = async (next: Config) => {
     setError(null);
+    const before = state?.config;
+    // Shown at once, so a key pressed before the file is written builds on this change instead
+    // of the settings before it (→ → lands two steps on, not one).
+    setState((s) => (s ? { ...s, config: next } : s));
     try {
       const saved = await actions.save(next);
       setState((s) => (s ? { ...s, config: saved } : s));
       onConfig(saved);
     } catch (err) {
+      if (before) setState((s) => (s ? { ...s, config: before } : s));
       setError((err as Error).message);
     }
   };

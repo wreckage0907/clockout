@@ -35,6 +35,8 @@ export function fakeActions(
   opts: {
     parse?: (text: string, day: Day, earlier: Turn[]) => Promise<Correction>;
     setup?: Partial<SetupState>;
+    /** Milliseconds each Setup save takes, as writing config.toml does. */
+    saveDelay?: number;
     /** The day to load; the fixture day by default. */
     day?: Day;
     /** An ERP to send to; no "Send to ERP" without one. */
@@ -180,6 +182,7 @@ export function fakeActions(
         ...opts.setup,
       }),
       save: async (next) => {
+        if (opts.saveDelay) await new Promise((r) => setTimeout(r, opts.saveDelay));
         calls.saved.push(next);
         return next;
       },
