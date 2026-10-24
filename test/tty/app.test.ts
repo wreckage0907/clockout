@@ -41,6 +41,17 @@ describe.skipIf(!hasPython && !process.env.CI)("the review screen in a terminal"
     expectRestored(after(r, DAY));
   });
 
+  it.each(["/quit", "/exit"])("leaves with %s, the terminal as it was", async (command) => {
+    const r = await runInPty(
+      sb,
+      ["day", DATE],
+      [{ wait: HOME }, { send: KEY.paste(command) }, { wait: command }, { send: KEY.enter }],
+    );
+    expect(r.failed).toBeNull();
+    expect(r.code).toBe(0);
+    expectRestored(after(r, HOME));
+  });
+
   it("puts a paste in the chat bar without sending it, and Enter sends it", async () => {
     const r = await runInPty(
       sb,

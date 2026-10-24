@@ -16,7 +16,8 @@ export type Slash =
   | { name: "date"; date: string }
   | { name: "setup"; section?: SetupSection }
   | { name: "problems" }
-  | { name: "help" };
+  | { name: "help" }
+  | { name: "quit" };
 
 export interface SlashCommand {
   name: string;
@@ -27,6 +28,8 @@ export interface SlashCommand {
   about: string;
   /** The key that does the same, if there is one. */
   key?: string;
+  /** Other names that run it, e.g. `/exit` for `/quit`. */
+  aliases?: string[];
 }
 
 export const COMMANDS: SlashCommand[] = [
@@ -48,6 +51,7 @@ export const COMMANDS: SlashCommand[] = [
   },
   { name: "problems", about: "What didn't work (sign-ins, AI helper) and how to fix it" },
   { name: "help", about: "List these commands" },
+  { name: "quit", about: "Leave Clockout (/exit works too)", key: "ctrl+c", aliases: ["exit"] },
 ];
 
 const SECTIONS: SetupSection[] = ["sources", "day", "ai", "projects", "erp"];
@@ -70,8 +74,9 @@ export function matching(text: string): SlashCommand[] {
   if (t === null) return [];
   const [word = "", ...rest] = t.slice(1).split(/\s+/);
   const name = word.toLowerCase();
-  if (rest.length) return COMMANDS.filter((c) => c.name === name);
-  return COMMANDS.filter((c) => c.name.startsWith(name));
+  const names = (c: SlashCommand) => [c.name, ...(c.aliases ?? [])];
+  if (rest.length) return COMMANDS.filter((c) => names(c).includes(name));
+  return COMMANDS.filter((c) => names(c).some((n) => n.startsWith(name)));
 }
 
 /**
@@ -100,6 +105,9 @@ export function parseSlash(text: string, today: string): { ok: Slash } | { error
       return none({ name: "add" });
     case "problems":
       return none({ name: "problems" });
+    case "quit":
+    case "exit":
+      return none({ name: "quit" });
     case "today":
       return none({ name: "date", date: today });
     case "yesterday":

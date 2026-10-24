@@ -17,6 +17,7 @@ describe("matching", () => {
     expect(matching("/").length).toBeGreaterThan(10);
     expect(matching("/co").map((c) => c.name)).toEqual(["connect", "copy"]);
     expect(matching("/connect erp x").map((c) => c.name)).toEqual(["connect"]);
+    expect(matching("/ex").map((c) => c.name)).toEqual(["quit"]);
     expect(matching("/zzz")).toEqual([]);
     expect(matching("hello")).toEqual([]);
   });
@@ -45,6 +46,9 @@ describe("parseSlash", () => {
     expect(ok("/add")).toEqual({ name: "add" });
     expect(ok("/")).toEqual({ name: "help" });
     expect(ok("/help")).toEqual({ name: "help" });
+    expect(ok("/quit")).toEqual({ name: "quit" });
+    expect(ok("/exit")).toEqual({ name: "quit" });
+    expect(ok("Slash exit.")).toEqual({ name: "quit" });
   });
 
   it("signs in and out of the ERP and Google", () => {

@@ -1,4 +1,4 @@
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useApp, useInput } from "ink";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Correction, Turn } from "../ai/edits";
 import type { OpenedDay } from "../collect";
@@ -179,6 +179,7 @@ export function App({
     if (!ai.on) showToast(ai.why);
   }, []);
   const aiOn = actions.ai().on;
+  const { exit } = useApp();
   const draft = useDraft(!setup && !overlay && !editing && !busy && !proposal && !sending);
   const pill = useDraft(!setup && editing !== null);
   const offset = useRef(0);
@@ -606,6 +607,7 @@ export function App({
   /** A slash command: what a key or button does, or a sign-in, without asking the AI. */
   const runSlash = (s: Slash, text: string) => {
     if (s.name === "help") return draft.setValue("/");
+    if (s.name === "quit") return exit();
     if (s.name === "date") return goTo(s.date);
     if (s.name === "setup") return openSetup(s.section);
     if (s.name === "problems") return setOverlay("problems");
