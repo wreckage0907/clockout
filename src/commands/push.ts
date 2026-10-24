@@ -74,6 +74,10 @@ export async function runPush(
   }
   const todo = changes(plan);
   if (opts.dryRun) return;
+  // So a script can tell something was left out (no task yet, approved, a closed week), even
+  // when there's nothing else to send.
+  if (plan.items.some((i) => i.action === "unmapped" || i.action === "blocked"))
+    process.exitCode = 1;
   if (todo.length === 0) {
     console.log("\nNothing to send.");
     return;
@@ -90,9 +94,6 @@ export async function runPush(
   }
   const result = await applyPush(stored, plan, target, ctx.store);
   report(result);
-  // So a script can tell something was left out.
-  if (plan.items.some((i) => i.action === "unmapped" || i.action === "blocked"))
-    process.exitCode = 1;
 }
 
 function report({ done, failed, unconfirmed }: PushResult) {

@@ -53,7 +53,7 @@ src/config/       zod schema, TOML load/save, XDG paths
 src/store/        JSON store for days and corrections
 src/collect.ts    runs sources for a day, builds and saves it (openDay)
 src/corrections.ts applies edits to a stored day with undo
-src/targets/      timesheet systems the day is sent to (next-pms); read and write entries only
+src/targets/      timesheet systems the day is sent to (next-pms, http); read and write entries only
 src/push.ts       plans and applies sending a day to a target, keeps the record of what was sent
 src/oauth.ts      loopback + PKCE for browser sign-ins
 src/log.ts        local error log: full details behind the one-line messages, tokens redacted
@@ -78,7 +78,7 @@ src/files.ts      readable reasons a file couldn't be written
 - vitest. Tests live in `test/`, mirroring `src/`.
 - Sources: feed files from `test/fixtures/` (same layout as the real tool, e.g. `fixtures/claude/projects/<slug>/<id>.jsonl`). No live network or API calls.
 - TUI: `ink-testing-library`.
-- `test/e2e/` runs the built CLI as a separate process (`test/e2e/helpers.ts`): its own temp home, a PATH with only node (never your own agent CLIs, nor the `gh` CI runners have), sources from the fixtures, GitHub and the ERP as fake servers on 127.0.0.1. Check exit code, stdout and stderr separately.
+- `test/e2e/` runs the built CLI as a separate process (`test/e2e/helpers.ts`): its own temp home, a PATH with only node (never your own agent CLIs, nor the `gh` CI runners have), sources from the fixtures, GitHub as a fake server and the mock PMS (`test/mock-pms/`, the timesheet API in docs/timesheet-api.md) on 127.0.0.1. Check exit code, stdout and stderr separately.
 - `pnpm smoke` packs the package, installs the tarball like npm users get it and runs the installed `clockout` (CI runs it too).
 - `pnpm coverage` counts every file in `src/`, loaded or not. Subprocess runs in `test/e2e/` don't count towards it.
 

@@ -238,10 +238,12 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
           loadGoogleCredentials().catch(() => null),
           loadErpCredentials().catch(() => null),
         ]);
+        const t = config.timesheet;
+        // An http target signs in with a token from the environment; next-pms in the browser.
         const signedIn =
-          !!erpCreds &&
-          !!config.timesheet &&
-          new URL(erpCreds.url).origin === new URL(config.timesheet.url).origin;
+          t?.type === "http"
+            ? !!process.env[t.token_env]
+            : !!erpCreds && !!t && new URL(erpCreds.url).origin === new URL(t.url).origin;
         return {
           config,
           googleConnected: google !== null,
@@ -254,7 +256,7 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
           helpers,
           erp: {
             connected: signedIn,
-            ...(signedIn && erpCreds?.user ? { user: erpCreds.user } : {}),
+            ...(signedIn && t?.type !== "http" && erpCreds?.user ? { user: erpCreds.user } : {}),
           },
         };
       },

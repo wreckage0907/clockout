@@ -763,6 +763,16 @@ export function Setup({
     if (!state || !config) return [];
     const c = config;
     const host = erpHost(c);
+    const http = c.timesheet?.type === "http" ? c.timesheet : null;
+    if (http && !state.erp.connected)
+      return [
+        {
+          id: "token",
+          label: `Set ${http.token_env}`,
+          wide: true,
+          note: `to your token for ${host}, then open Clockout again`,
+        },
+      ];
     if (!state.erp.connected || !c.timesheet)
       return [
         {
@@ -803,13 +813,18 @@ export function Setup({
               note: "you pick them the first time you send a day (ctrl+s)",
             },
           ]),
-      {
-        id: "sign-out",
-        group: "Sign-in",
-        label: "Sign out",
-        button: "neutral",
-        press: () => void disconnectErp(),
-      },
+      // An http target's token lives in your environment; there's nothing to sign out of here.
+      ...(http
+        ? []
+        : [
+            {
+              id: "sign-out",
+              group: "Sign-in",
+              label: "Sign out",
+              button: "neutral" as const,
+              press: () => void disconnectErp(),
+            },
+          ]),
     ];
   }
 

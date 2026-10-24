@@ -1,11 +1,13 @@
 import { type ErpCredentials, loadErpCredentials, saveErpCredentials } from "../config/credentials";
 import type { Config } from "../config/schema";
+import { httpTarget } from "./http";
 import { nextPms } from "./next-pms";
 import { erpAuth, type Fetch, siteOrigin } from "./next-pms/oauth";
 import type { Target } from "./types";
 
 export interface TargetDeps {
   fetch?: Fetch;
+  env?: NodeJS.ProcessEnv;
   credentials?: () => Promise<ErpCredentials | null>;
   saveCredentials?: (c: ErpCredentials) => Promise<void>;
 }
@@ -17,6 +19,14 @@ export interface TargetDeps {
 export async function openTarget(config: Config, deps: TargetDeps = {}): Promise<Target | null> {
   const t = config.timesheet;
   if (!t) return null;
+  if (t.type === "http") {
+    const token = (deps.env ?? process.env)[t.token_env];
+    if (!token)
+      throw new Error(
+        `Set ${t.token_env} to your timesheet API's token (from ${new URL(t.url).host}), then try again.`,
+      );
+    return httpTarget(t.url, token, t.token_env, deps.fetch);
+  }
   const creds = await (deps.credentials ?? loadErpCredentials)();
   if (!creds || creds.url !== siteOrigin(t.url)) {
     throw new Error(

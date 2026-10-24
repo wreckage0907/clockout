@@ -34,7 +34,8 @@
     "test": "vitest run",
     "check": "pnpm lint && pnpm typecheck && pnpm build && pnpm test && publint",
     "coverage": "vitest run --coverage",
-    "smoke": "sh scripts/smoke-package.sh"
+    "smoke": "sh scripts/smoke-package.sh",
+    "mock-pms": "node test/mock-pms/server.ts"
   },
   "dependencies": {
     "@clack/prompts": "1.8.1",

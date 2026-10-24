@@ -148,7 +148,20 @@ const nextPmsTarget = z.object({
   map: z.array(taskMapping).default([]),
 });
 
-export const timesheetTarget = z.discriminatedUnion("type", [nextPmsTarget]);
+/** Any timesheet or PMS system speaking Clockout's small JSON API (docs/timesheet-api.md). */
+const httpTarget = z.object({
+  type: z.literal("http"),
+  /** The API's base address, e.g. "https://pms.example.com/api/clockout". */
+  url: siteUrl,
+  /** The environment variable holding the API token; the token itself never goes in this file. */
+  token_env: z
+    .string()
+    .regex(/^[A-Z_][A-Z0-9_]*$/, "an environment variable name, e.g. CLOCKOUT_TIMESHEET_TOKEN")
+    .default("CLOCKOUT_TIMESHEET_TOKEN"),
+  map: z.array(taskMapping).default([]),
+});
+
+export const timesheetTarget = z.discriminatedUnion("type", [nextPmsTarget, httpTarget]);
 
 export const configSchema = z.object({
   me: z.object({

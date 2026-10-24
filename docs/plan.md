@@ -144,7 +144,8 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 - [x] End-to-end workflow: a day from every local source, the calendar and a fake GitHub drafted with `--json`, saved, and exported from what was saved, in every format and as a range
 - [x] CLI contract: exit code, stdout and stderr checked separately for bad options, dates, formats, conflicting arguments, typos, unwritable files, broken configs and a damaged saved day
-- [x] `clockout push` against a fake next-pms site: dry run, send, nothing twice, an entry deleted in the ERP, a revoked sign-in; rotated refresh tokens kept and the old one revoked
+- [x] Generic `http` timesheet target: a five-request JSON API any PMS can answer ([timesheet-api.md](timesheet-api.md)), token from an environment variable
+- [x] Mock PMS (`pnpm mock-pms`, `test/mock-pms/`) with a real system's rules; `clockout push` against it: dry run, send, nothing twice, entries deleted or changed there, approved entries, a closed week, an unknown task, a wrong or missing token, the PMS down
 - [x] Package smoke test in CI: the packed tarball installed globally runs as `clockout`
 - [ ] Interactive tests in a pseudo-terminal (Ink start-up, keys, paste, resize, terminal restored)
 

@@ -1,163 +1,56 @@
-import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  DATE,
-  fakeServer,
-  fixtureJson,
-  fixtureSourcesToml,
-  type Request,
-  type Sandbox,
-  sandbox,
-} from "./helpers";
+import { type MockPms, startMockPms } from "../mock-pms/server";
+import { DATE, fixtureSourcesToml, sandbox } from "./helpers";
 
-// `clockout push` against a fake next-pms site on 127.0.0.1: OAuth refresh with rotating tokens,
-// and timesheet entries kept in memory the way next-pms returns them.
+// `clockout push` to a project-management system speaking Clockout's timesheet API: the mock
+// PMS on 127.0.0.1 (test/mock-pms), with its own rules about tasks, hours and approvals.
 
-interface Entry {
-  name: string;
-  parent: string;
-  task: string;
-  hours: number;
-  description: string;
-  from_time: string;
-}
-
-const API = "/api/method/next_pms.timesheet.api";
 /** The fixture day has three meetings nobody answered; push says they wait. */
 const WAITING = "3 meetings waiting for an answer aren't sent. Run `clockout` to review.\n";
-const TOKEN = "/api/method/frappe.integrations.oauth2.get_token";
-const REVOKE = "/api/method/frappe.integrations.oauth2.revoke_token";
 
-function erpSite(employee: unknown) {
-  const entries: Entry[] = [];
-  let issued = 0;
-  let revokedSignIn = false;
-  let n = 0;
-  const handle = (r: Request, origin: string): { status?: number; json: unknown } => {
-    const body = r.body
-      ? r.headers["content-type"]?.includes("json")
-        ? JSON.parse(r.body)
-        : Object.fromEntries(new URLSearchParams(r.body))
-      : {};
-    switch (r.path) {
-      case "/.well-known/oauth-authorization-server":
-        return {
-          json: {
-            issuer: origin,
-            authorization_endpoint: `${origin}/api/method/frappe.integrations.oauth2.authorize`,
-            token_endpoint: `${origin}${TOKEN}`,
-            revocation_endpoint: `${origin}${REVOKE}`,
-          },
-        };
-      case TOKEN:
-        if (revokedSignIn) return { status: 403, json: { exc_type: "PermissionError" } };
-        issued++;
-        return {
-          json: { access_token: `at-${issued}`, expires_in: 3600, refresh_token: `rt-${issued}` },
-        };
-      case REVOKE:
-        return { json: {} };
-    }
-    if (r.headers.authorization !== `Bearer at-${issued}`)
-      return { status: 401, json: { exc_type: "AuthenticationError" } };
-    switch (r.path) {
-      case `${API}.employee.get_data`:
-        return { json: employee };
-      case `${API}.timesheet.get_timesheet_data`: {
-        const tasks: Record<string, { data: Entry[] }> = {};
-        for (const e of entries) {
-          tasks[e.task] ??= { data: [] };
-          tasks[e.task]?.data.push(e);
-        }
-        const dates = Array.from({ length: 7 }, (_, i) => `2026-10-${12 + i}`);
-        return { json: { message: { data: { week: { dates, status: "Not Submitted", tasks } } } } };
-      }
-      case `${API}.timesheet.save`:
-        entries.push({
-          name: `row-${++n}`,
-          parent: "TS-1",
-          task: body.task,
-          hours: body.hours,
-          description: body.description,
-          from_time: `${body.date} 00:00:00`,
-        });
-        return { json: { message: "ok" } };
-      case `${API}.timesheet.update_timesheet_detail`: {
-        const e = entries.find((x) => x.name === body.name);
-        if (e)
-          Object.assign(e, { task: body.task, hours: body.hours, description: body.description });
-        return { json: { message: "ok" } };
-      }
-      case `${API}.timesheet.delete`:
-        entries.splice(
-          entries.findIndex((x) => x.name === body.name),
-          1,
-        );
-        return { json: { message: "ok" } };
-    }
-    return { status: 404, json: {} };
-  };
-  return {
-    entries,
-    handle,
-    revokeSignIn: () => {
-      revokedSignIn = true;
-    },
-  };
+const MAP = {
+  Meetings: "TASK-MEET",
+  "acme/api": "TASK-API",
+  "dev-example/clockout": "TASK-TOOLS",
+};
+
+async function setup(map: Record<string, string> = MAP) {
+  const pms = await startMockPms();
+  const sb = await sandbox();
+  const rules = Object.entries(map)
+    .map(([project, task]) => `[[timesheet.map]]\nproject = "${project}"\nerp_task = "${task}"`)
+    .join("\n\n");
+  await sb.writeConfig(
+    await fixtureSourcesToml(sb, `\n[timesheet]\ntype = "http"\nurl = "${pms.url}"\n\n${rules}\n`),
+  );
+  const push = (args: string[] = ["--yes"], token = pms.token) =>
+    sb.run(["push", DATE, "--no-ai", ...args], { env: { CLOCKOUT_TIMESHEET_TOKEN: token } });
+  return { pms, push };
 }
 
-let sb: Sandbox;
-let site: ReturnType<typeof erpSite>;
-let server: Awaited<ReturnType<typeof fakeServer>>;
-const credentials = () => join(sb.config, "credentials.json");
-const writes = () =>
-  server.requests.filter((r) => /timesheet\.(save|update_timesheet_detail|delete)$/.test(r.path));
+describe("sending a day to a PMS", () => {
+  let pms: MockPms;
+  let push: Awaited<ReturnType<typeof setup>>["push"];
+  beforeAll(async () => {
+    ({ pms, push } = await setup());
+  });
+  afterAll(() => pms.stop());
 
-beforeAll(async () => {
-  sb = await sandbox();
-  site = erpSite(await fixtureJson("next-pms/employee.json"));
-  server = await fakeServer((r, origin) => site.handle(r, origin));
-  const map = [
-    ["Meetings", "TASK-MEET"],
-    ["acme/api", "TASK-API"],
-    ["dev-example/clockout", "TASK-TOOLS"],
-  ]
-    .map(([project, task]) => `\n[[timesheet.map]]\nproject = "${project}"\nerp_task = "${task}"`)
-    .join("\n");
-  await sb.writeConfig(
-    await fixtureSourcesToml(
-      sb,
-      `\n[timesheet]\ntype = "next-pms"\nurl = "${server.origin}"\n${map}\n`,
-    ),
-  );
-  await writeFile(
-    credentials(),
-    JSON.stringify({
-      erp: { url: server.origin, client_id: "cid", refresh_token: "rt-0", connected_at: DATE },
-    }),
-    { mode: 0o600 },
-  );
-});
-afterAll(() => server.close());
-
-describe("sending a day to the ERP", () => {
   it("shows what it would send and writes nothing on a dry run", async () => {
-    const r = await sb.run(["push", DATE, "--dry-run", "--no-ai"]);
+    const r = await push(["--dry-run"]);
     expect(r.stderr).toBe(WAITING);
     expect(r.code).toBe(0);
-    expect(r.stdout.split("\n")[0]).toBe(`${DATE} → ${server.origin}`);
-    expect(r.stdout).toContain("+ ");
-    expect(writes()).toEqual([]);
+    expect(r.stdout.split("\n")[0]).toBe(`${DATE} → ${pms.url}`);
+    expect(r.stdout).toContain("+ Add 2h00 to TASK-API: Fix auth token refresh");
+    expect(pms.writes()).toEqual([]);
   });
 
-  it("sends every row once, keeps the rotated sign-in and revokes the old one", async () => {
-    const r = await sb.run(["push", DATE, "--yes", "--no-ai"]);
+  it("sends every row once, on the task its project maps to, with the token", async () => {
+    const r = await push();
     expect(r.stderr).toBe(WAITING);
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("Sent 8 changes.");
-    // The local sources only (no GitHub here): every row, on the task its project maps to.
-    expect(site.entries.map((e) => [e.task, e.hours, e.description])).toEqual([
+    expect(pms.day(DATE).map((e) => [e.task, e.hours, e.description])).toEqual([
       ["TASK-MEET", 0.5, "Daily standup"],
       ["TASK-API", 2, "Fix auth token refresh"],
       ["TASK-API", 0.25, "Rate limit the login endpoint"],
@@ -167,37 +60,85 @@ describe("sending a day to the ERP", () => {
       ["TASK-API", 0.25, "Investigate flaky deploy"],
       ["TASK-TOOLS", 0.25, "Work on dev-example/clockout"],
     ]);
-    const saved = JSON.parse(await readFile(credentials(), "utf8"));
-    expect(saved.erp.refresh_token).not.toBe("rt-0");
-    const revoked = server.requests.filter((x) => x.path === REVOKE);
-    expect(new URLSearchParams(revoked[0]?.body).get("token")).toBe("rt-0");
+    expect(new Set(pms.requests.map((x) => x.auth))).toEqual(new Set(["Bearer mock-token"]));
   });
 
   it("sends nothing the second time", async () => {
-    const before = writes().length;
-    const r = await sb.run(["push", DATE, "--yes", "--no-ai"]);
+    const before = pms.writes().length;
+    const r = await push();
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("Nothing to send.");
-    expect(writes()).toHaveLength(before);
+    expect(pms.writes()).toHaveLength(before);
   });
 
-  it("adds back an entry deleted in the ERP, and only that one", async () => {
-    const gone = site.entries.splice(0, 1)[0];
-    const r = await sb.run(["push", DATE, "--yes", "--no-ai"]);
-    expect(r.stdout).toContain("Sent 1 change.");
-    expect(site.entries).toHaveLength(8);
-    expect(site.entries.at(-1)?.description).toBe(gone?.description);
+  it("adds back an entry deleted in the PMS, and puts back one changed there", async () => {
+    const [standup, auth] = pms.day(DATE);
+    if (standup) pms.entries.splice(pms.entries.indexOf(standup), 1);
+    if (auth) auth.hours = 5;
+    const r = await push();
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("Sent 2 changes.");
+    expect(pms.day(DATE)).toHaveLength(8);
+    expect(pms.day(DATE).find((e) => e.description === "Fix auth token refresh")?.hours).toBe(2);
   });
 
-  it("asks you to connect again once the sign-in is revoked, and writes nothing", async () => {
-    site.revokeSignIn();
-    const before = writes().length;
-    const r = await sb.run(["push", DATE, "--yes", "--no-ai"]);
+  it("leaves an approved entry alone, says why, and exits 1", async () => {
+    const auth = pms.day(DATE).find((e) => e.description === "Fix auth token refresh");
+    if (auth) auth.hours = 3;
+    pms.lock(auth?.id ?? "");
+    const before = pms.writes().length;
+    const r = await push();
     expect(r.code).toBe(1);
-    expect(r.stdout).toBe("");
-    expect(r.stderr).toContain(
-      "\nclockout: The ERP sign-in expired or was revoked. Run `clockout connect erp <url>` again.\n",
+    expect(r.stdout).toMatch(
+      /\n {2}! Can't send: Approved by your manager\. \(Fix auth token refresh\)\n/,
     );
-    expect(writes()).toHaveLength(before);
+    expect(pms.writes()).toHaveLength(before);
+    expect(auth?.hours).toBe(3);
+  });
+
+  it("says to check the token when the PMS refuses it, and when it's missing", async () => {
+    const host = new URL(pms.url).host;
+    const wrong = await push(["--yes"], "not-the-token");
+    expect(wrong.code).toBe(1);
+    expect(wrong.stdout).toBe("");
+    expect(wrong.stderr).toContain(
+      `clockout: ${host} refused the token in CLOCKOUT_TIMESHEET_TOKEN (Invalid token). Check it, or get a new one.\n`,
+    );
+    const missing = await push(["--yes"], "");
+    expect(missing.stderr).toContain(
+      `clockout: Set CLOCKOUT_TIMESHEET_TOKEN to your timesheet API's token (from ${host}), then try again.\n`,
+    );
+  });
+
+  it("says when the PMS isn't answering", async () => {
+    pms.setDown(true);
+    const r = await push();
+    pms.setDown(false);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain(
+      `clockout: ${new URL(pms.url).host} isn't answering right now (HTTP 503: Down for maintenance). Try again later.\n`,
+    );
+  });
+});
+
+describe("what the PMS refuses", () => {
+  it("shows its reason for each row it refused, sends the rest, and exits 1", async () => {
+    const { pms, push } = await setup({ ...MAP, "dev-example/clockout": "TASK-GONE" });
+    const r = await push();
+    await pms.stop();
+    expect(r.code).toBe(1);
+    expect(r.stdout).toContain("Sent 6 changes.");
+    expect(r.stderr).toContain("    There's no task TASK-GONE.\n");
+    expect(pms.day(DATE)).toHaveLength(6);
+  });
+
+  it("sends nothing to a week that's already approved", async () => {
+    const { pms, push } = await setup();
+    pms.closeDate(DATE);
+    const r = await push();
+    await pms.stop();
+    expect(r.code).toBe(1);
+    expect(r.stdout).toContain("This week is already approved.");
+    expect(pms.writes()).toEqual([]);
   });
 });

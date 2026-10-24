@@ -65,7 +65,7 @@
     <td width="50%" valign="top"><samp>
       <b>Send only what changed</b>
       <br><br>
-      Push reviewed rows to next-pms on Frappe/ERPNext. Clockout previews additions, updates
+      Push reviewed rows to next-pms on Frappe/ERPNext, or any system with a small JSON API. Clockout previews additions, updates
       and removals, remembers task mappings, and leaves entries made in the ERP alone.
     </samp></td>
   </tr>
@@ -255,6 +255,26 @@ the same flow with:
 node dist/cli.js push yesterday --dry-run
 node dist/cli.js push yesterday --yes
 ```
+
+</samp>
+</details>
+
+<details>
+<summary><b>↗️ Any other timesheet or PMS</b></summary>
+<br>
+<samp>
+
+Anything that answers five JSON requests (list a day's entries, search tasks, create, update,
+delete) with a bearer token can take your days: see [docs/timesheet-api.md](docs/timesheet-api.md).
+
+```toml
+[timesheet]
+type = "http"
+url = "https://pms.example.com/api/clockout"
+```
+
+Put the token in `CLOCKOUT_TIMESHEET_TOKEN` (never in the config), then send as above.
+`pnpm mock-pms` runs a mock one on your machine to try it.
 
 </samp>
 </details>
