@@ -7,7 +7,7 @@ const answers = {
   emails: ["dev@example.com"],
   timezone: "Asia/Kolkata",
   workingHours: "10:00-19:00",
-  ai: "claude-code" as const,
+  ai: "auto" as const,
 };
 const everything: Detections = {
   claudeCode: { summary: "3 projects" },
@@ -16,7 +16,7 @@ const everything: Detections = {
   opencode: { summary: "4 sessions" },
   antigravity: { summary: "2 conversations" },
   github: { summary: "logged in with the gh CLI" },
-  claudeCli: "2.1.302",
+  helpers: [{ name: "Claude Code", version: "2.1.302" }],
 };
 
 describe("buildConfig", () => {
@@ -42,7 +42,7 @@ describe("buildConfig", () => {
       opencode: null,
       antigravity: null,
       github: null,
-      claudeCli: null,
+      helpers: [],
     });
     expect(c.sources).toEqual([]);
     expect(configSchema.safeParse(c).success).toBe(true);

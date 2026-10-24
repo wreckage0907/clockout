@@ -31,6 +31,7 @@ import {
   longDate,
   mix,
   Pill,
+  ProblemsDialog,
   SlashMenu,
   Spinner,
   Toast,
@@ -55,6 +56,10 @@ import { hm, projectColor, T } from "./theme";
 export interface AppActions {
   /** The day; `refresh` drafts it again from the latest activity, dropping corrections. */
   load(date: string, opts?: { refresh?: boolean }): Promise<OpenedDay>;
+  /** The AI helper now, or why there's none (typed corrections need it; the rest doesn't). */
+  ai(): { on: true; label: string } | { on: false; why: string };
+  /** Where failures are logged in full, for display. */
+  errorLog: string;
   /** What was said, as edits to the day and changes to settings; `earlier` is the last few turns. */
   parse(text: string, day: Day, earlier: Turn[]): Promise<Correction>;
   /**
@@ -151,7 +156,7 @@ export function App({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState<string[]>([]);
-  const [overlay, setOverlay] = useState<"date" | "add" | "task" | null>(null);
+  const [overlay, setOverlay] = useState<"date" | "add" | "task" | "problems" | null>(null);
   const [sending, setSending] = useState<PushPlan | null>(null);
   const [unmapped, setUnmapped] = useState<Picking | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -163,6 +168,13 @@ export function App({
   const [chip, setChip] = useState(0);
   const [editing, setEditing] = useState<string | null>(null);
   const [toast, showToast] = useToast();
+  // Say once, at the start, that there's no AI helper and what that means.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only on first render
+  useEffect(() => {
+    const ai = actions.ai();
+    if (!ai.on) showToast(ai.why);
+  }, []);
+  const aiOn = actions.ai().on;
   const draft = useDraft(!setup && !overlay && !editing && !busy && !proposal && !sending);
   const pill = useDraft(!setup && editing !== null);
   const offset = useRef(0);
@@ -561,6 +573,7 @@ export function App({
     if (s.name === "help") return draft.setValue("/");
     if (s.name === "date") return goTo(s.date);
     if (s.name === "setup") return openSetup(s.section);
+    if (s.name === "problems") return setOverlay("problems");
     if (s.name === "connect") {
       const op: SettingOp = { op: "connect", service: s.service, ...(s.url ? { url: s.url } : {}) };
       return void configure(
@@ -767,11 +780,17 @@ export function App({
       value={draft.value}
       busy={busy}
       placeholder={
-        view === "home"
-          ? 'Tell me about your day, or what to set up…  "standup ran to 45 minutes"'
-          : card?.kind === "row"
-            ? `How long was “${card.title}”?  type 1h 45m, or say what changed`
-            : 'Say what changed…  "standup ran to 45 minutes"'
+        !aiOn
+          ? view === "home"
+            ? "No AI helper: Enter opens the day, / lists commands"
+            : card?.kind === "row"
+              ? `How long was “${card.title}”?  type 1h 45m  ·  no AI helper: / for commands`
+              : "No AI helper: type / for commands, or pick a card to change it"
+          : view === "home"
+            ? 'Tell me about your day, or what to set up…  "standup ran to 45 minutes"'
+            : card?.kind === "row"
+              ? `How long was “${card.title}”?  type 1h 45m, or say what changed`
+              : 'Say what changed…  "standup ran to 45 minutes"'
       }
       date={date}
       today={today}
@@ -821,6 +840,14 @@ export function App({
   ) : null;
   const dialogs = (
     <>
+      {overlay === "problems" ? (
+        <ProblemsDialog
+          problems={warnings}
+          errorLog={actions.errorLog}
+          screen={screen}
+          onClose={() => setOverlay(null)}
+        />
+      ) : null}
       {overlay === "add" && day ? (
         <AddTimeDialog
           projects={[
@@ -871,10 +898,18 @@ export function App({
   const warning = warnings.length ? (
     <Box gap={1} flexGrow={1}>
       <Box flexShrink={1} flexGrow={1}>
-        <Text color={T.ask} wrap="truncate-end">
-          ⚠ {warnings.join(" · ")}
-        </Text>
+        <Clickable onClick={() => setOverlay("problems")}>
+          {() => (
+            <Text color={T.ask} wrap="truncate-end">
+              ⚠ {warnings.length > 1 ? `${warnings.length} problems · ` : ""}
+              {warnings[0]}
+            </Text>
+          )}
+        </Clickable>
       </Box>
+      <Clickable onClick={() => setOverlay("problems")}>
+        {(hover) => <Text color={hover ? T.text : T.muted}>/problems ›</Text>}
+      </Clickable>
       {stale ? <Button label="Rebuild the day" tone="ask" onClick={() => askRebuild()} /> : null}
     </Box>
   ) : null;

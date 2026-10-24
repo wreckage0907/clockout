@@ -118,6 +118,14 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Antigravity source: the CLI's `brain/<id>` transcripts, titles and folders from `conversation_summaries.db`; the IDE's protobuf conversations aren't read
 - [x] Setup palette: sections on the left (Sources, Day, AI, ERP), the chosen one's settings on the right; keyboard and mouse; nothing hidden under "More"
 
+## Ready for other people
+
+- [x] Evaluation without your own setup: no `claude`, a logged-out `claude`, no sources, no config
+- [x] Choosing the AI helper never fails; without one the review screen says so (toast, chat-bar hint, why on typing) and commands print a note
+- [x] AI helpers: Codex (`codex exec`, strict schema, read-only sandbox), opencode (agent with every tool denied, session deleted), Pi (`pi -p --no-tools`); `auto` order Claude Code → Codex → opencode → Pi; Setup and init list what's installed. Antigravity can't be one (spec §6)
+- [x] Helper failures in the CLI's own words with how to sign in, never the command line
+- [x] GitHub and Google sign-in failures: what's wrong and how to fix it, `/problems`, local error log with tokens redacted
+
 ## Day 11 — Export and demo
 
 - [x] Clipboard, Markdown, CSV, TSV, JSON: date, project, task, hours, description (same work merged into one row)

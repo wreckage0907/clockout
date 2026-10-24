@@ -41,6 +41,10 @@ export function fakeActions(
     erp?: { target: Target; map?: TaskMapping[] };
     /** A corrected day with newer activity that can't be merged under it, until refreshed. */
     stale?: boolean;
+    /** Why there's no AI helper; there is one (Claude Code) without this. */
+    noAi?: string;
+    /** What went wrong drafting the day, e.g. a source's sign-in. */
+    warnings?: string[];
   } = {},
 ) {
   const start: StoredDay = opts.day ? { ...stored, day: opts.day } : stored;
@@ -78,13 +82,18 @@ export function fakeActions(
           kept: true,
           stale: true,
         };
-      return { stored: start, warnings: [], kept: false };
+      return { stored: start, warnings: opts.warnings ?? [], kept: false };
     },
+    errorLog: "~/.local/share/clockout/errors.log",
+    ai: () =>
+      opts.noAi ? { on: false, why: opts.noAi } : { on: true, label: "Claude Code (haiku)" },
     parse: async (text, day, earlier) => {
       if (opts.parse) return opts.parse(text, day, earlier);
       const local = localCorrection(text);
       if (local) return local;
-      throw new Error("Typed corrections need the AI helper. Turn it on in Setup (ctrl+p).");
+      throw new Error(
+        opts.noAi ?? "Typed corrections need the AI helper. Turn it on in Setup (ctrl+p).",
+      );
     },
     configure: async (ops) => {
       calls.configured.push(ops);
@@ -163,7 +172,7 @@ export function fakeActions(
         opencode: { found: null },
         antigravity: { found: null },
         github: { found: true },
-        aiFound: true,
+        helpers: [{ id: "claude-code", name: "Claude Code" }],
         erp: { connected: false },
         ...opts.setup,
       }),

@@ -185,9 +185,13 @@ export const configSchema = z.object({
     .optional(),
   ai: z
     .object({
-      backend: z.enum(["auto", "claude-code", "none"]).default("auto"),
-      /** Model alias passed to the backend; small and fast is plenty. */
-      model: z.string().min(1).default("haiku"),
+      /** "auto" uses the first installed of Claude Code, Codex, opencode and Pi. */
+      backend: z.enum(["auto", "claude-code", "codex", "opencode", "pi", "none"]).default("auto"),
+      /**
+       * Model for the helper; leave out for its default (haiku for Claude Code, your own default
+       * in the others). A Claude model only goes to Claude Code, any other only to the rest.
+       */
+      model: z.string().min(1).optional(),
     })
     .prefault({}),
   /** How the AI writes each row's description. Without the AI, titles are used as they are. */

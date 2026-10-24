@@ -92,7 +92,9 @@
 **🔮 Optional**
 
 - `gh auth login` — GitHub activity
-- `claude` — AI summaries and plain-language corrections on your Claude Code subscription
+- An AI helper for descriptions and plain-language corrections, on your own subscription:
+  `claude`, `codex`, `opencode` or `pi` (the first one installed is used; pick another in
+  Setup). Without one, descriptions come from titles and corrections are made on the cards
 
 </samp>
 
@@ -133,7 +135,7 @@
 
 | | Step | What happens |
 |---|---|---|
-| **1** | **Run `init`** | Clockout detects local agent logs, GitHub and Claude Code, then asks for your time zone, working hours and calendar. |
+| **1** | **Run `init`** | Clockout detects local agent logs, GitHub and an AI helper, then asks for your time zone, working hours and calendar. |
 | **2** | **Open the day** | Press Enter to expand the timesheet cards. Move with **↑ ↓**, edit a duration with **Enter**, and nudge it with **− / +**. Click checkboxes or press **Space** to select several; **Shift-click** (or **Option-click**, e.g. inside herdr) a card to tick it, or a range once one is ticked. |
 | **3** | **Say what is wrong** | Type or dictate a correction. Review the proposed operations, **Enter** to apply, **Esc** to revise, **Ctrl+Z** to undo. |
 | **4** | **Take the sheet** | **Ctrl+Y** copies tab-separated rows, or only the checked rows when any are selected. The selection toolbar can also map or remove several cards together. Use `export` for a file, another format or a range of dates. |
@@ -183,6 +185,13 @@ The AI returns edit operations, never a rewritten timesheet. Core validation rej
 changes before you see the proposal. Your corrections are stored with the day and replayed
 when new activity arrives; refreshing keeps them whenever the original blocks still exist.
 Use `--no-ai` for titles and heuristic summaries instead.
+
+The AI helper is your own agent CLI, run with its tools off, in an empty temporary folder,
+saving nothing: Claude Code (`claude -p`, schema enforced), Codex (`codex exec`, read-only
+sandbox, schema enforced), opencode (`opencode run` as an agent that may use no tools; the
+session is deleted afterwards) or Pi (`pi -p --no-tools`). It only sees titles, branch names
+and PR subjects. Antigravity can't be the helper: its print mode runs an agent, saves a
+conversation, and Google's terms don't allow other products to use it.
 
 </samp>
 </details>
@@ -244,6 +253,24 @@ the same flow with:
 node dist/cli.js push yesterday --dry-run
 node dist/cli.js push yesterday --yes
 ```
+
+</samp>
+</details>
+
+<details>
+<summary><b>🩺 When something doesn't work</b></summary>
+<br>
+<samp>
+
+A source that fails never stops the day: it is drafted from the rest, and the review screen
+shows a ⚠ line. Click it or type `/problems` for each message in full with its fix (sign in
+again, turn on the Calendar API, authorize a token for your organization's SSO…). The
+underlying errors are kept in `~/.local/share/clockout/errors.log`, on your machine only,
+with anything that looks like a token redacted. Google sign-in problems are listed in
+[docs/google-setup.md](docs/google-setup.md#troubleshooting).
+
+Without an AI helper, Clockout says so when it opens. The cards, `/` commands and exports
+all work; only typed corrections and AI descriptions need one.
 
 </samp>
 </details>

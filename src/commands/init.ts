@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import * as p from "@clack/prompts";
 import { execa } from "execa";
 import { z } from "zod";
-import { detectClaudeCli } from "../ai/claude-cli";
+import { BACKEND_NAMES, detectBackends } from "../ai";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths, tildify } from "../config/paths";
 import { type ConfigInput, isTimeZone, type SourceConfig } from "../config/schema";
@@ -22,7 +22,8 @@ export interface Detections {
   opencode: Detected | null;
   antigravity: Detected | null;
   github: Detected | null;
-  claudeCli: string | null;
+  /** Agent CLIs that can be the AI helper, in the order "auto" tries them. */
+  helpers: { name: string; version: string }[];
 }
 
 export interface InitAnswers {
@@ -31,7 +32,8 @@ export interface InitAnswers {
   timezone: string;
   workingHours: string;
   icsUrl?: string;
-  ai: "claude-code" | "none";
+  /** "auto" rather than a named helper, so a helper that goes missing never stops Clockout. */
+  ai: "auto" | "none";
 }
 
 /** Pure: answers + what was found on this machine → config to write. */
@@ -90,7 +92,7 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
     opencodeFound,
     agyFound,
     github,
-    claudeCli,
+    helpers,
     gitName,
     gitEmail,
   ] = await Promise.all([
@@ -100,7 +102,7 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
     opencode.detect(ctx),
     antigravity.detect(ctx),
     detectGitHub(ctx),
-    detectClaudeCli(env),
+    detectBackends(env),
     gitConfig("user.name"),
     gitConfig("user.email"),
   ]);
@@ -112,7 +114,7 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
     opencode: opencodeFound,
     antigravity: agyFound,
     github,
-    claudeCli,
+    helpers,
   };
 
   p.log.message(
@@ -127,9 +129,9 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
       github
         ? `✓ GitHub: ${github.summary}`
         : "✗ GitHub: not logged in. Run `gh auth login`, then `clockout init` again.",
-      claudeCli
-        ? `✓ Claude Code CLI ${claudeCli}: can write summaries on your subscription`
-        : "✗ Claude Code CLI: not found; summaries will use session and PR titles",
+      helpers[0]
+        ? `✓ AI helper: ${helpers.map((h) => `${h.name} ${h.version}`).join(", ")}; writes descriptions and reads typed corrections on your own subscription`
+        : `✗ AI helper: none found (${BACKEND_NAMES}). Descriptions will use session and PR titles, and typed corrections need one`,
     ].join("\n"),
   );
 
@@ -202,16 +204,16 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
     if (p.isCancel(icsUrl)) return cancelled();
   }
 
-  let ai: InitAnswers["ai"] = "none";
-  if (claudeCli) {
+  let ai: InitAnswers["ai"] = "auto";
+  if (helpers[0]) {
     const choice = await p.select({
-      message: "AI for summaries and voice corrections",
-      initialValue: "claude-code" as const,
+      message: "AI for descriptions and voice corrections",
+      initialValue: "auto" as const,
       options: [
         {
-          value: "claude-code" as const,
-          label: "Claude Code",
-          hint: "runs your own `claude`; no API key",
+          value: "auto" as const,
+          label: helpers[0].name,
+          hint: "on your own subscription, no API key; pick another in Setup (ctrl+p)",
         },
         { value: "none" as const, label: "None", hint: "use session and PR titles" },
       ],

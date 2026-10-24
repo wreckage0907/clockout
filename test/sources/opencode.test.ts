@@ -57,6 +57,11 @@ describe("opencode source", () => {
     expect(prompts[2]?.title).toBeUndefined(); // still "New session - …"
   });
 
+  it("leaves out Clockout's own AI calls, run in its temp folders", async () => {
+    const ids = new Set((await collect("2026-10-16")).map((a) => a.sessionId));
+    expect(ids.has("ses_0a1b2c3d4ffeClockoutAi05")).toBe(false);
+  });
+
   it("spans an agent turn from the first reply to the last one completing", async () => {
     const turns = (await collect("2026-10-16")).filter((a) => a.kind === "agent_turn");
     expect(turns.map((a) => [hhmm(a), a.end?.toISOString().slice(11, 19)])).toEqual([

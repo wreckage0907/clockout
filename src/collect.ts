@@ -10,6 +10,9 @@ import { getSource } from "./sources";
 import type { Source, SourceContext } from "./sources/types";
 import type { DayStore, StoredDay } from "./store/json-store";
 
+/** Where a failure's full details go (the error log); tests leave it out. */
+export type LogError = (where: string, err: unknown) => unknown;
+
 export interface Collected {
   activities: Activity[];
   /** One line per source that failed; the day is built from the rest. */
@@ -26,6 +29,7 @@ export async function collect(
   config: Config,
   ctx: Partial<Omit<SourceContext, "config">> = {},
   lookup: SourceLookup = getSource,
+  log?: LogError,
 ): Promise<Collected> {
   const range = dayRange(date, config.me.timezone);
   const full: SourceContext = { config, homeDir: homedir(), env: process.env, ...ctx };
@@ -41,14 +45,15 @@ export async function collect(
   const activities: Activity[] = [];
   const warnings: string[] = [];
   const ok = new Set<string>();
-  for (const r of results) {
+  results.forEach((r, i) => {
     if (r.status === "fulfilled") {
       activities.push(...r.value.out);
       ok.add(r.value.id);
     } else {
       warnings.push(r.reason instanceof Error ? r.reason.message : String(r.reason));
+      log?.(`source ${config.sources[i]?.type ?? "?"}`, r.reason);
     }
-  }
+  });
   return { activities, warnings, ok };
 }
 
@@ -80,12 +85,13 @@ export async function openDay(
     ai?: LlmBackend | null;
     /** Overrides which implementation runs for a source type (test and prototype hook). */
     sources?: SourceLookup;
+    log?: LogError;
   } = {},
 ): Promise<OpenedDay> {
   const existing = await store.load(date);
   const corrected = existing && existing.edits.length > 0 && !opts.refresh ? existing : null;
 
-  const fresh = await collect(date, config, opts.ctx, opts.sources);
+  const fresh = await collect(date, config, opts.ctx, opts.sources, opts.log);
   const freshSources = new Set(fresh.activities.map((a) => a.source));
   // Only sources still turned on: one you turned off takes its evidence with it.
   const configured = new Set<string>(config.sources.map((s) => s.type));
@@ -103,7 +109,8 @@ export async function openDay(
       const summaries = await summarizeDay(draft, opts.ai, summaryCache, config.descriptions);
       for (const b of draft.blocks) b.summary = summaries.get(b.id) ?? b.summary;
     } catch (err) {
-      warnings.push(`${(err as Error).message}. Using session and PR titles instead.`);
+      warnings.push(`${(err as Error).message} Using session and PR titles instead.`);
+      opts.log?.(`AI helper ${opts.ai.label}`, err);
     }
   }
 

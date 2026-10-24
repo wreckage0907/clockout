@@ -1,5 +1,6 @@
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { z } from "zod";
+import { TEMP_PREFIX } from "../../ai/cli";
 import { tildify } from "../../config/paths";
 import { type AgentSession, type SessionEvent, sessionActivities } from "../agent-session";
 import { repoForDir } from "../git-remote";
@@ -39,7 +40,11 @@ export const opencode: Source<OpencodeConfig> = {
     const db = await openReadOnly(file);
     if (!db) return null;
     try {
-      const row = db.prepare("SELECT count(*) AS n FROM session_v2 WHERE parent_id IS NULL").get();
+      const row = db
+        .prepare(
+          "SELECT count(*) AS n FROM session_v2 WHERE parent_id IS NULL AND directory NOT LIKE ?",
+        )
+        .get(`%/${TEMP_PREFIX}%`);
       const n = Number(row?.n ?? 0);
       if (n === 0) return null;
       return {
@@ -66,6 +71,14 @@ export function dbPath(ctx: Omit<SourceContext, "config">, override?: string): s
   return join(data, "opencode", "opencode.db");
 }
 
+/**
+ * Clockout's own AI calls through opencode run in a temp folder and are deleted afterwards; if a
+ * delete ever fails, the session still isn't your work.
+ */
+function isClockoutCall(directory: string): boolean {
+  return basename(dirname(directory)).startsWith(TEMP_PREFIX);
+}
+
 /** Top-level sessions active in the range; subagent sessions are left out like other agents'. */
 export async function readOpencodeSessions(
   file: string,
@@ -90,7 +103,7 @@ export async function readOpencodeSessions(
     const out: AgentSession[] = [];
     for (const raw of sessions) {
       const s = sessionRow.safeParse(raw);
-      if (!s.success) continue;
+      if (!s.success || isClockoutCall(s.data.directory)) continue;
       const events: SessionEvent[] = [];
       let skipped = 0;
       for (const m of messages.all(s.data.id)) {

@@ -1,11 +1,11 @@
 import { writeFile } from "node:fs/promises";
-import { chooseBackend } from "../ai";
 import { openDay } from "../collect";
 import { addDays } from "../core/time";
 import { timesheetRows } from "../core/timesheet";
 import type { TimesheetRow } from "../core/types";
 import { toCsv, toMarkdown, toTsv } from "../export/formats";
-import { type AppContext, appContext, resolveDate } from "./context";
+import { logError } from "../log";
+import { type AppContext, appContext, commandAi, resolveDate } from "./context";
 
 export interface ExportOptions {
   format?: string;
@@ -42,11 +42,11 @@ export async function runExport(
       throw new Error(`That's more than ${MAX_DAYS} days; export a shorter range.`);
   }
 
-  const ai = opts.ai === false ? null : await chooseBackend(config);
+  const ai = await commandAi(config, opts.ai);
   const rows: TimesheetRow[] = [];
   let open = 0;
   for (const date of dates) {
-    const { stored, warnings } = await openDay(date, config, store, { ai });
+    const { stored, warnings } = await openDay(date, config, store, { ai, log: logError });
     for (const w of warnings) console.error(`warning (${date}): ${w}`);
     rows.push(...timesheetRows(stored.day, config));
     open += stored.day.questions.length;

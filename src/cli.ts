@@ -7,6 +7,8 @@ import { runEdit, runUndo } from "./commands/edit";
 import { runExport } from "./commands/export";
 import { runInit } from "./commands/init";
 import { runPush } from "./commands/push";
+import { tildify } from "./config/paths";
+import { errorLogPath, logError } from "./log";
 
 const program = new Command().name("clockout").description(pkg.description).version(pkg.version);
 
@@ -17,8 +19,7 @@ const dayOptions = (cmd: Command) =>
     .option("--json", "print the drafted day as JSON")
     .option("--refresh", "rebuild from fresh activity, dropping corrections")
     .option("--no-ai", "use session and PR titles instead of AI summaries")
-    .option("--plain", "print the day instead of opening the review screen")
-    .option("--demo", "try it on a made-up day, without any setup");
+    .option("--plain", "print the day instead of opening the review screen");
 
 dayOptions(program.command("today", { isDefault: true }).description("Draft today")).action(
   (opts) => runDay("today", opts),
@@ -92,5 +93,9 @@ try {
   // Expected failures (bad config, no TTY) are Errors with a readable message; no stack trace.
   if (!(err instanceof Error)) throw err;
   console.error(`clockout: ${err.message}`);
+  if (err.cause !== undefined) {
+    await logError(`clockout ${process.argv.slice(2, 3).join(" ")}`.trim(), err);
+    console.error(`Details: ${tildify(errorLogPath())}`);
+  }
   process.exitCode = 1;
 }

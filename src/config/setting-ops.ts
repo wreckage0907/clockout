@@ -66,9 +66,21 @@ const taskNames = z
     meeting: z.string().min(1).optional(),
   })
   .describe("Default task names by kind of block");
+const HELPERS = ["claude-code", "codex", "opencode", "pi"] as const;
+/** The agent CLIs that can be the AI helper, by config name. */
+export const HELPER_NAMES: Record<(typeof HELPERS)[number], string> = {
+  "claude-code": "Claude Code",
+  codex: "Codex",
+  opencode: "opencode",
+  pi: "Pi",
+};
 const ai = z
-  .object({ op: z.literal("ai"), on: z.boolean() })
-  .describe("Turn the AI helper on or off");
+  .object({
+    op: z.literal("ai"),
+    on: z.boolean(),
+    helper: z.enum(HELPERS).optional().describe("Which agent CLI to use, when they name one"),
+  })
+  .describe("Turn the AI helper on or off, or pick which agent runs it");
 const descriptions = z
   .object({
     op: z.literal("descriptions"),
@@ -228,7 +240,7 @@ export function applySettings(
         break;
       }
       case "ai":
-        next = withAi(next, op.on ? "auto" : "none");
+        next = withAi(next, op.on ? (op.helper ?? "auto") : "none");
         break;
       case "descriptions": {
         const { op: _, ...style } = op;
@@ -349,7 +361,10 @@ function describeSetting(op: SettingOp): string {
       return parts.join(", ") || "No change to task names";
     }
     case "ai":
-      return op.on ? "Turn the AI helper on" : "Turn the AI helper off";
+      if (!op.on) return "Turn the AI helper off";
+      return op.helper
+        ? `Use ${HELPER_NAMES[op.helper]} as the AI helper`
+        : "Turn the AI helper on";
     case "descriptions": {
       const parts = [
         op.format ? `start with “${FORMAT_WORDS[op.format]} …”` : "",

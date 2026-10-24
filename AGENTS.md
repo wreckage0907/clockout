@@ -12,7 +12,7 @@ Clockout turns a developer's day (coding-agent sessions, GitHub activity, calend
 pnpm install             # pnpm 11 via corepack (see ADR 0004)
 pnpm dev                 # rebuild dist/ on change
 pnpm build               # bundle src/cli.ts → dist/cli.js
-node dist/cli.js demo     # run the built CLI on the fixture day
+node dist/cli.js day 2026-10-16 --plain --no-ai   # run the built CLI (needs a config)
 pnpm test                # vitest; builds dist/ first
 pnpm exec vitest run test/path/to/file.test.ts   # one test file
 pnpm lint                # biome check
@@ -54,7 +54,7 @@ src/corrections.ts applies edits to a stored day with undo
 src/targets/      timesheet systems the day is sent to (next-pms); read and write entries only
 src/push.ts       plans and applies sending a day to a target, keeps the record of what was sent
 src/oauth.ts      loopback + PKCE for browser sign-ins
-src/demo.ts       --demo: bundled fixtures, temp store, fixed date
+src/log.ts        local error log: full details behind the one-line messages, tokens redacted
 ```
 
 - `core/` must never import from `tui/`, `sources/`, `ai/` or Node built-ins with side effects. It may import `config/schema` (pure).
@@ -66,7 +66,8 @@ src/demo.ts       --demo: bundled fixtures, temp store, fixed date
 - All data stays on the user's machine. No telemetry.
 - Never read or log credential files (`~/.codex/auth.json`, keychains, `.env`, tokens). Get the GitHub token only via `gh auth token` or `GITHUB_TOKEN`, and never print it.
 - AI backends get titles, branch names and commit subjects only, never code or full prompts. For setup by chat they also get a settings summary ([ADR 0007](docs/adr/0007-setup-from-the-chat-bar.md)): never credentials, private calendar links or folder paths.
-- Run `claude -p` with tools off, no session persistence, in an empty temp dir.
+- Run every agent CLI (claude, codex, opencode, pi) with tools off (or denied / read-only where there's no switch), nothing saved, in an empty temp dir; never with the user's own agent config or MCP servers where it can be avoided.
+- Error messages say what's wrong and how to fix it; details go to the error log via `{ cause }`, never tokens.
 - Test fixtures are synthetic. Never copy real session logs, calendar data or PRs into `test/fixtures/`.
 
 ## Testing

@@ -3,7 +3,8 @@ import { openDay } from "../collect";
 import { timesheetRows } from "../core/timesheet";
 import { toCsv, toMarkdown } from "../export/formats";
 import { renderDay } from "../export/text";
-import { type AppContext, appContext, resolveDate } from "./context";
+import { logError } from "../log";
+import { type AppContext, appContext, commandAi, resolveDate } from "./context";
 
 export interface DayOptions {
   md?: boolean;
@@ -20,14 +21,17 @@ export async function runDay(dateInput: string | undefined, opts: DayOptions, ap
   const ctx = app ?? (await appContext());
   const { config, store } = ctx;
   const date = resolveDate(dateInput, config.me.timezone);
-  const ai = opts.ai === false ? null : await chooseBackend(config);
   const interactive = !opts.md && !opts.csv && !opts.json && !opts.plain;
   if (interactive && process.stdin.isTTY && process.stdout.isTTY) {
+    const choice =
+      opts.ai === false ? { backend: null, notice: null } : await chooseBackend(config);
     const { runTui } = await import("../tui/run");
-    await runTui(date, ctx, ai);
+    await runTui(date, ctx, choice);
     return;
   }
+  const ai = await commandAi(config, opts.ai);
   const { stored, warnings, kept, stale } = await openDay(date, config, store, {
+    log: logError,
     refresh: opts.refresh,
     ai,
   });

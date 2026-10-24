@@ -15,6 +15,7 @@ export type Slash =
   | { name: "add" }
   | { name: "date"; date: string }
   | { name: "setup"; section?: SetupSection }
+  | { name: "problems" }
   | { name: "help" };
 
 export interface SlashCommand {
@@ -45,6 +46,7 @@ export const COMMANDS: SlashCommand[] = [
     about: "Open setup, at sources, day, ai, projects or erp",
     key: "ctrl+p",
   },
+  { name: "problems", about: "What didn't work (sign-ins, AI helper) and how to fix it" },
   { name: "help", about: "List these commands" },
 ];
 
@@ -96,6 +98,8 @@ export function parseSlash(text: string, today: string): { ok: Slash } | { error
       return none({ name: "undo" });
     case "add":
       return none({ name: "add" });
+    case "problems":
+      return none({ name: "problems" });
     case "today":
       return none({ name: "date", date: today });
     case "yesterday":

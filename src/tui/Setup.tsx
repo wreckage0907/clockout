@@ -12,7 +12,7 @@ import {
   withSource,
 } from "../config/edit";
 import { type Config, durationMinutes } from "../config/schema";
-import { FORMAT_WORDS } from "../config/setting-ops";
+import { FORMAT_WORDS, HELPER_NAMES } from "../config/setting-ops";
 import type { ClaudeProject } from "../sources/claude-code/paths";
 import { Clickable } from "./clickable";
 import { Button, Dialog, Spinner, Typed, useDraft } from "./kit";
@@ -30,8 +30,8 @@ export interface SetupState {
   opencode: { found: string | null };
   antigravity: { found: string | null };
   github: { found: boolean };
-  /** The `claude` CLI is installed, so the AI helper can work. */
-  aiFound: boolean;
+  /** Agent CLIs installed here that can be the AI helper, in the order "auto" tries them. */
+  helpers: { id: Exclude<Config["ai"]["backend"], "auto" | "none">; name: string }[];
   /** Signed in to the ERP in `config.timesheet`, and as whom. */
   erp: { connected: boolean; user?: string };
 }
@@ -615,22 +615,44 @@ export function Setup({
   function aiRows(): Row[] {
     if (!state || !config) return [];
     const c = config;
-    const on = c.ai.backend !== "none";
+    const { backend } = c.ai;
+    const on = backend !== "none";
+    const { helpers } = state;
+    const chosen = helpers.find((h) => h.id === backend);
+    // The configured one stays listed when it isn't installed, so you can see it and move off it.
+    const listed =
+      backend === "auto" || backend === "none" || chosen
+        ? helpers
+        : [...helpers, { id: backend, name: HELPER_NAMES[backend] }];
+    const note = !on
+      ? "off: descriptions come from titles, typed corrections don't work"
+      : backend === "auto"
+        ? helpers[0]
+          ? `using ${helpers[0].name}`
+          : "none installed: Claude Code, Codex, opencode or Pi"
+        : chosen
+          ? ""
+          : `${HELPER_NAMES[backend]} isn't installed`;
     return [
       {
         id: "ai",
         label: "Helper",
         options: [
-          { label: "Claude Code", on, pick: () => void save(withAi(c, "auto")) },
+          { label: "Auto", on: backend === "auto", pick: () => void save(withAi(c, "auto")) },
+          ...listed.map((h) => ({
+            label: h.name,
+            on: backend === h.id,
+            pick: () => void save(withAi(c, h.id)),
+          })),
           { label: "No AI", on: !on, pick: () => void save(withAi(c, "none")) },
         ],
-        note: state.aiFound || !on ? "" : "needs the claude CLI on your PATH",
+        note,
       },
       {
         id: "model",
         label: "Model",
-        value: c.ai.model,
-        note: on ? "ai.model in config.toml" : "off: descriptions come from titles",
+        value: c.ai.model ?? "default",
+        note: on ? "ai.model in config.toml" : "",
       },
       {
         id: "d-format",

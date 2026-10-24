@@ -4,7 +4,8 @@ import { openDay } from "../collect";
 import { describeEdits } from "../core/edits";
 import { commitEdits, undoEdit } from "../corrections";
 import { renderDay } from "../export/text";
-import { type AppContext, appContext, resolveDate } from "./context";
+import { logError } from "../log";
+import { type AppContext, appContext, noAiMessage, resolveDate } from "./context";
 
 export interface EditOptions {
   date?: string;
@@ -14,14 +15,10 @@ export interface EditOptions {
 /** `clockout edit "the gap was lunch, I skipped the design sync"` */
 export async function runEdit(text: string, opts: EditOptions, app?: AppContext) {
   const { config, store } = app ?? (await appContext());
-  const backend = await chooseBackend(config);
-  if (!backend) {
-    throw new Error(
-      "Corrections in plain words need Claude Code. Install it, or set ai.backend in your config.",
-    );
-  }
+  const { backend } = await chooseBackend(config);
+  if (!backend) throw new Error(noAiMessage(config));
   const date = resolveDate(opts.date, config.me.timezone);
-  const { stored } = await openDay(date, config, store, { ai: backend });
+  const { stored } = await openDay(date, config, store, { ai: backend, log: logError });
 
   const { ops, reply } = await parseCorrection(text, stored.day, config, backend);
   const changes = ops.filter((o) => o.op !== "clarify");

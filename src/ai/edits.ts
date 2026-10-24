@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Config } from "../config/schema";
 import { aiSettingOpSchema, type ClaudeProjectRef, type SettingOp } from "../config/setting-ops";
 import { editOpSchema } from "../core/edit-schema";
+import { hasSecret } from "../core/secrets";
 import { prNumber } from "../core/summarize";
 import { localDate, localTime, minutesBetween } from "../core/time";
 import type { Day, EditOp } from "../core/types";
@@ -25,7 +26,7 @@ Rules:
 - Change only what they asked for.
 
 Settings (what Clockout reads and how it counts), from "settings" in the input:
-- Turning sources on or off, Claude Code projects to read or leave out (use names from claude_projects), daily target, working hours, rounding, time zone, default task names, the AI helper, and project rules ("anything in acme/api is Acme Website").
+- Turning sources on or off, Claude Code projects to read or leave out (use names from claude_projects), daily target, working hours, rounding, time zone, default task names, the AI helper (on, off, or which agent runs it: Claude Code, Codex, opencode or Pi), and project rules ("anything in acme/api is Acme Website").
 - Leaving a project out ("leave out my dotfiles", "don't count my personal project", "ignore the gym on my calendar"): project_rule with ignore true, named after the project as it is on the day (or matching a repo or title when they give one). It works for every source; claude_projects only when they mean Claude Code's own project list.
 - How descriptions are written ("write them in past tense", "make descriptions longer", "always put the ticket key first", "write them like: …"): descriptions, with only what they asked to change. Their own instructions go in their words; examples are descriptions they give as a model.
 - Durations are like "7h30m", "45m"; working hours "HH:MM-HH:MM".
@@ -89,7 +90,7 @@ export function settingsContext(config: Config, facts: SettingsFacts) {
     day: config.day,
     timezone: config.me.timezone,
     task_names: config.tasks,
-    ai_helper: config.ai.backend !== "none",
+    ai_helper: config.ai.backend,
     descriptions: config.descriptions,
     project_rules: config.projects.map((p) => ({
       name: p.name,
@@ -241,15 +242,9 @@ export function localCorrection(text: string): Correction | null {
   return null;
 }
 
-const TOKEN =
-  /\b(?:gh[opsur]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|sk-[\w-]{20,}|xox[abprs]-[\w-]{10,}|ya29\.[\w-]{20,}|AKIA[0-9A-Z]{16})/;
-
 /** Throws when the text holds something that looks like a token or key, so it's never sent. */
 export function refuseSecrets(text: string): void {
-  const random = (text.match(/[A-Za-z0-9_+/=-]{32,}/g) ?? []).some(
-    (w) => (w.match(/\d/g)?.length ?? 0) >= 4 && (w.match(/[A-Za-z]/g)?.length ?? 0) >= 4,
-  );
-  if (TOKEN.test(text) || random)
+  if (hasSecret(text))
     throw new Error(
       "That looks like a password or token, so it wasn't sent to the AI. Clockout never needs one: sign-ins happen in your browser.",
     );

@@ -689,10 +689,53 @@ export function useToast(): [string | null, (text: string) => void] {
   const [text, setText] = useState<string | null>(null);
   useEffect(() => {
     if (!text) return;
-    const t = setTimeout(() => setText(null), 2600);
+    // Long enough to read: a longer message (no AI helper, a sign-in to fix) stays longer.
+    const t = setTimeout(() => setText(null), Math.max(2600, text.length * 55));
     return () => clearTimeout(t);
   }, [text]);
   return [text, setText];
+}
+
+/**
+ * What didn't work while drafting the day (a source's sign-in, the AI helper), each message in
+ * full with its fix, and where the full details are kept.
+ */
+export function ProblemsDialog({
+  problems,
+  errorLog,
+  screen,
+  onClose,
+}: {
+  problems: string[];
+  errorLog: string;
+  screen: { width: number; height: number };
+  onClose: () => void;
+}) {
+  useInput((_, key) => {
+    if (key.escape || key.return) onClose();
+  });
+  const width = Math.min(84, screen.width - 4);
+  return (
+    <Dialog title="Problems" width={width} screen={screen} onClose={onClose}>
+      {problems.length ? (
+        problems.map((p) => (
+          <Box key={p} width={width - 6} marginBottom={1}>
+            <Text color={T.ask}>⚠ </Text>
+            <Text color={T.text} wrap="wrap">
+              {p}
+            </Text>
+          </Box>
+        ))
+      ) : (
+        <Box marginBottom={1}>
+          <Text color={T.muted}>Nothing went wrong drafting this day.</Text>
+        </Box>
+      )}
+      <Text color={T.faint} wrap="wrap">
+        Full details: {errorLog}
+      </Text>
+    </Dialog>
+  );
 }
 
 /**

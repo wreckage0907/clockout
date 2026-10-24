@@ -259,13 +259,43 @@ describe("day view", () => {
   });
 
   it("without an AI helper, a sentence stays in the bar with a pointer to setup", async () => {
-    const { ui, calls } = await openDay();
+    const noAi =
+      "The AI helper is off, so typed corrections don't work. Turn it on in Setup (ctrl+p).";
+    const { ui, calls } = await openDay({ noAi });
+    await until(ui.lastFrame, "No AI helper: type / for commands");
     ui.stdin.write("lunch was long");
     await tick();
     ui.stdin.write("\r");
     await until(ui.lastFrame, "Turn it on in Setup");
     expect(ui.lastFrame()).toContain("lunch was long");
     expect(calls.commits).toEqual([]);
+  });
+
+  it("says at the start that there's no AI helper, and why", async () => {
+    const noAi = "No AI helper found (Claude Code, Codex, opencode or Pi).";
+    const { ui } = open({ noAi });
+    await until(ui.lastFrame, "No AI helper found");
+    expect(ui.lastFrame()).toContain("No AI helper: Enter opens the day, / lists commands");
+  });
+
+  it("shows what went wrong in full, with the fix, from the warning or /problems", async () => {
+    const warnings = [
+      "GitHub: the GitHub CLI isn't logged in. Run `gh auth login`.",
+      "Google Calendar: the Google Calendar API is off for your Cloud project. Turn it on at https://console.cloud.google.com/apis/library/calendar-json.googleapis.com, then try again.",
+    ];
+    const { ui } = await openDay({ warnings });
+    await until(ui.lastFrame, "2 problems");
+    ui.stdin.write("/problems");
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Full details");
+    const frame = ui.lastFrame() ?? "";
+    expect(frame).toContain("Run `gh auth login`.");
+    expect(frame).toContain("calendar-json.googleapis.com");
+    expect(frame).toContain("~/.local/share/clockout/errors.log");
+    ui.stdin.write("\u001b");
+    await tick();
+    expect(ui.lastFrame()).not.toContain("Full details");
   });
 
   it("adds untracked time from the dashed card, which counts down to the daily target", async () => {
@@ -631,6 +661,25 @@ describe("setup", () => {
     ui.stdin.write(RIGHT);
     await until(ui.lastFrame, "one sentence");
     expect(lastSaved(calls)?.descriptions.length).toBe("medium");
+  });
+
+  it("offers every agent installed here as the AI helper, and auto says which it uses", async () => {
+    const helpers = [
+      { id: "claude-code" as const, name: "Claude Code" },
+      { id: "codex" as const, name: "Codex" },
+    ];
+    const { ui, calls } = await openSetup({ setup: { helpers } });
+    await down(ui, 2); // AI helper
+    await until(ui.lastFrame, "using Claude Code");
+    for (const label of ["Auto", "Claude Code", "Codex", "No AI"])
+      expect(ui.lastFrame()).toContain(label);
+    ui.stdin.write(RIGHT); // into the rows: Helper, on Auto
+    await tick();
+    ui.stdin.write(RIGHT); // → Claude Code
+    await tick();
+    ui.stdin.write(RIGHT); // → Codex
+    await tick();
+    expect(lastSaved(calls)?.ai.backend).toBe("codex");
   });
 
   it("writes a description prompt on its own page: enter saves, esc leaves it as it was", async () => {

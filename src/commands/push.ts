@@ -1,15 +1,15 @@
 import { autocomplete, confirm, isCancel } from "@clack/prompts";
-import { chooseBackend } from "../ai";
 import { openDay } from "../collect";
 import { withTaskMapping } from "../config/edit";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths } from "../config/paths";
 import type { Config } from "../config/schema";
 import { changes, describeItem, type PushPlan, type PushRow } from "../core/push";
+import { logError } from "../log";
 import { applyPush, preparePush } from "../push";
 import { openTarget } from "../targets";
 import type { RemoteTask, Target } from "../targets/types";
-import { type AppContext, appContext, resolveDate } from "./context";
+import { type AppContext, appContext, commandAi, resolveDate } from "./context";
 
 export interface PushOptions {
   dryRun?: boolean;
@@ -49,8 +49,8 @@ export async function runPush(
   const interactive = deps.interactive ?? (process.stdin.isTTY && process.stdout.isTTY);
   const date = resolveDate(dateInput, config.me.timezone);
 
-  const ai = opts.ai === false ? null : await chooseBackend(config).catch(() => null);
-  const { stored, warnings } = await openDay(date, config, ctx.store, { ai });
+  const ai = await commandAi(config, opts.ai);
+  const { stored, warnings } = await openDay(date, config, ctx.store, { ai, log: logError });
   for (const w of warnings) console.error(`warning: ${w}`);
   const meetings = stored.day.questions.filter((q) => q.blockId).length;
   if (meetings) {

@@ -2,10 +2,8 @@ import { homedir } from "node:os";
 import clipboard from "clipboardy";
 import { execa } from "execa";
 import { render, useWindowSize } from "ink";
-import { chooseBackend } from "../ai";
-import { detectClaudeCli } from "../ai/claude-cli";
+import { type AiChoice, BACKEND_NAMES, chooseBackend, detectBackends } from "../ai";
 import { type Correction, localCorrection, parseCorrection } from "../ai/edits";
-import type { LlmBackend } from "../ai/types";
 import { openDay } from "../collect";
 import { signInErp, signOutErp, signOutGoogle } from "../commands/connect";
 import type { AppContext } from "../commands/context";
@@ -16,11 +14,12 @@ import {
 } from "../config/credentials";
 import { withErpSite, withSource, withTaskMapping } from "../config/edit";
 import { loadConfig, saveConfig } from "../config/load";
-import { resolvePaths } from "../config/paths";
+import { resolvePaths, tildify } from "../config/paths";
 import type { Config } from "../config/schema";
 import { applySettings, type SettingEffect } from "../config/setting-ops";
 import { localDate } from "../core/time";
 import { commitEdits, undoEdit } from "../corrections";
+import { errorLogPath, logError } from "../log";
 import { applyPush, preparePush } from "../push";
 import { antigravity } from "../sources/antigravity";
 import { listClaudeProjects } from "../sources/claude-code/paths";
@@ -56,10 +55,16 @@ function Screen(props: Omit<Parameters<typeof App>[0], "width" | "height">) {
  * Runs the review app full screen, clickable. Config and the AI backend are kept here so a
  * change in setup applies to the next load and correction without restarting.
  */
-export async function runTui(date: string, app: AppContext, backend: LlmBackend | null) {
+export async function runTui(date: string, app: AppContext, choice: AiChoice) {
   const { store } = app;
   let config: Config = app.config;
-  let ai = backend;
+  let ai = choice.backend;
+  let aiNotice = choice.notice;
+  /** Why there's no AI helper, and what still works. */
+  const whyNoAi = () =>
+    config.ai.backend === "none"
+      ? "The AI helper is off, so typed corrections don't work. Turn it on in Setup (ctrl+p); the cards and / commands work without it."
+      : `${aiNotice ?? `No AI helper found (${BACKEND_NAMES}).`} Use the cards and / commands, or install one and sign in to it.`;
   const { configFile } = resolvePaths();
   const ctx = { homeDir: homedir(), env: process.env };
 
@@ -111,12 +116,14 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
   };
 
   const actions: AppActions = {
-    load: (d, opts) => openDay(d, config, store, { ai, ...opts }),
+    load: (d, opts) => openDay(d, config, store, { ai, log: logError, ...opts }),
+    ai: () => (ai ? { on: true, label: ai.label } : { on: false, why: whyNoAi() }),
+    errorLog: tildify(errorLogPath()),
     async parse(text, day, earlier) {
       if (!ai) {
         const local = localCorrection(text);
         if (local) return local;
-        throw new Error("Typed corrections need the AI helper. Turn it on in Setup (ctrl+p).");
+        throw new Error(whyNoAi());
       }
       const [projects, google, erpCreds] = await Promise.all([
         claudeProjects(),
@@ -128,7 +135,14 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
         erpConnected: erpCreds !== null,
         claudeProjects: projects,
       };
-      return findTasks(await parseCorrection(text, day, config, ai, { facts, earlier }));
+      const helper = ai;
+      const said = await parseCorrection(text, day, config, helper, { facts, earlier }).catch(
+        (err: unknown) => {
+          void logError(`AI helper ${helper.label}`, err);
+          throw err;
+        },
+      );
+      return findTasks(said);
     },
     async configure(ops) {
       const r = applySettings(config, ops, await claudeProjects());
@@ -174,7 +188,7 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
           opencodeFound,
           agyFound,
           github,
-          cli,
+          helpers,
           google,
           erpCreds,
         ] = await Promise.all([
@@ -184,7 +198,7 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
           opencode.detect(ctx),
           antigravity.detect(ctx),
           detectGitHub(ctx),
-          detectClaudeCli(),
+          detectBackends(),
           loadGoogleCredentials().catch(() => null),
           loadErpCredentials().catch(() => null),
         ]);
@@ -201,7 +215,7 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
           opencode: { found: opencodeFound?.summary ?? null },
           antigravity: { found: agyFound?.summary ?? null },
           github: { found: github !== null },
-          aiFound: cli !== null,
+          helpers,
           erp: {
             connected: signedIn,
             ...(signedIn && erpCreds?.user ? { user: erpCreds.user } : {}),
@@ -211,9 +225,10 @@ export async function runTui(date: string, app: AppContext, backend: LlmBackend 
       async save(next) {
         await saveConfig(configFile, next);
         const loaded = (await loadConfig(configFile)) ?? next;
-        const aiChanged = loaded.ai.backend !== config.ai.backend;
+        const aiChanged =
+          loaded.ai.backend !== config.ai.backend || loaded.ai.model !== config.ai.model;
         config = loaded;
-        if (aiChanged) ai = await chooseBackend(config).catch(() => null);
+        if (aiChanged) ({ backend: ai, notice: aiNotice } = await chooseBackend(config));
         return config;
       },
       async connectGoogle() {
