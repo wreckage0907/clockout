@@ -913,7 +913,9 @@ export function App({
           {menu}
         </Box>
         {dialogs}
-        {toast ? <Toast text={toast} bottom={2} /> : null}
+        {toast ? (
+          <Toast text={toast} bottom={2} right={Math.floor((width - box) / 2)} width={box} />
+        ) : null}
       </Box>
     );
 
@@ -1072,7 +1074,9 @@ export function App({
         {menu}
       </Box>
       {dialogs}
-      {toast ? <Toast text={toast} bottom={7} /> : null}
+      {toast ? (
+        <Toast text={toast} bottom={7} right={Math.floor((width - listW) / 2)} width={listW} />
+      ) : null}
     </Box>
   );
 }

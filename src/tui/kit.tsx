@@ -653,13 +653,24 @@ export function Dialog({
   );
 }
 
-/** A short note that clears itself. */
-export function Toast({ text, bottom }: { text: string; bottom: number }) {
+/** A short note that clears itself. `right` and `width` keep it inside the screen's column. */
+export function Toast({
+  text,
+  bottom,
+  right = 2,
+  width,
+}: {
+  text: string;
+  bottom: number;
+  right?: number;
+  width?: number;
+}) {
   return (
     <Box
       position="absolute"
       bottom={bottom}
-      right={2}
+      right={right}
+      maxWidth={width}
       backgroundColor={T.elementHi}
       borderStyle="bold"
       borderTop={false}

@@ -178,6 +178,17 @@ describe("day view", () => {
     expect(ui.lastFrame()).toContain("6h of 8h");
   });
 
+  it("keeps the note about a change inside the cards' column", async () => {
+    const { ui } = await openDay();
+    await down(ui, 1);
+    ui.stdin.write("+");
+    await until(ui.lastFrame, "ctrl+z undoes");
+    const lines = (ui.lastFrame() ?? "").split("\n");
+    const end = (text: string) => lines.find((l) => l.includes(text))?.trimEnd().length;
+    // The note's text stops at its right padding (2) where the header's total ends.
+    expect((end("ctrl+z undoes") ?? 0) + 2).toBe(end("6h 15m of 8h"));
+  });
+
   it("− stops at one step instead of marking the card as set by you", async () => {
     const { ui, calls } = await openDay();
     await down(ui, 8); // Investigate flaky deploy, 15m
