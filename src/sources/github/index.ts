@@ -160,7 +160,12 @@ export function createGitHubSource(client?: GraphQLClient): Source<GitHubConfig>
         const found = await findGitHubToken(ctx.env);
         if (!("token" in found)) throw new Error(found.problem, { cause: found.cause });
         via = found.via;
-        const gql = octokitGraphql.defaults({ headers: { authorization: `token ${found.token}` } });
+        // GitHub Enterprise (and Actions) set GITHUB_GRAPHQL_URL; github.com otherwise.
+        const url = ctx.env.GITHUB_GRAPHQL_URL;
+        const gql = octokitGraphql.defaults({
+          headers: { authorization: `token ${found.token}` },
+          ...(url ? { url } : {}),
+        });
         run = (query, variables) => gql(query, variables);
       }
       let raw: unknown;

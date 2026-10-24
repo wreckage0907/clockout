@@ -104,10 +104,13 @@ export async function openDay(
   const corrected = existing && existing.edits.length > 0 && !opts.refresh ? existing : null;
 
   const fresh = await collect(date, config, opts.ctx, opts.sources, opts.log);
-  // A folder deleted since the day was last built can't name its repo any more: keep the one it
-  // had, so the project doesn't change under your corrections and ERP mappings.
+  // A folder whose repo one source knows (Codex records it; a folder deleted since the day was
+  // last built can't say it any more) has that repo for every source, so the same work is one
+  // project, and stays the same project each time the day is opened.
   const knownRepo = new Map(
-    (existing?.activities ?? []).flatMap((a) => (a.cwd && a.repo ? [[a.cwd, a.repo]] : [])),
+    [...(existing?.activities ?? []), ...fresh.activities].flatMap((a) =>
+      a.cwd && a.repo ? [[a.cwd, a.repo] as const] : [],
+    ),
   );
   fresh.activities = fresh.activities.map((a) => {
     const repo = !a.repo && a.cwd ? knownRepo.get(a.cwd) : undefined;

@@ -32,7 +32,9 @@
     "lint": "biome check .",
     "fix": "biome check --write .",
     "test": "vitest run",
-    "check": "pnpm lint && pnpm typecheck && pnpm build && pnpm test && publint"
+    "check": "pnpm lint && pnpm typecheck && pnpm build && pnpm test && publint",
+    "coverage": "vitest run --coverage",
+    "smoke": "sh scripts/smoke-package.sh"
   },
   "dependencies": {
     "@clack/prompts": "1.8.1",

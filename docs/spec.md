@@ -122,7 +122,7 @@ Read from local files; nothing to set up. Never read auth or token files. A conf
 | Source | Reads | MVP |
 |---|---|---|
 | `git` | `git log --author=<me>` in repos seen in agent `cwd`s + configured roots | ✓ |
-| `github` | `gh auth token` or `GITHUB_TOKEN` → GraphQL `contributionsCollection` (PRs and issues opened, reviews with their comments and the PR's branch) and your latest 100 issue and PR comments (a comment on someone else's PR counts as reviewing it) | ✓ |
+| `github` | `gh auth token` or `GITHUB_TOKEN` → GraphQL (github.com, or `GITHUB_GRAPHQL_URL` for GitHub Enterprise) `contributionsCollection` (PRs and issues opened, reviews with their comments and the PR's branch) and your latest 100 issue and PR comments (a comment on someone else's PR counts as reviewing it) | ✓ |
 | GitLab / Bitbucket | via `command` source for now | later |
 
 ### Calendar

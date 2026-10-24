@@ -140,6 +140,14 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Helpers run in their own process group and are stopped on timeout and on quit; the terminal is restored on SIGTERM/SIGHUP; a too-small window says so
 - [x] ERP: https before sign-in, old refresh tokens revoked, reconnect on 403, next-pms missing named, days over 24h not sent, an unconfirmed send says so
 
+## Tests that run it like a user
+
+- [x] End-to-end workflow: a day from every local source, the calendar and a fake GitHub drafted with `--json`, saved, and exported from what was saved, in every format and as a range
+- [x] CLI contract: exit code, stdout and stderr checked separately for bad options, dates, formats, conflicting arguments, typos, unwritable files, broken configs and a damaged saved day
+- [x] `clockout push` against a fake next-pms site: dry run, send, nothing twice, an entry deleted in the ERP, a revoked sign-in; rotated refresh tokens kept and the old one revoked
+- [x] Package smoke test in CI: the packed tarball installed globally runs as `clockout`
+- [ ] Interactive tests in a pseudo-terminal (Ink start-up, keys, paste, resize, terminal restored)
+
 ## Day 11 — Export and demo
 
 - [x] Clipboard, Markdown, CSV, TSV, JSON: date, project, task, hours, description (same work merged into one row)

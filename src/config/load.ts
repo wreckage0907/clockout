@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parse, stringify } from "smol-toml";
 import { z } from "zod";
+import { tildify } from "./paths";
 import { type Config, type ConfigInput, configSchema } from "./schema";
 
 export class ConfigError extends Error {
@@ -9,7 +10,7 @@ export class ConfigError extends Error {
     readonly file: string,
     detail: string,
   ) {
-    super(`Problem in ${file}:\n${detail}`);
+    super(`Problem in ${tildify(file)}:\n${detail}`);
     this.name = "ConfigError";
   }
 }
