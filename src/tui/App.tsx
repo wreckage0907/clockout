@@ -1106,6 +1106,7 @@ function ProposalPanel({
       borderRight={false}
       borderBottom={false}
       borderLeftColor={T.primary}
+      borderLeftBackgroundColor={T.panel}
       paddingX={2}
       paddingY={1}
       marginBottom={1}
@@ -1228,45 +1229,53 @@ function CardView({
     );
   return (
     <Clickable onClick={({ shift }) => onSelect(shift)} marginBottom={1} flexShrink={0}>
-      {(hover) => (
-        <Box
-          width={width}
-          borderStyle="round"
-          borderColor={
-            selected
-              ? ask
-                ? T.ask
-                : T.text
-              : checked
-                ? T.primary
-                : ask
-                  ? mix(T.bg, T.ask, 0.5)
-                  : hover
-                    ? T.muted
-                    : T.border
-          }
-          paddingX={2}
-        >
-          <Box flexDirection="column" flexGrow={1} flexShrink={1}>
-            {body}
+      {(hover) => {
+        // A filled panel like the chat bar: the left bar marks focus, ticks and questions.
+        const bg = selected ? T.element : hover ? mix(T.panel, T.element, 0.5) : T.panel;
+        const bar = ask
+          ? selected
+            ? T.ask
+            : mix(bg, T.ask, 0.6)
+          : checked
+            ? T.primary
+            : selected
+              ? T.text
+              : bg;
+        return (
+          <Box
+            width={width}
+            backgroundColor={bg}
+            borderStyle="bold"
+            borderTop={false}
+            borderRight={false}
+            borderBottom={false}
+            borderLeftColor={bar}
+            borderLeftBackgroundColor={bg}
+            paddingX={2}
+            paddingY={1}
+          >
+            <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+              {body}
+            </Box>
+            <Pill
+              minutes={c.minutes}
+              step={step}
+              editing={editing}
+              text={typed}
+              edited={c.edited}
+              dim={ask}
+              surface={bg}
+              onEdit={ask ? undefined : onEdit}
+              onChange={ask ? undefined : onMinutes}
+            />
+            {ask ? null : (
+              <Clickable onClick={onRemove} marginLeft={2} alignSelf="center">
+                {(h) => <Text color={h ? T.danger : selected || hover ? T.muted : T.faint}>✕</Text>}
+              </Clickable>
+            )}
           </Box>
-          <Pill
-            minutes={c.minutes}
-            step={step}
-            editing={editing}
-            text={typed}
-            edited={c.edited}
-            dim={ask}
-            onEdit={ask ? undefined : onEdit}
-            onChange={ask ? undefined : onMinutes}
-          />
-          {ask ? null : (
-            <Clickable onClick={onRemove} marginLeft={2} alignSelf="center">
-              {(h) => <Text color={h ? T.danger : selected || hover ? T.muted : T.faint}>✕</Text>}
-            </Clickable>
-          )}
-        </Box>
-      )}
+        );
+      }}
     </Clickable>
   );
 }
@@ -1306,6 +1315,7 @@ function AddCard({
             width={width}
             borderStyle={DASHED}
             borderColor={selected || hover ? T.text : T.border}
+            borderBackgroundColor={T.bg}
             paddingX={2}
             justifyContent="space-between"
             alignItems="center"

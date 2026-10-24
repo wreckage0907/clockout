@@ -381,6 +381,7 @@ export function ChatBar({
       borderRight={false}
       borderBottom={false}
       borderLeftColor={T.primary}
+      borderLeftBackgroundColor={T.element}
       paddingX={2}
       paddingY={1}
     >
@@ -552,6 +553,7 @@ export function Pill({
   text = "",
   edited = false,
   dim = false,
+  surface = T.panel,
   onEdit,
   onChange,
 }: {
@@ -563,6 +565,8 @@ export function Pill({
   text?: string;
   edited?: boolean;
   dim?: boolean;
+  /** The background it sits on, so its border's cells match. */
+  surface?: string;
   onEdit?: () => void;
   onChange?: (minutes: number) => void;
 }) {
@@ -582,6 +586,7 @@ export function Pill({
           <Box
             borderStyle="round"
             borderColor={editing ? T.primary : hover ? T.muted : dim ? T.elementHi : T.border}
+            borderBackgroundColor={surface}
             width={11}
             justifyContent="center"
           >
@@ -661,6 +666,7 @@ export function Toast({ text, bottom }: { text: string; bottom: number }) {
       borderRight={false}
       borderBottom={false}
       borderLeftColor={T.primary}
+      borderLeftBackgroundColor={T.elementHi}
       paddingX={2}
     >
       <Text color={T.text}>{text}</Text>

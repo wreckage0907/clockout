@@ -55,6 +55,7 @@ export function SendPanel({
       borderRight={false}
       borderBottom={false}
       borderLeftColor={T.primary}
+      borderLeftBackgroundColor={T.panel}
       paddingX={2}
       paddingY={1}
       marginBottom={1}
