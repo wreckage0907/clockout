@@ -88,35 +88,34 @@ export const sourceConfig = z.discriminatedUnion("type", [
   googleCalendarSource,
 ]);
 
-const projectRule = z
-  .object({
-    name: z.string().min(1),
-    /** Default task for this project's work blocks. */
-    task: z.string().min(1).optional(),
-    /**
-     * Leave this project off the day, work and meetings, e.g. a personal one. Without `match`
-     * it leaves out the project with this name, however it was found.
-     */
-    ignore: z.boolean().optional(),
-    match: z
-      .object({
-        /** "owner/name" */
-        repo: z.string().optional(),
-        /** Regular expression tested against meeting and session titles. */
-        title: z.string().optional(),
-        /** e.g. "acme.com": meetings with attendees from this domain. */
-        attendee_domain: z.string().optional(),
-      })
-      .refine(
-        (m) => m.repo || m.title || m.attendee_domain,
-        "give at least one of repo, title, attendee_domain",
-      )
-      .optional(),
-  })
-  .refine((r) => r.match || r.ignore, {
-    error: "give a match (repo, title or attendee_domain), or ignore = true",
-    path: ["match"],
-  });
+/**
+ * A project: how matching work is named (`match`), a project to leave out (`ignore`), or with
+ * only a name, one you log time to by hand (offered in "Add time" and to the AI).
+ */
+const projectRule = z.object({
+  name: z.string().min(1),
+  /** Default task for this project's work blocks. */
+  task: z.string().min(1).optional(),
+  /**
+   * Leave this project off the day, work and meetings, e.g. a personal one. Without `match`
+   * it leaves out the project with this name, however it was found.
+   */
+  ignore: z.boolean().optional(),
+  match: z
+    .object({
+      /** "owner/name" */
+      repo: z.string().optional(),
+      /** Regular expression tested against meeting and session titles. */
+      title: z.string().optional(),
+      /** e.g. "acme.com": meetings with attendees from this domain. */
+      attendee_domain: z.string().optional(),
+    })
+    .refine(
+      (m) => m.repo || m.title || m.attendee_domain,
+      "give at least one of repo, title, attendee_domain",
+    )
+    .optional(),
+});
 
 /** Which ERP task a Clockout project (and optionally task) goes to. */
 const taskMapping = z.object({

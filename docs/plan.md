@@ -126,6 +126,12 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Helper failures in the CLI's own words with how to sign in, never the command line
 - [x] GitHub and Google sign-in failures: what's wrong and how to fix it, `/problems`, local error log with tokens redacted
 
+## Projects by hand
+
+- [x] A project can be only a name (`[[projects]] name = "…"`, optional `task`): one you log time to by hand
+- [x] Add time: + New project (typed, saved to config), and projects from other days, ERP mappings and the ERP's tasks
+- [x] Setup → Projects: Add project field, ✕ remove; "add a project called …" in the chat bar
+
 ## Day 11 — Export and demo
 
 - [x] Clipboard, Markdown, CSV, TSV, JSON: date, project, task, hours, description (same work merged into one row)

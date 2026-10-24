@@ -120,11 +120,11 @@ const projectRule = z
       ),
   })
   .describe(
-    "Add or replace a rule that puts matching work under a project name, or leaves it out (ignore)",
+    "Add or replace a project: a rule that puts matching work under its name, one to leave out (ignore), or with only a name, a project they log time to by hand",
   );
 const removeProjectRule = z
   .object({ op: z.literal("remove_project_rule"), name: z.string().min(1) })
-  .describe("Remove the project rules with this name");
+  .describe("Remove the project (and its rules) with this name");
 const connect = z
   .object({
     op: z.literal("connect"),
@@ -389,10 +389,11 @@ function describeSetting(op: SettingOp): string {
         op.attendee_domain ? `meetings with ${op.attendee_domain}` : "",
       ].filter(Boolean);
       if (op.ignore) return `Leave out ${what.join(", ") || op.name}, work and meetings`;
-      return `${what.join(", ") || "Matching work"} → project ${op.name}${op.task ? ` (${op.task})` : ""}`;
+      if (!what.length) return `Add the project ${op.name}${op.task ? ` (${op.task})` : ""}`;
+      return `${what.join(", ")} → project ${op.name}${op.task ? ` (${op.task})` : ""}`;
     }
     case "remove_project_rule":
-      return `Remove the project rule for ${op.name}`;
+      return `Remove the project ${op.name}`;
     case "calendar_feed":
       return "Read your calendar from its private link (kept on this machine)";
     case "connect":

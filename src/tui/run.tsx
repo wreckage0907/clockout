@@ -176,6 +176,24 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
     undo: (stored) => undoEdit(stored, store),
     copy: (text) => clipboard.write(text),
     savedDates: () => store.dates(),
+    async moreProjects(date) {
+      // Newest first: what you worked on lately comes before what you did a month ago.
+      const dates = (await store.dates().catch(() => []))
+        .filter((d) => d !== date)
+        .sort()
+        .reverse()
+        .slice(0, 30);
+      const [days, tasks] = await Promise.all([
+        Promise.all(dates.map((d) => store.load(d).catch(() => null))),
+        config.timesheet ? send.searchTasks("").catch(() => []) : Promise.resolve([]),
+      ]);
+      const recent = days.flatMap(
+        (s) =>
+          s?.day.blocks.filter((b) => b.billable && b.kind !== "meeting").map((b) => b.project) ??
+          [],
+      );
+      return { recent, erp: tasks.flatMap((t) => (t.project ? [t.project] : [])) };
+    },
     get send() {
       return config.timesheet ? send : undefined;
     },

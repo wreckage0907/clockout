@@ -752,52 +752,110 @@ export function ProblemsDialog({
 }
 
 /**
- * Time nothing recorded: pick a project, set how long, say what it was. Clockout finds a place
- * for it in the day; you never pick a clock time.
+ * Time nothing recorded: pick a project (or type a new one), set how long, say what it was.
+ * Clockout finds a place for it in the day; you never pick a clock time.
  */
 export function AddTimeDialog({
   projects,
+  erp,
   step,
   screen,
   onAdd,
   onClose,
 }: {
+  /** Projects you know here: the day's, config's, recent days'. */
   projects: string[];
+  /** Projects from the ERP, with its host, once they've loaded. */
+  erp?: { site: string; projects: string[] };
   step: number;
   screen: { width: number; height: number };
-  onAdd: (project: string, minutes: number, summary: string) => void;
+  /** `isNew` when the project was typed in rather than picked. */
+  onAdd: (project: string, minutes: number, summary: string, isNew: boolean) => void;
   onClose: () => void;
 }) {
-  const [project, setProject] = useState(0);
+  const all = [...projects, ...(erp?.projects ?? [])];
+  // `all.length` stands for "+ New project"; with nothing to pick, you start by naming one.
+  const [project, setProject] = useState(all.length ? 0 : -1);
+  const [typed, setTyped] = useState<string | null>(null);
+  const [naming, setNaming] = useState(all.length === 0);
   const [minutes, setMinutes] = useState(60);
-  const draft = useDraft(true);
+  const name = useDraft(naming);
+  const draft = useDraft(!naming);
+  const isNew = project < 0 || project >= all.length;
+  const chosen = isNew ? typed : (all[project] ?? null);
+  const pick = (i: number) => {
+    setProject(i);
+    setNaming(i >= all.length);
+  };
+  const takeName = () => {
+    const n = name.value.trim();
+    if (!n) return;
+    const known = all.findIndex((p) => p.toLowerCase() === n.toLowerCase());
+    setNaming(false);
+    if (known >= 0) return setProject(known);
+    setProject(all.length);
+    setTyped(n);
+  };
   const submit = () => {
-    const p = projects[project];
-    if (p) onAdd(p, minutes, draft.value.trim());
+    if (naming) return takeName();
+    if (chosen) onAdd(chosen, minutes, draft.value.trim(), isNew);
+    else setNaming(true);
   };
   useInput((ch, key) => {
-    if (key.escape) return onClose();
+    if (key.escape) return naming && all.length ? setNaming(false) : onClose();
     if (key.return) return submit();
-    if (key.tab)
-      return setProject((i) => (i + (key.shift ? projects.length - 1 : 1)) % projects.length);
+    if (key.tab) {
+      const n = all.length + 1;
+      return pick(((((project < 0 ? all.length : project) + (key.shift ? -1 : 1)) % n) + n) % n);
+    }
     if (key.upArrow) return setMinutes((m) => m + step);
     if (key.downArrow) return setMinutes((m) => Math.max(step, m - step));
-    draft.edit(ch, key);
+    (naming ? name : draft).edit(ch, key);
   });
-  const width = Math.min(64, screen.width - 4);
+  const width = Math.min(72, screen.width - 4);
+  const chip = (p: string, i: number) => (
+    <Button
+      key={`${i}-${p}`}
+      label={p}
+      tone={i === project && !naming ? "primary" : "neutral"}
+      onClick={() => pick(i)}
+    />
+  );
+  const newLabel = typed && isNew && !naming ? `${typed} (new)` : "+ New project";
   return (
     <Dialog title="Add time" width={width} screen={screen} onClose={onClose}>
       <Text color={T.muted}>Project</Text>
-      <Box gap={1} flexWrap="wrap" width={width - 6}>
-        {projects.map((p, i) => (
-          <Button
-            key={p}
-            label={p}
-            tone={i === project ? "primary" : "neutral"}
-            onClick={() => setProject(i)}
-          />
-        ))}
+      <Box columnGap={1} flexWrap="wrap" width={width - 6}>
+        {projects.map(chip)}
+        <Button
+          label={newLabel}
+          tone={isNew ? "primary" : "quiet"}
+          onClick={() => pick(all.length)}
+        />
       </Box>
+      {erp?.projects.length ? (
+        <>
+          <Box marginTop={1}>
+            <Text color={T.faint}>From {erp.site}</Text>
+          </Box>
+          <Box columnGap={1} flexWrap="wrap" width={width - 6}>
+            {erp.projects.map((p, i) => chip(p, projects.length + i))}
+          </Box>
+        </>
+      ) : null}
+      {naming ? (
+        <Box marginTop={1} flexDirection="column">
+          <Text color={T.muted}>New project</Text>
+          <Box backgroundColor={T.element} paddingX={1} width={width - 6}>
+            <Text wrap="truncate-start">
+              <Typed
+                value={name.value}
+                placeholder="its name, e.g. Acme Website · enter to use it"
+              />
+            </Text>
+          </Box>
+        </Box>
+      ) : null}
       <Box height={1} />
       <Text color={T.muted}>How long</Text>
       <Pill minutes={minutes} step={step} onChange={setMinutes} />
@@ -810,8 +868,14 @@ export function AddTimeDialog({
       </Box>
       <Box height={1} />
       <Box justifyContent="space-between" width={width - 6}>
-        <Text color={T.faint}>tab project · ↑↓ time</Text>
-        <Button label={`Add ${hm(minutes)}`} tone="primary" onClick={submit} />
+        <Text color={T.faint}>
+          {naming ? "type a name · enter uses it · esc back" : "tab project · ↑↓ time"}
+        </Text>
+        <Button
+          label={chosen && !naming ? `Add ${hm(minutes)}` : "Add"}
+          tone="primary"
+          onClick={submit}
+        />
       </Box>
     </Dialog>
   );

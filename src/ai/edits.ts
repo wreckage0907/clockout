@@ -27,6 +27,7 @@ Rules:
 
 Settings (what Clockout reads and how it counts), from "settings" in the input:
 - Turning sources on or off, Claude Code projects to read or leave out (use names from claude_projects), daily target, working hours, rounding, time zone, default task names, the AI helper (on, off, or which agent runs it: Claude Code, Codex, opencode or Pi), and project rules ("anything in acme/api is Acme Website").
+- Adding a project to log time to ("add a project called Acme Website", "I also work on Internal Tools"): project_rule with only the name (and task if they give one).
 - Leaving a project out ("leave out my dotfiles", "don't count my personal project", "ignore the gym on my calendar"): project_rule with ignore true, named after the project as it is on the day (or matching a repo or title when they give one). It works for every source; claude_projects only when they mean Claude Code's own project list.
 - How descriptions are written ("write them in past tense", "make descriptions longer", "always put the ticket key first", "write them like: …"): descriptions, with only what they asked to change. Their own instructions go in their words; examples are descriptions they give as a model.
 - Durations are like "7h30m", "45m"; working hours "HH:MM-HH:MM".

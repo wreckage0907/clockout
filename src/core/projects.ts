@@ -1,5 +1,8 @@
 import type { Config } from "../config/schema";
-import type { Activity } from "./types";
+import type { Activity, Day } from "./types";
+
+/** Lunch and other breaks: not billed, never on the sheet. */
+export const BREAK_PROJECT = "Break";
 
 export const MEETINGS_PROJECT = "Meetings";
 
@@ -55,6 +58,35 @@ function safeRegex(source: string): RegExp | null {
     regexCache.set(source, re);
   }
   return regexCache.get(source) ?? null;
+}
+
+/**
+ * Projects to offer when adding time by hand (work, so not meetings), best first: the day's own
+ * work, the ones in config
+ * (added by hand or named by a rule), the ones mapped to ERP tasks, the last few days', then
+ * the ERP's. Left-out projects and breaks aren't offered; names differing only in case are one.
+ */
+export function addTimeProjects(
+  day: Day,
+  config: Config,
+  more: { recent?: readonly string[]; erp?: readonly string[] } = {},
+): { local: string[]; erp: string[] } {
+  const seen = new Set<string>();
+  const take = (names: readonly string[]) =>
+    names.filter((n) => {
+      const k = n.trim().toLowerCase();
+      if (!k || seen.has(k) || k === BREAK_PROJECT.toLowerCase() || ignoredBy(n, config.projects))
+        return false;
+      seen.add(k);
+      return true;
+    });
+  const local = take([
+    ...day.blocks.filter((b) => b.billable && b.kind !== "meeting").map((b) => b.project),
+    ...config.projects.filter((p) => !p.ignore).map((p) => p.name),
+    ...(config.timesheet?.map ?? []).map((m) => m.project),
+    ...(more.recent ?? []),
+  ]);
+  return { local, erp: take(more.erp ?? []) };
 }
 
 /** Ticket keys like ABC-123 in a branch name. */

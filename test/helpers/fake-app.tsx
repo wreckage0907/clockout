@@ -45,6 +45,8 @@ export function fakeActions(
     noAi?: string;
     /** What went wrong drafting the day, e.g. a source's sign-in. */
     warnings?: string[];
+    /** Projects from other days and the ERP, for "Add time". */
+    more?: { recent: string[]; erp: string[] };
   } = {},
 ) {
   const start: StoredDay = opts.day ? { ...stored, day: opts.day } : stored;
@@ -85,6 +87,7 @@ export function fakeActions(
       return { stored: start, warnings: opts.warnings ?? [], kept: false };
     },
     errorLog: "~/.local/share/clockout/errors.log",
+    moreProjects: async () => opts.more ?? { recent: [], erp: [] },
     ai: () =>
       opts.noAi ? { on: false, why: opts.noAi } : { on: true, label: "Claude Code (haiku)" },
     parse: async (text, day, earlier) => {

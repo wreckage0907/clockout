@@ -201,7 +201,9 @@ conversation, and Google's terms don't allow other products to use it.
 <br>
 <samp>
 
-Project rules turn repositories, titles and attendee domains into your project names. Task
+Project rules turn repositories, titles and attendee domains into your project names, and
+projects you add by hand (Setup → Projects, **+ New project** in Add time, or "add a project
+called Internal") are offered whenever you add time; so are recent days' and your ERP's. Task
 rules separate development, reviews and meetings. Rows are rounded to your configured step,
 unconfirmed meetings and breaks are left out, and repeated exports merge the same work.
 Configuration lives in `~/.config/clockout/config.toml`; **Ctrl+P** opens setup in the app.

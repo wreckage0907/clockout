@@ -311,6 +311,57 @@ describe("day view", () => {
     await until(ui.lastFrame, "6h 45m of 8h");
     expect(calls.commits.at(-1)?.ops[0]).toMatchObject({ op: "add", start: "12:15", end: "13:15" });
   });
+
+  async function openAddTime(opts: Parameters<typeof fakeActions>[0] = {}) {
+    const app = await openDay(opts);
+    app.ui.stdin.write("/add");
+    await tick();
+    app.ui.stdin.write("\r");
+    await until(app.ui.lastFrame, "How long");
+    return app;
+  }
+
+  it("adds time to a project typed in, and keeps that project for other days", async () => {
+    const { ui, calls } = await openAddTime();
+    // Tab through the projects to "+ New project", which asks for a name.
+    for (let i = 0; i < 12 && !(ui.lastFrame() ?? "").includes("enter uses it"); i++) {
+      ui.stdin.write("\t");
+      await tick();
+    }
+    ui.stdin.write("Internal Tools");
+    await tick();
+    ui.stdin.write("\r"); // use the name
+    await until(ui.lastFrame, "Internal Tools (new)");
+    ui.stdin.write("Fix the CI cache");
+    await tick();
+    ui.stdin.write("\r"); // add
+    await until(ui.lastFrame, "Added 1h to Internal Tools");
+    expect(calls.commits.at(-1)?.ops[0]).toMatchObject({
+      op: "add",
+      project: "Internal Tools",
+      summary: "Fix the CI cache",
+    });
+    await until(() => JSON.stringify(calls.saved.at(-1) ?? ""), "Internal Tools");
+    expect((calls.saved.at(-1) as Config).projects).toContainEqual({ name: "Internal Tools" });
+  });
+
+  it("asks for a project's name straight away when there's none to pick", async () => {
+    const empty = { ...fixtureDay, blocks: [], gaps: [], questions: [] };
+    const { ui } = await openAddTime({ day: empty });
+    expect(ui.lastFrame()).toContain("enter uses it");
+  });
+
+  it("offers projects from other days and from the ERP, after the day's own", async () => {
+    const { ui } = await openAddTime({
+      more: { recent: ["Acme Website", "acme/api"], erp: ["rtCamp Internal", "Acme Website"] },
+      erp: { target: fakeTarget().target },
+    });
+    await until(ui.lastFrame, "rtCamp Internal");
+    const frame = ui.lastFrame() ?? "";
+    expect(frame.indexOf("acme/api")).toBeLessThan(frame.indexOf("Acme Website"));
+    expect(frame).toContain("From erp.example.com");
+    expect(frame.match(/Acme Website/g)).toHaveLength(1); // once, not again under the ERP's
+  });
 });
 
 describe("setup from the chat bar", () => {
@@ -741,8 +792,27 @@ describe("setup", () => {
     const frame = ui.lastFrame() ?? "";
     expect(frame).toMatch(/Coding\s+Development/);
     expect(frame).toMatch(/Reviews\s+Code Review/);
-    expect(frame).toContain("PROJECT RULES");
-    expect(frame).toContain("saying it in the chat bar");
+    expect(frame).toContain("PROJECTS");
+    expect(frame).toContain("Add project");
+    expect(frame).toContain("say it in the chat bar");
+  });
+
+  it("adds a project by typing its name, and removes one with ⌫", async () => {
+    const { ui, calls } = await openSetup();
+    await down(ui, 3); // Projects
+    await until(ui.lastFrame, "Add project");
+    ui.stdin.write(RIGHT); // into the rows: the Add project field
+    await tick();
+    ui.stdin.write("Internal");
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "added by you");
+    expect(lastSaved(calls)?.projects).toEqual([{ name: "Internal" }]);
+    ui.stdin.write("\u001b[A"); // up to the Internal row
+    await tick();
+    ui.stdin.write("\u007f"); // ⌫
+    await until(() => JSON.stringify(lastSaved(calls)?.projects), "[]");
+    expect(lastSaved(calls)?.projects).toEqual([]);
   });
 
   it("opens Claude Code's projects with enter, filters them by typing, and esc goes back", async () => {

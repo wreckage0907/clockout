@@ -63,11 +63,11 @@ describe("configSchema", () => {
     expect(issues(bad)).toEqual(["sources.0.url"]);
   });
 
-  it("rejects a project rule with nothing to match", () => {
+  it("rejects an empty match, and takes a project with only a name (logged by hand)", () => {
     expect(issues({ ...minimal, projects: [{ name: "Acme", match: {} }] })).toEqual([
       "projects.0.match",
     ]);
-    expect(issues({ ...minimal, projects: [{ name: "Acme" }] })).toEqual(["projects.0.match"]);
+    expect(issues({ ...minimal, projects: [{ name: "Acme" }] })).toEqual([]);
   });
 
   it("writes short, verb-first descriptions unless told otherwise", () => {

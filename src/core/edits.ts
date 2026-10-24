@@ -1,5 +1,6 @@
 import type { Config } from "../config/schema";
 import { ASK_GAP_MINUTES, computeGaps, gapQuestionText } from "./blocks";
+import { BREAK_PROJECT } from "./projects";
 import { addDays, atLocalTime, formatDuration, localTime, MINUTE, minutesBetween } from "./time";
 import { blockMinutes } from "./timesheet";
 import type { Block, Day, EditOp, Question } from "./types";
@@ -7,7 +8,7 @@ import type { Block, Day, EditOp, Question } from "./types";
 const MIN_LEFTOVER = 5 * MINUTE;
 
 /** Project used for lunch and breaks when no project is given. */
-export const BREAK_PROJECT = "Break";
+export { BREAK_PROJECT };
 
 export interface EditResult {
   day: Day;
@@ -73,6 +74,9 @@ export function applyEdits(day: Day, ops: readonly EditOp[], config: Config): Ed
       : kind === "review"
         ? config.tasks.review
         : config.tasks.work;
+  /** A project's own default task, e.g. one added by hand with a task. */
+  const projectTask = (project: string) =>
+    config.projects.find((p) => p.task && p.name.toLowerCase() === project.toLowerCase())?.task;
   const kindFor = (task: string | undefined): Block["kind"] =>
     task === config.tasks.meeting ? "meeting" : task === config.tasks.review ? "review" : "work";
 
@@ -116,7 +120,7 @@ export function applyEdits(day: Day, ops: readonly EditOp[], config: Config): Ed
           start,
           end,
           project: op.project,
-          task: op.task ?? taskFor(kind),
+          task: op.task ?? (kind === "work" ? projectTask(op.project) : undefined) ?? taskFor(kind),
           summary: op.summary,
           kind,
           billable: op.billable ?? true,

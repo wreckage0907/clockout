@@ -117,11 +117,12 @@ describe("applySettings", () => {
     ).toEqual([]);
   });
 
-  it("needs at least one thing for a project rule to match, unless it leaves the project out", () => {
-    const r = applySettings(config, [{ op: "project_rule", name: "Acme" }]);
-    expect(r.errors).toEqual([
-      "projects.0.match: give a match (repo, title or attendee_domain), or ignore = true",
-    ]);
+  it("adds a project by name alone, or one to leave out", () => {
+    const add: SettingOp = { op: "project_rule", name: "Acme Website", task: "Support" };
+    const r = applySettings(config, [add]);
+    expect(r.errors).toEqual([]);
+    expect(r.config.projects).toEqual([{ name: "Acme Website", task: "Support" }]);
+    expect(describeSettings([add])).toEqual(["Add the project Acme Website (Support)"]);
     const ignore: SettingOp = { op: "project_rule", name: "dotfiles", ignore: true };
     const left = applySettings(config, [ignore]);
     expect(left.errors).toEqual([]);

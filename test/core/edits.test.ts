@@ -55,6 +55,23 @@ describe("applyEdits", () => {
     ]);
   });
 
+  it("gives time added to a project by hand that project's own task", () => {
+    const withProject = {
+      ...config,
+      projects: [...config.projects, { name: "Internal Tools", task: "Tooling" }],
+    };
+    const r = applyEdits(
+      day,
+      [{ op: "add", start: "17:00", end: "17:30", project: "internal tools", summary: "Fix CI" }],
+      withProject,
+    );
+    expect(r.errors).toEqual([]);
+    expect(r.day.blocks.find((b) => b.summary === "Fix CI")).toMatchObject({
+      task: "Tooling",
+      kind: "work",
+    });
+  });
+
   it("adds a block in a gap, splits, and merges", () => {
     const added = apply([
       {

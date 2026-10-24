@@ -2,9 +2,11 @@ import { Box, Text, useInput } from "ink";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Correction, Turn } from "../ai/edits";
 import type { OpenedDay } from "../collect";
+import { withProject } from "../config/edit";
 import { type Config, durationMinutes, type TaskMapping } from "../config/schema";
 import { describeSettings, type SettingEffect, type SettingOp } from "../config/setting-ops";
 import { describeEdits, placeTimeOps } from "../core/edits";
+import { addTimeProjects } from "../core/projects";
 import { changes, mappingFor, type PushPlan, type PushRow } from "../core/push";
 import { addDays, parseDuration } from "../core/time";
 import {
@@ -78,6 +80,8 @@ export interface AppActions {
   copy(text: string): Promise<void>;
   /** Dates with a saved day, for the date picker. */
   savedDates(): Promise<string[]>;
+  /** Projects from other days and the ERP, for adding time by hand. */
+  moreProjects(date: string): Promise<{ recent: string[]; erp: string[] }>;
   setup: SetupActions;
   /** Sending the day to the ERP; absent when none is set up. */
   send?: SendActions;
@@ -226,6 +230,27 @@ export function App({
       .then(setSaved)
       .catch(() => setSaved([]));
   }, [overlay, actions]);
+
+  // Projects from other days and the ERP, loaded when "Add time" opens; it shows today's first.
+  const [more, setMore] = useState<{ recent: string[]; erp: string[] }>({ recent: [], erp: [] });
+  useEffect(() => {
+    if (overlay !== "add") return;
+    let live = true;
+    actions
+      .moreProjects(date)
+      .then((m) => live && setMore(m))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [overlay, actions, date]);
+  const addable = (d: Day) => {
+    const { local, erp } = addTimeProjects(d, config, more);
+    return {
+      projects: local,
+      ...(erp.length && actions.send ? { erp: { site: actions.send.site, projects: erp } } : {}),
+    };
+  };
 
   const day = stored?.day ?? null;
   const cards = useMemo(() => (day ? buildCards(day, config) : []), [day, config]);
@@ -850,18 +875,19 @@ export function App({
       ) : null}
       {overlay === "add" && day ? (
         <AddTimeDialog
-          projects={[
-            ...new Set([
-              ...day.blocks.filter((b) => b.billable).map((b) => b.project),
-              ...config.projects.map((p) => p.name),
-            ]),
-          ].concat(day.blocks.length || config.projects.length ? [] : ["General"])}
+          {...addable(day)}
           step={step}
           screen={screen}
           onClose={() => setOverlay(null)}
-          onAdd={(p, m, s) => {
+          onAdd={(p, m, s, isNew) => {
             setOverlay(null);
             void commit(placeTimeOps(day, p, m, s), `✓ Added ${hm(m)} to ${short(p)}`);
+            // A project typed in is kept, so it's offered on every day from now on.
+            if (isNew)
+              void actions.setup
+                .save(withProject(config, p))
+                .then(setConfig)
+                .catch((err: Error) => showToast(err.message));
           }}
         />
       ) : null}

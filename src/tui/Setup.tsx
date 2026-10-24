@@ -8,7 +8,9 @@ import {
   withClaudeExclude,
   withDay,
   withDescriptions,
+  withoutProject,
   withoutTaskMapping,
+  withProject,
   withSource,
 } from "../config/edit";
 import { type Config, durationMinutes } from "../config/schema";
@@ -146,6 +148,7 @@ export function Setup({
   const typingSite =
     section === "erp" && focus === "rows" && !state?.erp.connected && busy !== "erp";
   const site = useDraft(typingSite);
+  const newProject = useDraft(section === "projects" && focus === "rows");
 
   useEffect(() => {
     let live = true;
@@ -215,9 +218,10 @@ export function Setup({
     if (!row) return;
     if (row.remove && (key.backspace || key.delete)) return row.remove();
     if (row.input) {
+      const typing = section === "erp" ? site : newProject;
       if (key.return) return row.press?.();
-      if (key.leftArrow && !site.value) return setFocus("nav");
-      site.edit(ch, key);
+      if (key.leftArrow && !typing.value) return setFocus("nav");
+      typing.edit(ch, key);
       return;
     }
     if (key.leftArrow || key.rightArrow) {
@@ -319,7 +323,9 @@ export function Setup({
         : focus === "nav"
           ? "↑↓ section · → or enter to change it · esc close"
           : row?.input
-            ? "type the address · enter signs in · esc back"
+            ? section === "projects"
+              ? "type a name · enter adds it · esc back"
+              : "type the address · enter signs in · esc back"
             : row?.remove
               ? "↑↓ move · ⌫ forget · esc back"
               : "↑↓ move · ←→ change · enter or space pick · esc back";
@@ -429,7 +435,7 @@ export function Setup({
       case "ai":
         return "Writes the descriptions and reads what you type in the chat bar. It gets titles, branch names and commit subjects, never code or your prompts.";
       case "projects":
-        return 'Change these by saying it in the chat bar, e.g. "anything in acme/api is Acme Website", "leave out my dotfiles" or "call meetings Calls".';
+        return 'Projects you log time to, and rules that name your work. Add one below or say it in the chat bar: "add a project called Internal", "anything in acme/api is Acme Website", "leave out my dotfiles".';
       case "erp": {
         const host = erpHost(config);
         if (state.erp.connected && host)
@@ -708,30 +714,36 @@ export function Setup({
       { id: "t-review", label: "Reviews", value: c.tasks.review },
       { id: "t-meeting", label: "Meetings", value: c.tasks.meeting },
     ].map((r) => ({ ...r, group: "Default tasks" }));
-    const rules: Row[] = c.projects.length
-      ? c.projects.map((p, i) => ({
-          id: `rule-${i}`,
-          group: "Project rules",
-          label: p.name,
-          value:
-            [
-              p.match?.repo ? `repo ${p.match.repo}` : "",
-              p.match?.title ? `title /${p.match.title}/` : "",
-              p.match?.attendee_domain ? `meetings with ${p.match.attendee_domain}` : "",
-            ]
-              .filter(Boolean)
-              .join(", ") || "this project",
-          ...(p.ignore ? { note: "left out" } : p.task ? { note: `→ ${p.task}` } : {}),
-        }))
-      : [
-          {
-            id: "rules-none",
-            group: "Project rules",
-            label: "None yet",
-            note: "projects come from each repo's name",
-          },
-        ];
-    return [...tasks, ...rules];
+    const rules: Row[] = c.projects.map((p, i) => ({
+      id: `rule-${i}`,
+      group: "Projects",
+      label: p.name,
+      value:
+        [
+          p.match?.repo ? `repo ${p.match.repo}` : "",
+          p.match?.title ? `title /${p.match.title}/` : "",
+          p.match?.attendee_domain ? `meetings with ${p.match.attendee_domain}` : "",
+        ]
+          .filter(Boolean)
+          .join(", ") || (p.ignore ? "this project" : "added by you"),
+      ...(p.ignore ? { note: "left out" } : p.task ? { note: `→ ${p.task}` } : {}),
+      trail: "✕ remove",
+      remove: () => void save(withoutProject(c, i)),
+    }));
+    const add: Row = {
+      id: "add-project",
+      group: "Projects",
+      label: "Add project",
+      input: { value: newProject.value, placeholder: "a project you log time to, e.g. Internal" },
+      ...(c.projects.length ? {} : { note: "others come from each repo's name" }),
+      press: () => {
+        const name = newProject.value.trim();
+        if (!name) return;
+        newProject.setValue("");
+        void save(withProject(c, name));
+      },
+    };
+    return [...tasks, ...rules, add];
   }
 
   function erpRows(): Row[] {

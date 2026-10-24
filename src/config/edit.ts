@@ -29,6 +29,19 @@ export function withDay(config: Config, day: Partial<Config["day"]>): Config {
   return { ...config, day: { ...config.day, ...day } };
 }
 
+/** Adds a project by name (one you log time to by hand), unless there's one by that name already. */
+export function withProject(config: Config, name: string, task?: string): Config {
+  const clean = name.trim();
+  if (!clean || config.projects.some((p) => p.name.toLowerCase() === clean.toLowerCase()))
+    return config;
+  return { ...config, projects: [...config.projects, { name: clean, ...(task ? { task } : {}) }] };
+}
+
+/** Removes the project rule at `index` in `[[projects]]`. */
+export function withoutProject(config: Config, index: number): Config {
+  return { ...config, projects: config.projects.filter((_, i) => i !== index) };
+}
+
 export function withAi(config: Config, backend: Config["ai"]["backend"]): Config {
   return { ...config, ai: { ...config.ai, backend } };
 }
