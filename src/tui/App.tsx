@@ -305,6 +305,9 @@ export function App({
         return next;
       });
   };
+  /** Shift-click ticks a card; once some are ticked, it ticks the range from the anchor. */
+  const shiftClick = (i: number) =>
+    checked.size && anchor.current >= 0 ? selectAt(i, true, false) : selectAt(i, false, true);
   /** Takes a card off the day: a row's blocks, or a meeting you weren't in. */
   const remove = (c: Card) => {
     if (!day) return;
@@ -1027,8 +1030,8 @@ export function App({
                   chip={i === sel ? chip : -1}
                   editing={editing === it.key}
                   typed={pill.value}
-                  onSelect={(range) => selectAt(i, range, false)}
-                  onToggle={(range) => selectAt(i, range, true)}
+                  onSelect={(shift) => (shift ? shiftClick(i) : selectAt(i, false, false))}
+                  onToggle={(shift) => (shift ? shiftClick(i) : selectAt(i, false, true))}
                   onEdit={() => startEdit(i)}
                   onMinutes={(m) => setMinutes(it, m)}
                   onRemove={() => remove(it)}

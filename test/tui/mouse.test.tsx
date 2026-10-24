@@ -5,7 +5,7 @@ import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
 import { App } from "../../src/tui/App";
 import { Clickable, MouseProvider, Overlay } from "../../src/tui/clickable";
-import { type MouseEvent, splitMouse, withMouse } from "../../src/tui/mouse";
+import { MOUSE_OFF, MOUSE_ON, type MouseEvent, splitMouse, withMouse } from "../../src/tui/mouse";
 import { config, fakeActions } from "../helpers/fake-app";
 import { FIXTURE_DATE } from "../helpers/fixture-day";
 
@@ -39,6 +39,11 @@ describe("mouse input", () => {
       { x: 9, y: 4, kind: "release", button: "left", shift: false },
       { x: 2, y: 3, kind: "wheelUp", button: "none", shift: false },
     ]);
+  });
+
+  it("asks the terminal for Shift-clicks while on and hands them back when off", () => {
+    expect(MOUSE_ON).toContain("\u001b[>1s");
+    expect(MOUSE_OFF).toContain("\u001b[>0s");
   });
 
   it("reads Shift from an SGR mouse report", () => {
@@ -207,6 +212,33 @@ describe("mouse input", () => {
       { op: "delete", id: "b1" },
       { op: "delete", id: "b2" },
     ]);
+  });
+
+  it("ticks a card on Shift-click with nothing ticked, then extends from it", async () => {
+    const events = new EventEmitter();
+    const { actions } = fakeActions();
+    const { lastFrame, stdin } = render(
+      <MouseProvider events={events}>
+        <App
+          initialDate={FIXTURE_DATE}
+          today={FIXTURE_DATE}
+          config={config}
+          actions={actions}
+          width={120}
+          height={40}
+        />
+      </MouseProvider>,
+    );
+    await until(lastFrame, "6h of 8h");
+    stdin.write("\r");
+    await until(lastFrame, "Copy sheet");
+    click(events, find(lastFrame() ?? "", "Fix auth token refresh"), true);
+    await until(lastFrame, "1 selected");
+    expect(lastFrame()).toContain("[x] Fix auth token refresh");
+    expect(lastFrame()).toContain("[ ] Daily standup");
+    click(events, find(lastFrame() ?? "", "Daily standup"), true);
+    await until(lastFrame, "2 selected");
+    expect(lastFrame()).toContain("[x] Daily standup");
   });
 
   it("clicks: the ERP block asks for the address and signs in on Enter", async () => {

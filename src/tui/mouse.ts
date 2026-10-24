@@ -45,9 +45,13 @@ export function splitMouse(pending: string, chunk: string) {
 /** How long a possible start of a mouse report waits for the rest before it counts as keys. */
 const HOLD_MS = 10;
 
-/** Escape codes that turn click, drag and motion reporting on (SGR encoding) and off. */
-export const MOUSE_ON = "\u001b[?1000h\u001b[?1003h\u001b[?1006h";
-export const MOUSE_OFF = "\u001b[?1006l\u001b[?1003l\u001b[?1000l";
+/**
+ * Escape codes that turn click, drag and motion reporting on (SGR encoding) and off. `CSI > 1 s`
+ * (XTSHIFTESCAPE) asks terminals like Ghostty and xterm to send Shift-clicks to the app
+ * instead of keeping them for their own text selection; `CSI > 0 s` hands them back.
+ */
+export const MOUSE_ON = "\u001b[?1000h\u001b[?1003h\u001b[?1006h\u001b[>1s";
+export const MOUSE_OFF = "\u001b[>0s\u001b[?1006l\u001b[?1003l\u001b[?1000l";
 
 /**
  * Wraps a TTY stdin so Ink sees keys and pastes as usual while mouse reports go to `mouse`.
