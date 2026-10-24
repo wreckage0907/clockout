@@ -353,10 +353,10 @@ describe("day view", () => {
 
   it("offers projects from other days and from the ERP, after the day's own", async () => {
     const { ui } = await openAddTime({
-      more: { recent: ["Acme Website", "acme/api"], erp: ["rtCamp Internal", "Acme Website"] },
+      more: { recent: ["Acme Website", "acme/api"], erp: ["Acme Internal", "Acme Website"] },
       erp: { target: fakeTarget().target },
     });
-    await until(ui.lastFrame, "rtCamp Internal");
+    await until(ui.lastFrame, "Acme Internal");
     const frame = ui.lastFrame() ?? "";
     expect(frame.indexOf("acme/api")).toBeLessThan(frame.indexOf("Acme Website"));
     expect(frame).toContain("From erp.example.com");

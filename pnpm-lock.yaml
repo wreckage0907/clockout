@@ -23,9 +23,6 @@ importers:
       commander:
         specifier: 15.0.0
         version: 15.0.0
-      date-fns:
-        specifier: 4.4.0
-        version: 4.4.0
       execa:
         specifier: 10.2.0
         version: 10.2.0
@@ -647,9 +644,6 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
-
-  date-fns@4.4.0:
-    resolution: {integrity: sha512-+1UMbeh68lH1SegH83CGWwpb6OHHbpSgr3+s5Eww5M4CAgswBpoWS0AjTOfEJ33HiYKz1hdj/KTFprzXHmq/6w==}
 
   defu@6.1.7:
     resolution: {integrity: sha512-7z22QmUWiQ/2d0KkdYmANbRUVABpZ9SNYyH5vx6PZ+nE5bcC0l7uFvEfHlyld/HcGBFTL536ClDt3DEcSlEJAQ==}
@@ -1842,8 +1836,6 @@ snapshots:
       type-fest: 1.4.0
 
   csstype@3.2.3: {}
-
-  date-fns@4.4.0: {}
 
   defu@6.1.7: {}
 

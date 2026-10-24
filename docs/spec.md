@@ -190,9 +190,9 @@ Rules for every CLI backend: run in an empty temp dir with tools off (denied or 
 
 ```toml
 [me]
-name = "Girish"
-emails = ["girish@example.com"]        # matches your ATTENDEE line for RSVP status
-git_authors = ["girish@example.com"]
+name = "Dev"
+emails = ["dev@example.com"]        # matches your ATTENDEE line for RSVP status
+git_authors = ["dev@example.com"]
 timezone = "Asia/Kolkata"
 
 [day]

@@ -8,7 +8,7 @@ describe("erpOrigin", () => {
   });
 
   it("allows plain http only on this machine", () => {
-    expect(erpOrigin("http://erpv16.localhost")).toBe("http://erpv16.localhost");
+    expect(erpOrigin("http://erp.localhost")).toBe("http://erp.localhost");
     expect(erpOrigin("http://127.0.0.1:8000")).toBe("http://127.0.0.1:8000");
     expect(() => erpOrigin("http://erp.example.com")).toThrow(/https:\/\//);
     expect(() => erpOrigin("ftp://erp.example.com")).toThrow(/https:\/\//);

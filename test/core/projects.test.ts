@@ -42,11 +42,11 @@ describe("addTimeProjects", () => {
   it("offers the day's projects, then config's, ERP-mapped, recent days', then the ERP's", () => {
     const got = addTimeProjects(day, config, {
       recent: ["Side Gig", "internal tools", "dotfiles", "Break"],
-      erp: ["rtCamp Internal", "Side Gig"],
+      erp: ["Acme Internal", "Side Gig"],
     });
     expect(got).toEqual({
       local: ["dev-example/clockout", "Internal Tools", "Acme Website", "acme/api", "Side Gig"],
-      erp: ["rtCamp Internal"],
+      erp: ["Acme Internal"],
     });
   });
 });

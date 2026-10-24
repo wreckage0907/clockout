@@ -188,6 +188,6 @@ describe("openTarget", () => {
 
   it("accepts https sites, and plain http only on this machine", () => {
     expect(() => config({ type: "next-pms", url: "http://erp.example.com" })).toThrow("https");
-    expect(config({ type: "next-pms", url: "http://erpv16.localhost" }).timesheet?.map).toEqual([]);
+    expect(config({ type: "next-pms", url: "http://erp.localhost" }).timesheet?.map).toEqual([]);
   });
 });
