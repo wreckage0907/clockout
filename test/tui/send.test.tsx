@@ -201,6 +201,7 @@ describe("which ERP task a card goes to", () => {
     ui.stdin.write(CTRL_T);
     await until(ui.lastFrame, "Which ERP task for 2 cards?");
     expect(ui.lastFrame()).toContain("Only the selected cards. Project defaults are unchanged.");
+    await until(ui.lastFrame, "Bug fixing · Acme");
     ui.stdin.write(DOWN); // Bug fixing
     await tick();
     ui.stdin.write("\r");
