@@ -147,7 +147,7 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Generic `http` timesheet target: a five-request JSON API any PMS can answer ([timesheet-api.md](timesheet-api.md)), token from an environment variable
 - [x] Mock PMS (`pnpm mock-pms`, `test/mock-pms/`) with a real system's rules; `clockout push` against it: dry run, send, nothing twice, entries deleted or changed there, approved entries, a closed week, an unknown task, a wrong or missing token, the PMS down
 - [x] Package smoke test in CI: the packed tarball installed globally runs as `clockout`
-- [ ] Interactive tests in a pseudo-terminal (Ink start-up, keys, paste, resize, terminal restored)
+- [x] Interactive tests in a pseudo-terminal (`test/tty/`): Ink start-up, keys, a paste that doesn't submit, resizing to too small and back, Ctrl+C and SIGTERM/SIGHUP leaving the terminal as it was, Ctrl+C while an AI helper hangs (helper stopped), sending to the mock PMS with Ctrl+S
 
 ## Day 11 — Export and demo
 

@@ -296,12 +296,6 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
   const off = () => process.stdout.write(MOUSE_OFF);
   process.stdout.write(MOUSE_ON);
   process.once("exit", off);
-  // A closed terminal or a kill: "exit" handlers (mouse off, Ink's restore) only run if we exit.
-  const quit = (code: number) => () => process.exit(code);
-  const onTerm = quit(143);
-  const onHup = quit(129);
-  process.once("SIGTERM", onTerm);
-  process.once("SIGHUP", onHup);
   const today = localDate(new Date(), config.me.timezone);
   const ui = render(
     <MouseProvider events={mouse}>
@@ -309,6 +303,18 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
     </MouseProvider>,
     { stdin, exitOnCtrlC: true, alternateScreen: true },
   );
+  // A closed terminal or a kill: leave the full screen (Ink does that on unmount), turn the
+  // mouse off, stop helpers, then exit the way a signal would. Nothing else would restore it.
+  const quit = (code: number) => () => {
+    ui.unmount();
+    off();
+    stopHelpers();
+    process.exit(code);
+  };
+  const onTerm = quit(143);
+  const onHup = quit(129);
+  process.once("SIGTERM", onTerm);
+  process.once("SIGHUP", onHup);
   try {
     await ui.waitUntilExit();
   } finally {

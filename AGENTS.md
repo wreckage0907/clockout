@@ -79,6 +79,7 @@ src/files.ts      readable reasons a file couldn't be written
 - Sources: feed files from `test/fixtures/` (same layout as the real tool, e.g. `fixtures/claude/projects/<slug>/<id>.jsonl`). No live network or API calls.
 - TUI: `ink-testing-library`.
 - `test/e2e/` runs the built CLI as a separate process (`test/e2e/helpers.ts`): its own temp home, a PATH with only node (never your own agent CLIs, nor the `gh` CI runners have), sources from the fixtures, GitHub as a fake server and the mock PMS (`test/mock-pms/`, the timesheet API in docs/timesheet-api.md) on 127.0.0.1. Check exit code, stdout and stderr separately.
+- `test/tty/` runs the review screen in a real pseudo-terminal through `test/tty/drive.py` (python3's standard library, run with `-I`): wait for text, keys, bracketed paste, resize, signals; then checks what reached the terminal on the way out (mouse off, main screen, cursor).
 - `pnpm smoke` packs the package, installs the tarball like npm users get it and runs the installed `clockout` (CI runs it too).
 - `pnpm coverage` counts every file in `src/`, loaded or not. Subprocess runs in `test/e2e/` don't count towards it.
 
