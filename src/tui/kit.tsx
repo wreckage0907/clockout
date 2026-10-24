@@ -624,32 +624,45 @@ export function Dialog({
   onClose: () => void;
   children: ReactNode;
 }) {
+  // Over a plain backdrop the size of the screen, so nothing behind peeks out around it, and in
+  // the middle of it (a little above, where the eye goes first). A click on the backdrop closes.
   return (
-    <Overlay
-      onOutside={onClose}
+    <Box
       position="absolute"
-      left={Math.max(0, Math.floor((screen.width - width) / 2))}
-      top={1}
-      width={width}
+      top={0}
+      left={0}
+      width={screen.width}
+      height={screen.height}
+      backgroundColor={T.bg}
       flexDirection="column"
-      backgroundColor={T.panel}
-      borderStyle="round"
-      borderColor={T.border}
-      borderBackgroundColor={T.panel}
-      paddingX={2}
-      paddingY={1}
+      alignItems="center"
+      justifyContent="center"
+      paddingBottom={Math.floor(screen.height / 10)}
     >
-      <Box justifyContent="space-between">
-        <Text color={T.text} bold>
-          {title}
-        </Text>
-        <Clickable onClick={onClose}>
-          {(hover) => <Text color={hover ? T.text : T.muted}>esc ✕</Text>}
-        </Clickable>
-      </Box>
-      <Box height={1} />
-      {children}
-    </Overlay>
+      <Overlay
+        onOutside={onClose}
+        width={width}
+        flexDirection="column"
+        flexShrink={0}
+        backgroundColor={T.panel}
+        borderStyle="round"
+        borderColor={T.border}
+        borderBackgroundColor={T.panel}
+        paddingX={2}
+        paddingY={1}
+      >
+        <Box justifyContent="space-between">
+          <Text color={T.text} bold>
+            {title}
+          </Text>
+          <Clickable onClick={onClose}>
+            {(hover) => <Text color={hover ? T.text : T.muted}>esc ✕</Text>}
+          </Clickable>
+        </Box>
+        <Box height={1} />
+        {children}
+      </Overlay>
+    </Box>
   );
 }
 

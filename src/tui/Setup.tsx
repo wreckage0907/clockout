@@ -294,6 +294,9 @@ export function Setup({
 
   const width = Math.min(100, screen.width - 4);
   const inner = width - 6;
+  // Grows with the terminal, so long lists get the room; one height for every section, so the
+  // dialog doesn't jump when you move between them.
+  const body = Math.min(24, Math.max(8, screen.height - 14));
   const paneWidth = inner - NAV - 3;
   if (!state || !config)
     return (
@@ -323,7 +326,7 @@ export function Setup({
 
   return (
     <Dialog title="Setup" width={width} screen={screen} onClose={onClose}>
-      <Box minHeight={Math.min(16, Math.max(8, screen.height - 12))}>
+      <Box minHeight={body}>
         <Box flexDirection="column" width={NAV} flexShrink={0}>
           {SECTIONS.map((s) => (
             <NavItem
@@ -360,7 +363,7 @@ export function Setup({
             <ClaudeProjects
               width={paneWidth}
               projects={projects}
-              shown={shown.slice(0, Math.max(4, screen.height - 18))}
+              shown={shown.slice(0, Math.max(4, body - 5))}
               excluded={excluded}
               search={search.value}
               picked={Math.min(pick, shown.length - 1)}
