@@ -164,3 +164,15 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 - [ ] VHS demo GIF, demo video
 - [ ] Repo public, final #NoHandsChallenge post
+
+## Change Clockout through config
+
+[ADR 0009](adr/0009-change-clockout-through-config.md): what people change to fit their own timesheet is config the AI can propose, never code.
+
+- [ ] Accept ADR 0009
+- [ ] `[[exports]]`: named formats (csv, tsv, markdown, json, text), columns with headers and formats (dates, hours as decimal / h:mm / minutes), merge, text line templates; built-ins unchanged, formula guard kept
+- [ ] Use them: `export --format <name>`, `/copy <name>`, a default for Ctrl+Y; README
+- [ ] Settings operations for exports ("add a Harvest export with hours as h:mm"), shown in the AI's settings summary
+- [ ] `type = "api"` timesheet target: the five operations mapped onto any API's requests (paths, body templates, dotted paths into answers, hours units, auth pattern); the `http` target as one fixed mapping; tests against the mock PMS with a different API shape
+- [ ] Settings operations for the mapping, drafted from pasted API docs; token and other header values never in the summary
+- [ ] `type = "command"` target and export: JSON over stdin/stdout, no shell, timeout, own process group; set by hand or on the command line only, refused from the chat bar; an example script that talks to an MCP server

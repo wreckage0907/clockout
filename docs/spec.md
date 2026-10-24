@@ -306,7 +306,7 @@ Copy-paste is the step people skip, so Clockout can write the day into the times
 - Sources: Copilot CLI, Gemini CLI, Goose, Crush; CalDAV; Microsoft Graph
 - `clockout hooks install`, OTLP receiver
 - `clockout serve`
-- Export templates for Toggl / Harvest / Clockify / Jira
+- Export templates for Toggl / Harvest / Clockify / Jira, and any timesheet API, as config the AI can propose ([ADR 0009](adr/0009-change-clockout-through-config.md), proposed)
 - Saving repeated corrections as rules
 - Standup mode
 
