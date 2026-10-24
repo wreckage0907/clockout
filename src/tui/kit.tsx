@@ -502,18 +502,26 @@ const FILL: Record<Tone, string> = {
   quiet: T.element,
 };
 
-/** Something to click. Filled tones carry dark text; hovering lightens it. */
+/** Something to click. Filled tones carry dark text; hovering lightens it. Disabled ones are faint. */
 export function Button({
   label,
   onClick,
   tone = "neutral",
   focused = false,
+  disabled = false,
 }: {
   label: string;
   onClick?: () => void;
   tone?: Tone;
   focused?: boolean;
+  disabled?: boolean;
 }) {
+  if (disabled)
+    return (
+      <Box flexShrink={0}>
+        <Text backgroundColor={FILL[tone]} color={T.faint}>{` ${label} `}</Text>
+      </Box>
+    );
   return (
     <Clickable onClick={onClick} flexShrink={0}>
       {(hover) => {
@@ -562,7 +570,12 @@ export function Pill({
   return (
     <Box alignItems="center" gap={1} flexShrink={0}>
       {onChange ? (
-        <Button label="−" tone="quiet" onClick={() => onChange(Math.max(step, minutes - step))} />
+        <Button
+          label="−"
+          tone="quiet"
+          disabled={minutes <= step}
+          onClick={() => onChange(minutes - step)}
+        />
       ) : null}
       <Clickable onClick={onEdit}>
         {(hover) => (

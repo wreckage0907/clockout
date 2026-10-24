@@ -607,7 +607,8 @@ export function App({
       if (key.ctrl && ch === "t") return card ? pickFor(card) : undefined;
       if (draft.value === "" && card?.kind === "row") {
         if (ch === "+" || ch === "=") return setMinutes(card, card.minutes + step);
-        if (ch === "-" || ch === "_") return setMinutes(card, Math.max(step, card.minutes - step));
+        if (ch === "-" || ch === "_")
+          return card.minutes > step ? setMinutes(card, card.minutes - step) : undefined;
       }
       if (draft.value === "" && card?.kind === "ask") {
         if (key.leftArrow) return setChip((c) => Math.max(0, c - 1));

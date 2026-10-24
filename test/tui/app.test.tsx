@@ -125,6 +125,16 @@ describe("day view", () => {
     expect(ui.lastFrame()).toContain("6h of 8h");
   });
 
+  it("− stops at one step instead of marking the card as set by you", async () => {
+    const { ui, calls } = await openDay();
+    await down(ui, 8); // Investigate flaky deploy, 15m
+    await until(ui.lastFrame, "How long was “Investigate flaky deploy”?");
+    ui.stdin.write("-");
+    await tick();
+    expect(calls.commits).toEqual([]);
+    expect(ui.lastFrame()).not.toContain("set by you");
+  });
+
   it("answering a meeting saves it, without counting its overlap with coding twice", async () => {
     const { ui, calls } = await openDay();
     await down(ui, 4); // Design sync
