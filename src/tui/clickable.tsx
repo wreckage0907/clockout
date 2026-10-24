@@ -13,6 +13,7 @@ import type { MouseEvent } from "./mouse";
 
 export interface ClickModifiers {
   shift: boolean;
+  alt: boolean;
 }
 
 interface Handlers {
@@ -104,7 +105,7 @@ export function MouseProvider({
         Boolean(t.on.current.click || t.on.current.outside),
       );
       const click = best?.on.current.click;
-      if (click) return click({ shift: e.shift });
+      if (click) return click({ shift: e.shift, alt: e.alt });
       if (!best && top > 0) for (const t of all) if (t.layer === top) t.on.current.outside?.();
     };
     events.on("mouse", onMouse);

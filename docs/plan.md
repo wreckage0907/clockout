@@ -101,6 +101,7 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Card checkboxes, Space to toggle, Shift-click / Shift+↑↓ ranges, and a selection toolbar
 - [x] Copy selected rows, remove selected cards in one undoable edit, and map selected cards to one ERP task without changing project defaults
 - [x] Shift-click anywhere on a card ticks it, and terminals that keep Shift-click for selection (Ghostty, xterm) pass it through
+- [x] Option-click does the same, for multiplexers (herdr) that never pass Shift-clicks on
 
 ## Setup by chat
 

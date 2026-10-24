@@ -25,8 +25,18 @@ function find(frame: string, text: string): { x: number; y: number } {
   return { x: [...(lines[y] ?? "").slice(0, lines[y]?.indexOf(text))].length, y };
 }
 
-function click(events: EventEmitter, at: { x: number; y: number }, shift = false) {
-  const e: MouseEvent = { ...at, kind: "press", button: "left", shift };
+function click(
+  events: EventEmitter,
+  at: { x: number; y: number },
+  mods: { shift?: boolean; alt?: boolean } = {},
+) {
+  const e: MouseEvent = {
+    ...at,
+    kind: "press",
+    button: "left",
+    shift: mods.shift ?? false,
+    alt: mods.alt ?? false,
+  };
   events.emit("mouse", e);
 }
 
@@ -35,9 +45,9 @@ describe("mouse input", () => {
     const r = splitMouse("", "a\u001b[<0;10;5Mb\u001b[<0;10;5m\u001b[<64;3;4M");
     expect(r.rest).toBe("ab");
     expect(r.events).toEqual([
-      { x: 9, y: 4, kind: "press", button: "left", shift: false },
-      { x: 9, y: 4, kind: "release", button: "left", shift: false },
-      { x: 2, y: 3, kind: "wheelUp", button: "none", shift: false },
+      { x: 9, y: 4, kind: "press", button: "left", shift: false, alt: false },
+      { x: 9, y: 4, kind: "release", button: "left", shift: false, alt: false },
+      { x: 2, y: 3, kind: "wheelUp", button: "none", shift: false, alt: false },
     ]);
   });
 
@@ -46,9 +56,12 @@ describe("mouse input", () => {
     expect(MOUSE_OFF).toContain("\u001b[>0s");
   });
 
-  it("reads Shift from an SGR mouse report", () => {
-    const r = splitMouse("", "\u001b[<4;10;5M");
-    expect(r.events).toEqual([{ x: 9, y: 4, kind: "press", button: "left", shift: true }]);
+  it("reads Shift and Alt from an SGR mouse report", () => {
+    const r = splitMouse("", "\u001b[<4;10;5M\u001b[<8;10;5M");
+    expect(r.events).toEqual([
+      { x: 9, y: 4, kind: "press", button: "left", shift: true, alt: false },
+      { x: 9, y: 4, kind: "press", button: "left", shift: false, alt: true },
+    ]);
   });
 
   it("holds a report split across chunks, wherever the split falls", () => {
@@ -61,7 +74,9 @@ describe("mouse input", () => {
       expect(first.rest).toBe("x");
       const second = splitMouse(first.pending, b);
       expect(second).toMatchObject({ rest: "", pending: "" });
-      expect(second.events).toEqual([{ x: 0, y: 1, kind: "press", button: "left", shift: false }]);
+      expect(second.events).toEqual([
+        { x: 0, y: 1, kind: "press", button: "left", shift: false, alt: false },
+      ]);
     }
   });
 
@@ -195,9 +210,9 @@ describe("mouse input", () => {
     await until(lastFrame, "Copy sheet");
     click(events, find(lastFrame() ?? "", "[ ]")); // Daily standup; anchors the range
     await until(lastFrame, "1 selected");
-    click(events, find(lastFrame() ?? "", "Fix auth token refresh"), true);
+    click(events, find(lastFrame() ?? "", "Fix auth token refresh"), { shift: true });
     await until(lastFrame, "2 selected");
-    expect(lastFrame()).toContain("2h 45m · shift-click for a range");
+    expect(lastFrame()).toContain("2h 45m · shift- or option-click for a range");
 
     click(events, find(lastFrame() ?? "", " Copy "));
     await until(lastFrame, "Copied 2 selected rows");
@@ -232,11 +247,38 @@ describe("mouse input", () => {
     await until(lastFrame, "6h of 8h");
     stdin.write("\r");
     await until(lastFrame, "Copy sheet");
-    click(events, find(lastFrame() ?? "", "Fix auth token refresh"), true);
+    click(events, find(lastFrame() ?? "", "Fix auth token refresh"), { shift: true });
     await until(lastFrame, "1 selected");
     expect(lastFrame()).toContain("[x] Fix auth token refresh");
     expect(lastFrame()).toContain("[ ] Daily standup");
-    click(events, find(lastFrame() ?? "", "Daily standup"), true);
+    click(events, find(lastFrame() ?? "", "Daily standup"), { shift: true });
+    await until(lastFrame, "2 selected");
+    expect(lastFrame()).toContain("[x] Daily standup");
+  });
+
+  it("does the same on Option-click, which multiplexers like herdr pass through", async () => {
+    const events = new EventEmitter();
+    const { actions } = fakeActions();
+    const { lastFrame, stdin } = render(
+      <MouseProvider events={events}>
+        <App
+          initialDate={FIXTURE_DATE}
+          today={FIXTURE_DATE}
+          config={config}
+          actions={actions}
+          width={120}
+          height={40}
+        />
+      </MouseProvider>,
+    );
+    await until(lastFrame, "6h of 8h");
+    stdin.write("\r");
+    await until(lastFrame, "Copy sheet");
+    click(events, find(lastFrame() ?? "", "Fix auth token refresh"), { alt: true });
+    await until(lastFrame, "1 selected");
+    expect(lastFrame()).toContain("[x] Fix auth token refresh");
+    expect(lastFrame()).toContain("[ ] Daily standup");
+    click(events, find(lastFrame() ?? "", "Daily standup"), { alt: true });
     await until(lastFrame, "2 selected");
     expect(lastFrame()).toContain("[x] Daily standup");
   });

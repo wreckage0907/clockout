@@ -134,7 +134,7 @@
 | | Step | What happens |
 |---|---|---|
 | **1** | **Run `init`** | Clockout detects local agent logs, GitHub and Claude Code, then asks for your time zone, working hours and calendar. |
-| **2** | **Open the day** | Press Enter to expand the timesheet cards. Move with **↑ ↓**, edit a duration with **Enter**, and nudge it with **− / +**. Click checkboxes or press **Space** to select several; **Shift-click** a card to tick it, or a range once one is ticked. |
+| **2** | **Open the day** | Press Enter to expand the timesheet cards. Move with **↑ ↓**, edit a duration with **Enter**, and nudge it with **− / +**. Click checkboxes or press **Space** to select several; **Shift-click** (or **Option-click**, e.g. inside herdr) a card to tick it, or a range once one is ticked. |
 | **3** | **Say what is wrong** | Type or dictate a correction. Review the proposed operations, **Enter** to apply, **Esc** to revise, **Ctrl+Z** to undo. |
 | **4** | **Take the sheet** | **Ctrl+Y** copies tab-separated rows, or only the checked rows when any are selected. The selection toolbar can also map or remove several cards together. Use `export` for a file, another format or a range of dates. |
 | **5** | **Pick another day** | Run `yesterday` or `day 2026-10-16`; in the review screen, click the date or use **PgUp / PgDn**. |

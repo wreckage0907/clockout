@@ -305,7 +305,10 @@ export function App({
         return next;
       });
   };
-  /** Shift-click ticks a card; once some are ticked, it ticks the range from the anchor. */
+  /**
+   * Shift- or Option-click ticks a card; once some are ticked, it ticks the range from the
+   * anchor. Option is there for multiplexers like herdr that keep Shift-clicks for selection.
+   */
   const shiftClick = (i: number) =>
     checked.size && anchor.current >= 0 ? selectAt(i, true, false) : selectAt(i, false, true);
   /** Takes a card off the day: a row's blocks, or a meeting you weren't in. */
@@ -982,7 +985,10 @@ export function App({
             <Text color={T.primary} bold>
               {checkedCards.length} selected
             </Text>
-            <Text color={T.muted}> · {hm(checkedMinutes)} · shift-click for a range</Text>
+            <Text color={T.muted}>
+              {" "}
+              · {hm(checkedMinutes)} · shift- or option-click for a range
+            </Text>
           </Text>
           <Box gap={1}>
             {erp ? <Button label="Map task" tone="primary" onClick={pickChecked} /> : null}
@@ -1197,7 +1203,11 @@ function CardView({
     body = (
       <>
         <Box>
-          <Clickable onClick={({ shift }) => onToggle(shift)} marginRight={1} flexShrink={0}>
+          <Clickable
+            onClick={({ shift, alt }) => onToggle(shift || alt)}
+            marginRight={1}
+            flexShrink={0}
+          >
             {(hover) => (
               <Text color={checked || hover ? T.primary : T.muted}>{checked ? "[x]" : "[ ]"}</Text>
             )}
@@ -1235,7 +1245,7 @@ function CardView({
       </>
     );
   return (
-    <Clickable onClick={({ shift }) => onSelect(shift)} marginBottom={1} flexShrink={0}>
+    <Clickable onClick={({ shift, alt }) => onSelect(shift || alt)} marginBottom={1} flexShrink={0}>
       {(hover) => {
         // A filled panel like the chat bar: the left bar marks focus, ticks and questions.
         const bg = selected ? T.element : hover ? mix(T.panel, T.element, 0.5) : T.panel;
