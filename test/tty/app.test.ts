@@ -23,7 +23,11 @@ function expectRestored(tail: string) {
   expect(tail).toContain(RESTORE.cursorShown);
 }
 
-describe.skipIf(!hasPython && !process.env.CI)("the review screen in a terminal", () => {
+const canRun = hasPython || !!process.env.CI;
+// Longer than drive.py's 30s, so a stuck step fails with what was on screen, not a bare timeout.
+const timeout = 40_000;
+
+describe.runIf(canRun)("the review screen in a terminal", { timeout }, () => {
   let sb: Sandbox;
   beforeAll(async () => {
     sb = await sandbox();
@@ -164,7 +168,8 @@ erp_task = "TASK-TOOLS"
         { send: KEY.enter },
         { wait: DAY },
         { send: KEY.ctrlS },
-        { wait: "Send to " },
+        // The panel's own title; the header's "Send to ERP" button is there from the start.
+        { wait: "from Clockout" },
         { send: KEY.enter },
         { wait: "✓ Sent" },
         { send: KEY.ctrlC },
