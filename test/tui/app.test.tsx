@@ -77,6 +77,37 @@ describe("home", () => {
     await until(ui.lastFrame, "of 6h");
     expect(ui.lastFrame()).toContain("6h of 6h");
   });
+
+  it("clears the old day's total while another day is drafting", async () => {
+    const fake = fakeActions();
+    const load = fake.actions.load;
+    let release = () => {};
+    fake.actions.load = (date, opts) => {
+      if (date === FIXTURE_DATE) return load(date, opts);
+      return new Promise((resolve, reject) => {
+        release = () => void load(date, opts).then(resolve, reject);
+      });
+    };
+    const ui = render(
+      <App
+        initialDate={FIXTURE_DATE}
+        today={FIXTURE_DATE}
+        config={config}
+        actions={fake.actions}
+        width={W}
+        height={H}
+      />,
+    );
+    await until(ui.lastFrame, "6h of 8h");
+    ui.stdin.write(PASTE("/date monday"));
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Drafting Mon, Oct 12");
+    expect(ui.lastFrame()).not.toContain("6h of 8h");
+    expect(ui.lastFrame()).not.toContain("0m of 8h");
+    release();
+    await until(ui.lastFrame, "6h of 8h");
+  });
 });
 
 describe("day view", () => {
@@ -490,7 +521,7 @@ describe("setup", () => {
   const lastSaved = (calls: { saved: unknown[] }) => calls.saved.at(-1) as Config | undefined;
 
   it("ctrl+p opens it on the sources, every coding agent listed, and esc closes it", async () => {
-    const { ui } = await openSetup();
+    const { ui, calls } = await openSetup();
     const frame = ui.lastFrame() ?? "";
     for (const section of ["Sources", "Day", "AI helper", "Projects", "ERP"])
       expect(frame).toContain(section);
@@ -501,6 +532,20 @@ describe("setup", () => {
     ui.stdin.write(ESC);
     await tick();
     expect(ui.lastFrame()).not.toContain("What Clockout reads");
+    expect(calls.loads).toEqual([FIXTURE_DATE]);
+  });
+
+  it("closing after a change doesn't draft the current day again", async () => {
+    const { ui, calls } = await openSetup();
+    ui.stdin.write(RIGHT);
+    await tick();
+    ui.stdin.write(" "); // turn Claude Code off
+    for (let i = 0; i < 50 && calls.saved.length === 0; i++) await tick();
+    expect(calls.saved).toHaveLength(1);
+    ui.stdin.write("\u0010"); // ctrl+p closes from the rows too
+    await tick();
+    expect(ui.lastFrame()).not.toContain("What Clockout reads");
+    expect(calls.loads).toEqual([FIXTURE_DATE]);
   });
 
   it("ticks a source from the keyboard, skipping one that isn't on this machine", async () => {

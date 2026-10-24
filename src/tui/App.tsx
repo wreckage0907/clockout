@@ -136,7 +136,6 @@ export function App({
   const [view, setView] = useState<"home" | "day">("home");
   const [setup, setSetup] = useState(false);
   const [setupAt, setSetupAt] = useState<SetupSection>("sources");
-  const [configChanged, setConfigChanged] = useState(false);
   const [reload, setReload] = useState(0);
   const [stored, setStored] = useState<StoredDay | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -174,6 +173,9 @@ export function App({
     const refresh = refreshNext.current;
     refreshNext.current = false;
     setLoading(true);
+    setStored(null);
+    setWarnings([]);
+    setStale(false);
     actions
       .load(date, refresh ? { refresh } : undefined)
       .then((opened) => {
@@ -746,17 +748,8 @@ export function App({
           actions={actions.setup}
           screen={screen}
           start={setupAt}
-          onConfig={(c) => {
-            setConfig(c);
-            setConfigChanged(true);
-          }}
-          onClose={() => {
-            setSetup(false);
-            if (configChanged) {
-              setConfigChanged(false);
-              setReload((n) => n + 1);
-            }
-          }}
+          onConfig={setConfig}
+          onClose={() => setSetup(false)}
         />
       ) : null}
     </>
