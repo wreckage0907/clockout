@@ -16,5 +16,8 @@ describe("resolveDate", () => {
 
   it("explains dates it can't read", () => {
     expect(() => resolveDate("last tuesday", "Asia/Kolkata", now)).toThrow(/Use today, yesterday/);
+    expect(() => resolveDate("2026-02-30", "Asia/Kolkata", now)).toThrow(/Can't read the date/);
+    expect(() => resolveDate("2099-01-01", "Asia/Kolkata", now)).toThrow(/hasn't happened yet/);
+    expect(resolveDate("2099-01-01", "Asia/Kolkata", now, { future: true })).toBe("2099-01-01");
   });
 });

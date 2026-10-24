@@ -1,5 +1,14 @@
+import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { cliFailure, jsonIn, lastLine, strictSchema, withoutNulls } from "../../src/ai/cli";
+import {
+  cliFailure,
+  cliRunner,
+  jsonIn,
+  lastLine,
+  runCli,
+  strictSchema,
+  withoutNulls,
+} from "../../src/ai/cli";
 
 describe("agent CLI helpers", () => {
   it("makes a schema strict: anyOf for oneOf, every key required, optional ones nullable", () => {
@@ -73,5 +82,21 @@ describe("agent CLI helpers", () => {
     expect(cliFailure("Codex", "model overloaded", "run `codex login`.").message).toBe(
       "Codex: model overloaded.",
     );
+  });
+
+  it("on a timeout, stops the helper and anything it started, even if they hold the output open", async () => {
+    // A shell that starts a long sleep sharing its output, as agent CLIs start tools.
+    const started = Date.now();
+    const run = cliRunner(300);
+    await expect(
+      run("sh", ["-c", "sleep 30 & echo started; wait"], { input: "", cwd: tmpdir() }),
+    ).rejects.toThrow("didn't answer within 1 second");
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
+
+  it("says when the helper isn't installed", async () => {
+    await expect(
+      runCli("clockout-no-such-helper", [], { input: "", cwd: tmpdir() }),
+    ).rejects.toThrow("isn't installed");
   });
 });

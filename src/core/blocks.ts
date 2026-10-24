@@ -17,6 +17,8 @@ const ASK_GAP = ASK_GAP_MINUTES * MINUTE;
 const LONG_GAP_MINUTES = 120;
 /** Local times a gap has to touch for lunch to be a likely answer. */
 const LUNCH = ["12:00", "15:00"] as const;
+/** Events at least this long aren't taken as attended without asking. */
+const LONG_EVENT = 10 * 60 * MINUTE;
 /** This many of your actions during an accepted meeting suggest you skipped it. */
 const BUSY_IN_MEETING = 2;
 
@@ -59,7 +61,22 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
   if (ignored.size) notes.push(`Left out ${[...ignored].join(", ")}: your project rules ignore it`);
 
   // Meetings
-  const meetings = dedupeMeetings(acts.filter((a) => a.kind === "meeting" && a.end));
+  // An event of 10 hours or more (an offsite, a conference, a block over several days) isn't a
+  // meeting you sat in around the clock: only its part in working hours counts, and it's asked about.
+  const [whFrom, whTo] = config.day.working_hours.split("-") as [string, string];
+  const [workFrom, workTo] = [atLocalTime(date, whFrom, tz), atLocalTime(date, whTo, tz)];
+  const long = new Set<Activity>();
+  const meetings = dedupeMeetings(acts.filter((a) => a.kind === "meeting" && a.end)).flatMap(
+    (m) => {
+      if ((m.end?.getTime() ?? 0) - m.start.getTime() < LONG_EVENT) return [m];
+      const start = new Date(Math.max(m.start.getTime(), workFrom.getTime()));
+      const end = new Date(Math.min(m.end?.getTime() ?? 0, workTo.getTime()));
+      if (end <= start) return [];
+      const clipped = { ...m, start, end };
+      long.add(clipped);
+      return [clipped];
+    },
+  );
   const declined = meetings.filter((m) => m.attendance === "declined");
   if (declined.length) {
     notes.push(
@@ -72,14 +89,16 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
   const attended: Activity[] = [];
   const doubleBooked: { m: Activity; other: Activity }[] = [];
   for (const m of meetings
-    .filter((x) => x.attendance === "accepted")
+    .filter((x) => x.attendance === "accepted" && !long.has(x))
     .sort((a, b) => a.start.getTime() - b.start.getTime())) {
     const other = attended.find((o) => (o.end?.getTime() ?? 0) > m.start.getTime());
     if (other) doubleBooked.push({ m, other });
     else attended.push(m);
   }
   const unsure = [
-    ...meetings.filter((m) => m.attendance !== "accepted" && m.attendance !== "declined"),
+    ...meetings.filter(
+      (m) => (m.attendance !== "accepted" || long.has(m)) && m.attendance !== "declined",
+    ),
     ...doubleBooked.map((d) => d.m),
   ];
 
@@ -111,7 +130,13 @@ export function buildDay(date: string, activities: readonly Activity[], config: 
     );
     const working = overlapping ? ` You were working on ${overlapping.span.project} then.` : "";
     const clash = doubleBooked.find((d) => d.m === m);
-    if (clash) {
+    if (long.has(m)) {
+      questions.push({
+        kind: "attendance",
+        text: `"${m.title}" is a long event; it's counted for your working hours (${span(m, tz)}). Were you at it all that time?${working}`,
+        blockId: meetingKey(m),
+      });
+    } else if (clash) {
       questions.push({
         kind: "overlap",
         text: `"${m.title}" (${span(m, tz)}) overlaps "${clash.other.title}" (${span(clash.other, tz)}). Did you attend it too?`,
@@ -349,16 +374,50 @@ function resolveOverlaps(spans: Span[]): Piece[] {
   return pieces;
 }
 
+/**
+ * A lone sliver joins the block next to it. A run of slivers is switching back and forth between
+ * sessions running side by side: each gets its share of that stretch as one piece, in the order
+ * they came up, so none takes the whole stretch.
+ */
 function foldSlivers(pieces: Piece[]): Piece[] {
+  const short = (p: Piece) => p.end - p.start < SLIVER;
   const out: Piece[] = [];
-  for (const p of pieces) {
-    const prev = out.at(-1);
-    if (prev && p.end - p.start < SLIVER && prev.end === p.start) prev.end = p.end;
-    else if (prev && prev.end - prev.start < SLIVER && prev.end === p.start) {
-      out[out.length - 1] = { ...p, start: prev.start };
-    } else out.push({ ...p });
+  for (let i = 0; i < pieces.length; ) {
+    const p = pieces[i] as Piece;
+    let j = i + 1;
+    if (short(p))
+      while (
+        j < pieces.length &&
+        short(pieces[j] as Piece) &&
+        pieces[j]?.start === pieces[j - 1]?.end
+      )
+        j++;
+    if (j - i > 1) out.push(...shared(pieces.slice(i, j)));
+    else out.push({ ...p });
+    i = j;
   }
-  return out;
+  const folded: Piece[] = [];
+  for (const p of out) {
+    const prev = folded.at(-1);
+    const touching = prev && prev.end === p.start;
+    if (touching && prev.span === p.span) prev.end = p.end;
+    else if (touching && short(p) && !short(prev)) prev.end = p.end;
+    else if (touching && short(prev)) folded[folded.length - 1] = { ...p, start: prev.start };
+    else folded.push({ ...p });
+  }
+  return folded;
+}
+
+/** One piece per span over the run's time, each as long as its slivers added up. */
+function shared(run: Piece[]): Piece[] {
+  const total = new Map<Span, number>();
+  for (const p of run) total.set(p.span, (total.get(p.span) ?? 0) + p.end - p.start);
+  let at = (run[0] as Piece).start;
+  return [...total].map(([span, ms]) => {
+    const piece = { span, start: at, end: at + ms };
+    at += ms;
+    return piece;
+  });
 }
 
 function subtract(p: Piece, ms: number, me: number): Piece[] {

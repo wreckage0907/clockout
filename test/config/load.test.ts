@@ -50,6 +50,12 @@ describe("config files", () => {
     await expect(loadConfig(file)).rejects.toThrow(/me\.emails\[0\]/);
   });
 
+  it("says how to fix an empty one", async () => {
+    const file = join(dir, "config.toml");
+    await writeFile(file, "# nothing yet\n");
+    await expect(loadConfig(file)).rejects.toThrow(/empty\. Run `clockout init --force`/);
+  });
+
   it("refuses to save an invalid config", async () => {
     const file = join(dir, "config.toml");
     const bad = { ...config, me: { ...config.me, timezone: "Nowhere/Land" } };

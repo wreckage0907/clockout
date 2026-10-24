@@ -83,6 +83,7 @@ describe("parseSlash", () => {
     expect(ok("/date 2026-09-30")).toEqual({ name: "date", date: "2026-09-30" });
     expect(error("/date")).toContain("Which day?");
     expect(error("/date someday")).toContain("Which day?");
+    expect(error("/date 2099-01-01")).toBe("2099-01-01 hasn't happened yet");
   });
 
   it("opens setup, at a section if one is named", () => {

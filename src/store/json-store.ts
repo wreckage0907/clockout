@@ -1,7 +1,9 @@
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { tildify } from "../config/paths";
 import type { PushedEntry } from "../core/push";
 import type { Activity, Day, EditOp } from "../core/types";
+import { fileError } from "../files";
 
 export interface EditRecord {
   at: string;
@@ -46,8 +48,26 @@ export class DayStore {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
       throw err;
     }
-    const parsed = JSON.parse(text, reviveDates) as StoredDay;
-    return parsed.version === 1 ? parsed : null;
+    const where = tildify(this.file(date));
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text, reviveDates);
+    } catch (err) {
+      throw new Error(
+        `The saved day ${where} is damaged. Move it aside (or delete it) to rebuild the day from your activity; corrections made on it are lost.`,
+        { cause: err },
+      );
+    }
+    const version = (parsed as { version?: unknown } | null)?.version;
+    if (typeof version === "number" && version > 1)
+      throw new Error(
+        `${where} was saved by a newer Clockout. Update Clockout to open it (npm i -g clockout-cli).`,
+      );
+    if (version !== 1 || typeof (parsed as { day?: unknown }).day !== "object")
+      throw new Error(
+        `The saved day ${where} isn't one Clockout can read. Move it aside (or delete it) to rebuild the day.`,
+      );
+    return parsed as StoredDay;
   }
 
   /** Dates with a saved day, sorted ascending; empty when nothing is saved yet. */
@@ -67,11 +87,19 @@ export class DayStore {
 
   async save(stored: StoredDay): Promise<void> {
     const file = this.file(stored.date);
-    await mkdir(join(this.dataDir, "days"), { recursive: true, mode: 0o700 });
+    await mkdir(join(this.dataDir, "days"), { recursive: true, mode: 0o700 }).catch(
+      (err: unknown) => {
+        throw fileError(file, err, `the day to ${tildify(file)}`);
+      },
+    );
     const trimmed = { ...stored, history: stored.history.slice(-HISTORY_LIMIT) };
     const tmp = `${file}.${process.pid}.tmp`;
-    await writeFile(tmp, `${JSON.stringify(trimmed, null, 2)}\n`, { mode: 0o600 });
-    await rename(tmp, file);
+    try {
+      await writeFile(tmp, `${JSON.stringify(trimmed, null, 2)}\n`, { mode: 0o600 });
+      await rename(tmp, file);
+    } catch (err) {
+      throw fileError(file, err, `the day to ${tildify(file)}`);
+    }
   }
 }
 

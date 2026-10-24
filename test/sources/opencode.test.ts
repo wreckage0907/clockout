@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -101,5 +101,16 @@ describe("opencode source", () => {
       summary: expect.stringMatching(/^3 sessions in .*opencode\.db$/),
     });
     expect(await opencode.detect({ ...ctx(), env: { XDG_DATA_HOME: "/nowhere" } })).toBeNull();
+  });
+
+  it("fails, rather than finding nothing, when its database is there but can't be read", async () => {
+    const bad = join(dataHome, "garbage.db");
+    await writeFile(bad, "not a database at all, just some text that is long enough to read");
+    await expect(readOpencodeSessions(bad, dayRange("2026-10-16", "Asia/Kolkata"))).rejects.toThrow(
+      "opencode: couldn't read its database",
+    );
+    expect(
+      await readOpencodeSessions(join(dataHome, "none.db"), dayRange("2026-10-16", "Asia/Kolkata")),
+    ).toEqual([]);
   });
 });

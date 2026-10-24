@@ -1,6 +1,7 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { access, constants, stat } from "node:fs/promises";
 import { createInterface } from "node:readline";
+import { tildify } from "../config/paths";
 import type { Activity } from "../core/types";
 import type { DateRange } from "./types";
 
@@ -72,17 +73,40 @@ export async function* sessionActivities(
   if (done) yield done;
 }
 
-/** Non-empty lines of a JSONL file, each parsed as JSON (`undefined` for a line that isn't). */
+/**
+ * Non-empty lines of a JSONL file, each parsed as JSON (`undefined` for a line that isn't). A file
+ * that can't be read (permissions, deleted meanwhile) ends early rather than failing the source,
+ * so one bad session doesn't hide all the others.
+ */
 export async function* jsonLines(file: string): AsyncGenerator<unknown> {
   const lines = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
-  for await (const raw of lines) {
-    if (!raw.trim()) continue;
-    try {
-      yield JSON.parse(raw) as unknown;
-    } catch {
-      yield undefined;
+  try {
+    for await (const raw of lines) {
+      if (!raw.trim()) continue;
+      try {
+        yield JSON.parse(raw) as unknown;
+      } catch {
+        yield undefined;
+      }
     }
+  } catch {
+    // Unreadable: what was read so far stands.
   }
+}
+
+/**
+ * Throws when a tool's folder is missing or unreadable, so the day says so (and keeps what was
+ * saved from it) instead of quietly showing nothing from that tool.
+ */
+export async function requireFolder(name: string, dir: string): Promise<void> {
+  const info = await stat(dir).catch(() => null);
+  if (!info?.isDirectory())
+    throw new Error(
+      `${name}: no folder at ${tildify(dir)}. Check the folder in config.toml, or turn ${name} off in Setup (ctrl+p).`,
+    );
+  await access(dir, constants.R_OK | constants.X_OK).catch((err: unknown) => {
+    throw new Error(`${name}: can't read ${tildify(dir)} (permission denied).`, { cause: err });
+  });
 }
 
 /** A real file changed on or after `since`; older files can't hold events in a later range. */

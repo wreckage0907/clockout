@@ -36,6 +36,15 @@ describe("openDay", () => {
     expect(again.stored.day.blocks).toEqual(first.stored.day.blocks);
   });
 
+  it("keeps a session's repo after its folder is deleted, so the project doesn't change", async () => {
+    const s = await store();
+    const first = await openDay(FIXTURE_DATE, config, s, { ctx: ctx(claudeDir) });
+    const gone = { ...ctx(claudeDir), resolveRepo: async () => undefined };
+    const again = await openDay(FIXTURE_DATE, config, s, { ctx: gone, refresh: true });
+    const projects = (d: typeof first) => d.stored.day.blocks.map((b) => b.project);
+    expect(projects(again)).toEqual(projects(first));
+  });
+
   it("drops a source's evidence once you turn it off", async () => {
     const s = await store();
     const first = await openDay(FIXTURE_DATE, config, s, { ctx: ctx(claudeDir) });

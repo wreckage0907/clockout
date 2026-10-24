@@ -438,3 +438,48 @@ describe("GitHub activity", () => {
     ]);
   });
 });
+
+describe("sessions running side by side", () => {
+  const hhmm = (m: number) =>
+    `${String(10 + Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+  it("share the time they were switched between, rather than one taking it all", () => {
+    const repos = ["acme/alpha", "acme/beta", "acme/gamma"];
+    const acts = repos.flatMap((repo, n) =>
+      Array.from({ length: 40 }, (_, k) =>
+        prompt(hhmm(k * 3 + n), { repo, sessionId: repo, title: repo }),
+      ),
+    );
+    const day = buildDay(D, acts, fixtureConfig());
+    const minutes = new Map<string, number>();
+    for (const b of day.blocks)
+      minutes.set(
+        b.project,
+        (minutes.get(b.project) ?? 0) + (b.end.getTime() - b.start.getTime()) / 60_000,
+      );
+    expect([...minutes.keys()].sort()).toEqual(repos);
+    for (const m of minutes.values()) expect(m).toBeGreaterThan(30);
+    expect(day.blocks.length).toBeLessThanOrEqual(6);
+  });
+});
+
+describe("long events", () => {
+  it("count an event over several days only for working hours, and ask about it", () => {
+    const offsite = meeting("09:00", "18:00", {
+      title: "Offsite",
+      start: atLocalTime("2026-10-19", "09:00", TZ),
+      end: atLocalTime("2026-10-21", "18:00", TZ),
+    });
+    const day = buildDay(D, [offsite, meeting("11:00", "11:30")], fixtureConfig());
+    const block = day.blocks.find((b) => b.summary === "Offsite");
+    expect(block && `${localTime(block.start, TZ)}-${localTime(block.end, TZ)}`).toBe(
+      "09:30-18:30",
+    );
+    expect(block?.confirmed).toBe(false);
+    expect(day.questions.map((q) => q.text)).toContainEqual(
+      expect.stringMatching(/^"Offsite" is a long event/),
+    );
+    // The real meeting inside it isn't taken as clashing with it.
+    expect(day.blocks.find((b) => b.summary === "Sync")?.confirmed).toBe(true);
+  });
+});

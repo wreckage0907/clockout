@@ -1,8 +1,9 @@
 import { homedir } from "node:os";
 import clipboard from "clipboardy";
 import { execa } from "execa";
-import { render, useWindowSize } from "ink";
+import { Box, render, Text, useWindowSize } from "ink";
 import { type AiChoice, BACKEND_NAMES, chooseBackend, detectBackends } from "../ai";
+import { stopHelpers } from "../ai/cli";
 import { type Correction, localCorrection, parseCorrection } from "../ai/edits";
 import { openDay } from "../collect";
 import { signInErp, signOutErp, signOutGoogle } from "../commands/connect";
@@ -24,7 +25,7 @@ import { applyPush, preparePush } from "../push";
 import { antigravity } from "../sources/antigravity";
 import { listClaudeProjects } from "../sources/claude-code/paths";
 import { codex } from "../sources/codex";
-import { detectGitHub } from "../sources/github/token";
+import { gitHubStatus } from "../sources/github/token";
 import { connectGoogle, googleClient } from "../sources/google-calendar/oauth";
 import { opencode } from "../sources/opencode";
 import { pi } from "../sources/pi";
@@ -45,10 +46,27 @@ async function openQuietly(url: string): Promise<void> {
   await execa(cmd, args as string[]).catch(() => undefined);
 }
 
-/** The app at the terminal's current size. */
+/** Below this the cards and dialogs don't fit. */
+const MIN = { columns: 60, rows: 18 };
+
+/** The app at the terminal's current size, or a note to make it bigger (the app stays as it was). */
 function Screen(props: Omit<Parameters<typeof App>[0], "width" | "height">) {
   const { columns, rows } = useWindowSize();
-  return <App {...props} width={columns} height={rows} />;
+  const small = columns < MIN.columns || rows < MIN.rows;
+  return (
+    <>
+      {small && (
+        <Box width={columns} height={rows} alignItems="center" justifyContent="center">
+          <Text>
+            Make the window bigger ({MIN.columns}×{MIN.rows}) · ctrl+c quits
+          </Text>
+        </Box>
+      )}
+      <Box display={small ? "none" : "flex"}>
+        <App {...props} width={columns} height={rows} />
+      </Box>
+    </>
+  );
 }
 
 /**
@@ -215,7 +233,7 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
           codex.detect(ctx),
           opencode.detect(ctx),
           antigravity.detect(ctx),
-          detectGitHub(ctx),
+          gitHubStatus(process.env),
           detectBackends(),
           loadGoogleCredentials().catch(() => null),
           loadErpCredentials().catch(() => null),
@@ -232,7 +250,7 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
           codex: { found: codexFound?.summary ?? null },
           opencode: { found: opencodeFound?.summary ?? null },
           antigravity: { found: agyFound?.summary ?? null },
-          github: { found: github !== null },
+          github: { found: github.found !== null, fix: github.fix },
           helpers,
           erp: {
             connected: signedIn,
@@ -276,6 +294,12 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
   const off = () => process.stdout.write(MOUSE_OFF);
   process.stdout.write(MOUSE_ON);
   process.once("exit", off);
+  // A closed terminal or a kill: "exit" handlers (mouse off, Ink's restore) only run if we exit.
+  const quit = (code: number) => () => process.exit(code);
+  const onTerm = quit(143);
+  const onHup = quit(129);
+  process.once("SIGTERM", onTerm);
+  process.once("SIGHUP", onHup);
   const today = localDate(new Date(), config.me.timezone);
   const ui = render(
     <MouseProvider events={mouse}>
@@ -288,5 +312,9 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
   } finally {
     off();
     stop();
+    process.off("SIGTERM", onTerm);
+    process.off("SIGHUP", onHup);
+    // Quitting while the AI was thinking: don't wait for it.
+    stopHelpers();
   }
 }

@@ -54,8 +54,12 @@ export function formatDuration(minutes: number): string {
   return `${Math.floor(m / 60)}h${pad(m % 60)}`;
 }
 
+/** YYYY-MM-DD naming a real day (not 2026-02-30, which Date would roll over to 2 March). */
 export function isDate(s: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y = 0, m = 0, d = 0] = s.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
 }
 
 function parseDate(date: string): [number, number, number] {

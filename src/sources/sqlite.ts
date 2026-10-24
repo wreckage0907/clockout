@@ -30,12 +30,16 @@ function sqlite(): Promise<SqliteModule | null> {
 
 /** Another tool's database, opened read-only, or null when it's missing or unreadable. */
 export async function openReadOnly(file: string): Promise<DatabaseSync | null> {
+  return openOrThrow(file).catch(() => null);
+}
+
+/**
+ * Another tool's database, opened read-only, waiting a while if the tool is writing to it; null
+ * when there's no such file (or no SQLite in this Node). Throws when it's there but won't open.
+ */
+export async function openOrThrow(file: string): Promise<DatabaseSync | null> {
   if (!(await stat(file).catch(() => null))?.isFile()) return null;
   const mod = await sqlite();
   if (!mod) return null;
-  try {
-    return new mod.DatabaseSync(file, { readOnly: true });
-  } catch {
-    return null;
-  }
+  return new mod.DatabaseSync(file, { readOnly: true, timeout: 5000 });
 }

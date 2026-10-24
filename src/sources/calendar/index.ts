@@ -19,17 +19,40 @@ export async function fetchIcs(url: string): Promise<string> {
       throw new Error("Calendar: couldn't read the local .ics file");
     });
   }
+  const failed = (err: unknown) => {
+    const e = err as Error & { cause?: { code?: string } };
+    return new Error(
+      e.name === "TimeoutError"
+        ? "Calendar: the calendar feed didn't answer within 20 seconds. Check your connection and try again."
+        : "Calendar: couldn't reach the calendar feed. Check your connection, or that the address still works.",
+      // Only the kind of failure: the message could hold the address.
+      { cause: new Error([e.name, e.cause?.code].filter(Boolean).join(" ")) },
+    );
+  };
   const res = await fetch(url.replace(/^webcal:/, "https:"), {
     signal: AbortSignal.timeout(20_000),
-  }).catch((err: Error) => {
-    throw new Error(`Calendar: couldn't reach the calendar feed (${err.name})`);
+  }).catch((err: unknown) => {
+    throw failed(err);
   });
   if (!res.ok) {
     throw new Error(
       `Calendar: the feed returned HTTP ${res.status}. If you reset the secret address, run \`clockout init\` again.`,
     );
   }
-  return res.text();
+  return res.text().catch((err: unknown) => {
+    throw failed(err);
+  });
+}
+
+/** A whole calendar, not a sign-in page or an expired link's HTML, nor one cut off halfway. */
+export function checkIcs(text: string): string {
+  if (!/^\s*BEGIN:VCALENDAR/i.test(text))
+    throw new Error(
+      "Calendar: the feed address didn't return a calendar (it may have expired). Copy the secret iCal address again and run `clockout init`.",
+    );
+  if (!/END:VCALENDAR\s*$/i.test(text))
+    throw new Error("Calendar: the calendar feed was cut off. Try again in a moment.");
+  return text;
 }
 
 export function createCalendarSource(fetcher: IcsFetcher = fetchIcs): Source<CalendarConfig> {
@@ -40,7 +63,7 @@ export function createCalendarSource(fetcher: IcsFetcher = fetchIcs): Source<Cal
     detect: async (): Promise<Detected | null> => null,
     async *collect(range, cfg, ctx) {
       const me = ctx.config.me.emails.map((e) => e.toLowerCase());
-      const data = ical.parseICS(await fetcher(cfg.url));
+      const data = ical.parseICS(checkIcs(await fetcher(cfg.url)));
       for (const item of Object.values(data)) {
         if (item?.type !== "VEVENT" || item.status === "CANCELLED") continue;
         const instances = ical.expandRecurringEvent(item, {

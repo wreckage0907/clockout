@@ -4,6 +4,7 @@ import type { LlmBackend } from "./ai/types";
 import type { Config } from "./config/schema";
 import { buildDay } from "./core/blocks";
 import { applyEdits } from "./core/edits";
+import { cleanText } from "./core/text";
 import { dayRange } from "./core/time";
 import type { Activity, Day } from "./core/types";
 import { getSource } from "./sources";
@@ -47,7 +48,8 @@ export async function collect(
   const ok = new Set<string>();
   results.forEach((r, i) => {
     if (r.status === "fulfilled") {
-      activities.push(...r.value.out);
+      // Not push(...out): a huge day overflows the call stack.
+      for (const a of r.value.out) activities.push(cleaned(a));
       ok.add(r.value.id);
     } else {
       warnings.push(r.reason instanceof Error ? r.reason.message : String(r.reason));
@@ -55,6 +57,16 @@ export async function collect(
     }
   });
   return { activities, warnings, ok };
+}
+
+/** Words from outside (titles, branches) as one line of plain text, before they reach the screen. */
+function cleaned(a: Activity): Activity {
+  const out = { ...a };
+  for (const k of ["title", "project", "repo", "branch"] as const) {
+    const v = out[k];
+    if (v !== undefined) out[k] = cleanText(v);
+  }
+  return out;
 }
 
 /** Sources whose local logs get cleaned up; an empty result for an old day means "gone", not "nothing happened". */
@@ -92,6 +104,15 @@ export async function openDay(
   const corrected = existing && existing.edits.length > 0 && !opts.refresh ? existing : null;
 
   const fresh = await collect(date, config, opts.ctx, opts.sources, opts.log);
+  // A folder deleted since the day was last built can't name its repo any more: keep the one it
+  // had, so the project doesn't change under your corrections and ERP mappings.
+  const knownRepo = new Map(
+    (existing?.activities ?? []).flatMap((a) => (a.cwd && a.repo ? [[a.cwd, a.repo]] : [])),
+  );
+  fresh.activities = fresh.activities.map((a) => {
+    const repo = !a.repo && a.cwd ? knownRepo.get(a.cwd) : undefined;
+    return repo ? { ...a, repo } : a;
+  });
   const freshSources = new Set(fresh.activities.map((a) => a.source));
   // Only sources still turned on: one you turned off takes its evidence with it.
   const configured = new Set<string>(config.sources.map((s) => s.type));

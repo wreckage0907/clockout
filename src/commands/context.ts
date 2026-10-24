@@ -22,13 +22,20 @@ export async function appContext(): Promise<AppContext> {
 }
 
 /** "today", "yesterday", "-2" (days ago) or "YYYY-MM-DD" → local date in `tz`. */
-export function resolveDate(input: string | undefined, tz: string, now = new Date()): string {
+export function resolveDate(
+  input: string | undefined,
+  tz: string,
+  now = new Date(),
+  { future = false } = {},
+): string {
   const today = localDate(now, tz);
   if (!input || input === "today") return today;
   if (input === "yesterday") return addDays(today, -1);
   if (/^-\d+$/.test(input)) return addDays(today, Number(input));
-  if (isDate(input)) return input;
-  throw new Error(`Can't read the date "${input}". Use today, yesterday, -2 or YYYY-MM-DD.`);
+  if (!isDate(input))
+    throw new Error(`Can't read the date "${input}". Use today, yesterday, -2 or YYYY-MM-DD.`);
+  if (input > today && !future) throw new Error(`${input} hasn't happened yet; today is ${today}.`);
+  return input;
 }
 
 /**

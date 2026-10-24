@@ -7,7 +7,7 @@ import { dayRange } from "../../src/core/time";
 import type { Activity } from "../../src/core/types";
 import { createGitHubSource } from "../../src/sources/github";
 import { describeGitHubError } from "../../src/sources/github/errors";
-import { findGitHubToken } from "../../src/sources/github/token";
+import { findGitHubToken, gitHubStatus } from "../../src/sources/github/token";
 
 const config = configSchema.parse({
   me: { name: "Dev", emails: ["dev@example.com"], timezone: "Asia/Kolkata" },
@@ -61,6 +61,15 @@ describe("GitHub token problems", () => {
       problem: expect.stringContaining("isn't installed and no token is set"),
     });
     expect(found).toMatchObject({ problem: expect.stringContaining("https://cli.github.com") });
+  });
+
+  it("tells setup to install gh, or to log in, in a few words", async () => {
+    const empty = await mkdtemp(join(tmpdir(), "clockout-nogh-"));
+    expect((await gitHubStatus({ PATH: empty })).fix).toBe(
+      "install gh (https://cli.github.com), then run gh auth login",
+    );
+    const dir = await fakeGh('echo "no oauth token found for github.com" >&2; exit 1');
+    expect(await gitHubStatus({ PATH: dir })).toEqual({ found: null, fix: "run gh auth login" });
   });
 
   it("says to log in when gh has no login", async () => {

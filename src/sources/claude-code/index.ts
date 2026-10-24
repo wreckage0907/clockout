@@ -6,6 +6,7 @@ import {
   changedSince,
   jsonLines,
   parseTime,
+  requireFolder,
   type SessionEvent,
   sessionActivities,
 } from "../agent-session";
@@ -28,6 +29,11 @@ const line = z.object({
   gitBranch: z.string().optional(),
   isSidechain: z.boolean().optional(),
   isMeta: z.boolean().optional(),
+  isCompactSummary: z.boolean().optional(),
+  /** Who sent a user message: "human", or e.g. "task-notification", "peer", "coordinator". */
+  origin: z.object({ kind: z.string().optional() }).optional(),
+  /** "typed"/"keyboard" for you, "system" for one Claude Code sent itself. */
+  promptSource: z.string().optional(),
   aiTitle: z.string().optional(),
   message: z.object({ content: z.unknown() }).optional(),
 });
@@ -40,7 +46,9 @@ export const claudeCode: Source<ClaudeCodeConfig> = {
   async *collect(range, cfg, ctx) {
     const resolveRepo = ctx.resolveRepo ?? repoForDir;
     const skip = new Set(cfg.exclude ?? []);
-    for await (const file of sessionFiles(projectsDir(ctx, cfg.projects_dir), range, skip)) {
+    const dir = projectsDir(ctx, cfg.projects_dir);
+    await requireFolder("Claude Code", dir);
+    for await (const file of sessionFiles(dir, range, skip)) {
       const session = await readSession(file);
       yield* sessionActivities("claude-code", session, range, resolveRepo);
     }
@@ -99,7 +107,7 @@ export async function readSession(file: string): Promise<AgentSession> {
       continue;
     }
     const kind =
-      parsed.type === "user" && isHumanPrompt(parsed.message?.content)
+      parsed.type === "user" && fromYou(parsed) && isHumanPrompt(parsed.message?.content)
         ? "prompt"
         : parsed.type === "assistant"
           ? "agent"
@@ -110,6 +118,16 @@ export async function readSession(file: string): Promise<AgentSession> {
 }
 
 /** A typed prompt, as opposed to a tool result or local command output that Claude Code logs as `user`. */
+/**
+ * A user message you sent, not one Claude Code wrote in your place: a compaction summary, a
+ * background task finishing, a message from another session. Older logs don't say, so they count.
+ */
+function fromYou(l: Line): boolean {
+  if (l.isCompactSummary) return false;
+  if (l.origin?.kind && l.origin.kind !== "human") return false;
+  return l.promptSource !== "system";
+}
+
 export function isHumanPrompt(content: unknown): boolean {
   if (typeof content === "string") return !content.startsWith("<local-command-");
   if (!Array.isArray(content)) return false;

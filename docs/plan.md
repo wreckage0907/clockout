@@ -132,6 +132,14 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Add time: + New project (typed, saved to config), and projects from other days, ERP mappings and the ERP's tasks
 - [x] Setup → Projects: Add project field, ✕ remove; "add a project called …" in the chat bar
 
+## Production readiness pass
+
+- [x] CLI: Node version check before loading, real dates only, no future days, readable file and saved-day errors, typo suggestions, export range fixes
+- [x] Sources: side-by-side sessions share their time, prompts Claude Code sends itself don't count, missing folders and unreadable opencode databases warn and keep saved time, deleted repo folders keep their repo, calendar feed checks
+- [x] Safety: control characters stripped from titles, spreadsheet formulas neutralised in CSV/TSV, AI answers checked (fit the day, no tokens) before they're shown, helper errors redacted on screen
+- [x] Helpers run in their own process group and are stopped on timeout and on quit; the terminal is restored on SIGTERM/SIGHUP; a too-small window says so
+- [x] ERP: https before sign-in, old refresh tokens revoked, reconnect on 403, next-pms missing named, days over 24h not sent, an unconfirmed send says so
+
 ## Day 11 — Export and demo
 
 - [x] Clipboard, Markdown, CSV, TSV, JSON: date, project, task, hours, description (same work merged into one row)

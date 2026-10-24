@@ -1,4 +1,6 @@
+import { access, constants, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
+import { dirname } from "node:path";
 import * as p from "@clack/prompts";
 import { execa } from "execa";
 import { z } from "zod";
@@ -6,10 +8,12 @@ import { BACKEND_NAMES, detectBackends } from "../ai";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths, tildify } from "../config/paths";
 import { type ConfigInput, isTimeZone, type SourceConfig } from "../config/schema";
+import { fileError } from "../files";
 import { antigravity } from "../sources/antigravity";
 import { detectClaudeCode } from "../sources/claude-code/paths";
 import { codex } from "../sources/codex";
-import { detectGitHub } from "../sources/github/token";
+import { gitHubStatus } from "../sources/github/token";
+import { HAS_BUILT_IN_CLIENT } from "../sources/google-calendar/oauth";
 import { opencode } from "../sources/opencode";
 import { pi } from "../sources/pi";
 import type { Detected } from "../sources/types";
@@ -72,6 +76,13 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
   const home = homedir();
   const { configFile } = resolvePaths(env, home);
 
+  // Before the questions, not after them: a folder it can't write fails now.
+  await mkdir(dirname(configFile), { recursive: true, mode: 0o700 })
+    .then(() => access(dirname(configFile), constants.W_OK))
+    .catch((err: unknown) => {
+      throw fileError(configFile, err);
+    });
+
   p.intro("clockout init");
 
   if (!opts.force && (await loadConfig(configFile).catch(() => "invalid"))) {
@@ -101,7 +112,7 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
     codex.detect(ctx),
     opencode.detect(ctx),
     antigravity.detect(ctx),
-    detectGitHub(ctx),
+    gitHubStatus(env),
     detectBackends(env),
     gitConfig("user.name"),
     gitConfig("user.email"),
@@ -113,7 +124,7 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
     codex: codexFound,
     opencode: opencodeFound,
     antigravity: agyFound,
-    github,
+    github: github.found,
     helpers,
   };
 
@@ -126,9 +137,9 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
       ...(codexFound ? [`✓ Codex sessions: ${codexFound.summary}`] : []),
       ...(opencodeFound ? [`✓ opencode sessions: ${opencodeFound.summary}`] : []),
       ...(agyFound ? [`✓ Antigravity conversations: ${agyFound.summary}`] : []),
-      github
-        ? `✓ GitHub: ${github.summary}`
-        : "✗ GitHub: not logged in. Run `gh auth login`, then `clockout init` again.",
+      github.found
+        ? `✓ GitHub: ${github.found.summary}`
+        : `✗ GitHub: ${github.fix}, then run \`clockout init\` again.`,
       helpers[0]
         ? `✓ AI helper: ${helpers.map((h) => `${h.name} ${h.version}`).join(", ")}; writes descriptions and reads typed corrections on your own subscription`
         : `✗ AI helper: none found (${BACKEND_NAMES}). Descriptions will use session and PR titles, and typed corrections need one`,
@@ -176,9 +187,14 @@ export async function runInit(opts: { force?: boolean }): Promise<void> {
 
   const calendarChoice = await p.select({
     message: "Calendar (for meetings and your RSVPs)",
-    initialValue: "google" as const,
+    // Until Clockout ships its own Google client, signing in needs a one-time setup first.
+    initialValue: HAS_BUILT_IN_CLIENT || process.env.CLOCKOUT_GOOGLE_CLIENT_ID ? "google" : "ics",
     options: [
-      { value: "google" as const, label: "Sign in with Google", hint: "once; read-only" },
+      {
+        value: "google" as const,
+        label: "Sign in with Google",
+        hint: HAS_BUILT_IN_CLIENT ? "once; read-only" : "read-only; needs a one-time Google setup",
+      },
       { value: "ics" as const, label: "Paste a private calendar address (ICS)" },
       { value: "none" as const, label: "Skip for now" },
     ],

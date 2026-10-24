@@ -1,9 +1,11 @@
+import { rmSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { execa } from "execa";
 import { z } from "zod";
+import { redactSecrets } from "../core/secrets";
 
 /** Every AI call runs in a fresh folder with this prefix; sources skip sessions started in one. */
 export const TEMP_PREFIX = "clockout-ai-";
@@ -22,19 +24,86 @@ export type Runner = (
   opts: { input: string; cwd: string; env?: Record<string, string> },
 ) => Promise<Ran>;
 
-export const runCli: Runner = async (cmd, args, { input, cwd, env }) => {
-  const r = await execa(cmd, args, {
-    input,
-    cwd,
-    timeout: 120_000,
-    reject: false,
-    ...(env ? { env } : {}),
-  });
-  if (r.timedOut) throw new Error("didn't answer within 2 minutes");
-  if (r.failed && r.exitCode === undefined)
-    throw new Error(r.code === "ENOENT" ? "isn't installed" : "couldn't be started");
-  return { stdout: String(r.stdout), stderr: String(r.stderr), exitCode: r.exitCode ?? 1 };
-};
+/**
+ * Runs an agent CLI in its own process group, so that on a timeout, or when Clockout quits
+ * (Ctrl+C, a closed terminal), the whole group goes: agent CLIs start processes of their own,
+ * which would otherwise keep running and keep the output open.
+ */
+export function cliRunner(timeoutMs: number): Runner {
+  return async (cmd, args, { input, cwd, env }) => {
+    const sub = execa(cmd, args, {
+      input,
+      cwd,
+      reject: false,
+      detached: true,
+      cleanup: false,
+      ...(env ? { env } : {}),
+    });
+    const pid = sub.pid;
+    if (pid) helpers.add(pid);
+    watchExit();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      if (pid) killGroup(pid);
+    }, timeoutMs);
+    try {
+      const r = await sub;
+      if (timedOut) throw new Error(`didn't answer within ${minutes(timeoutMs)}`);
+      if (r.failed && r.exitCode === undefined)
+        throw new Error(r.code === "ENOENT" ? "isn't installed" : "couldn't be started");
+      return { stdout: String(r.stdout), stderr: String(r.stderr), exitCode: r.exitCode ?? 1 };
+    } finally {
+      clearTimeout(timer);
+      if (pid) helpers.delete(pid);
+    }
+  };
+}
+
+export const runCli: Runner = cliRunner(120_000);
+
+function minutes(ms: number): string {
+  const [n, unit] =
+    ms >= 60_000 ? [Math.round(ms / 60_000), "minute"] : [Math.ceil(ms / 1000), "second"];
+  return `${n} ${unit}${n === 1 ? "" : "s"}`;
+}
+
+/** Process groups of helpers still running, and temp folders still in use. */
+const helpers = new Set<number>();
+const folders = new Set<string>();
+
+function killGroup(pid: number): void {
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    // Already gone.
+  }
+}
+
+/** Stops every helper still running and removes their folders; for when Clockout quits. */
+export function stopHelpers(): void {
+  for (const pid of helpers) killGroup(pid);
+  helpers.clear();
+  for (const dir of folders) rmSync(dir, { recursive: true, force: true });
+  folders.clear();
+}
+
+let watching = false;
+function watchExit(): void {
+  if (watching) return;
+  watching = true;
+  process.once("exit", stopHelpers);
+  // A signal skips "exit" handlers unless something handles it; quit the usual way after cleaning up.
+  for (const [signal, code] of [
+    ["SIGINT", 130],
+    ["SIGTERM", 143],
+    ["SIGHUP", 129],
+  ] as const)
+    process.once(signal, () => {
+      stopHelpers();
+      process.exit(code);
+    });
+}
 
 /** First word of `<cmd> --version`, or null when it isn't on PATH. */
 export async function cliVersion(
@@ -53,10 +122,12 @@ export async function cliVersion(
 export async function inTempDir<T>(fn: (dir: string, work: string) => Promise<T>): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), TEMP_PREFIX));
   const work = join(dir, "work");
+  folders.add(dir);
   try {
     await mkdir(work);
     return await fn(dir, work);
   } finally {
+    folders.delete(dir);
     await rm(dir, { recursive: true, force: true });
   }
 }
@@ -71,17 +142,20 @@ export async function validated<T>(
   once: () => Promise<unknown>,
 ): Promise<T> {
   let problem = "";
+  let cause: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     const raw = await once();
     if (raw === undefined) {
       problem = "unreadable output";
+      cause = new Error("no JSON object in the answer");
       continue;
     }
     const value = schema.safeParse(withoutNulls(raw));
     if (value.success) return value.data;
     problem = "output didn't match the expected shape";
+    cause = value.error;
   }
-  throw new Error(`${name}: ${problem}.`);
+  throw new Error(`${name}: ${problem}.`, { cause });
 }
 
 /** JSON Schema for a zod schema, without the "$schema" draft marker CLIs don't resolve. */
@@ -169,7 +243,9 @@ export function lastLine(text: string): string {
  * A CLI's own words about a failure, shortened, plus how to sign in again when that's the
  * problem ("Not logged in", "401", "invalid API key").
  */
-export function cliFailure(name: string, said: string, signIn: string): Error {
+export function cliFailure(name: string, raw: string, signIn: string): Error {
+  // On screen too, and maybe in a demo or a pasted bug report: no tokens it may have echoed.
+  const said = redactSecrets(raw);
   const short = said.length > 200 ? `${said.slice(0, 199)}…` : said;
   const auth =
     /not (?:logged|signed) in|log ?in\b|sign ?in\b|unauthori[sz]ed|\b401\b|api key|credential|access token|expired/i.test(

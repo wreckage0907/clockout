@@ -13,7 +13,9 @@ interface Call {
 }
 
 /** The ERP's OAuth endpoints in memory. */
-function server(opts: { registration?: number; rotate?: boolean; grant?: "invalid" } = {}) {
+function server(
+  opts: { registration?: number; rotate?: boolean; grant?: "invalid" | 403 | 502 } = {},
+) {
   const calls: Call[] = [];
   let n = 0;
   const doFetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -27,6 +29,9 @@ function server(opts: { registration?: number; rotate?: boolean; grant?: "invali
     if (url === metadata.token_endpoint) {
       if (opts.grant === "invalid")
         return Response.json({ error: "invalid_grant" }, { status: 400 });
+      if (opts.grant === 403)
+        return Response.json({ exc_type: "PermissionError" }, { status: 403 });
+      if (opts.grant === 502) return new Response("<html>Bad Gateway</html>", { status: 502 });
       n++;
       return Response.json({
         access_token: `at-${n}`,
@@ -35,6 +40,7 @@ function server(opts: { registration?: number; rotate?: boolean; grant?: "invali
         refresh_token: opts.rotate === false ? "rt-0" : `rt-${n}`,
       });
     }
+    if (url === metadata.revocation_endpoint) return Response.json({});
     if (url.endsWith("frappe.auth.get_logged_user"))
       return Response.json({ message: "dev@example.com" });
     return new Response("?", { status: 500 });
@@ -102,6 +108,13 @@ describe("ERP sign-in", () => {
       connectErp("https://erp.example.com", approve, { fetch: doFetch }),
     ).rejects.toThrow("Enable Dynamic Client Registration");
   });
+
+  it("says when the address isn't a Frappe site at all", async () => {
+    const doFetch = (async () => new Response("<html>Welcome</html>")) as typeof fetch;
+    await expect(
+      connectErp("https://erp.example.com", approve, { fetch: doFetch }),
+    ).rejects.toThrow("doesn't look like a Frappe site");
+  });
 });
 
 describe("erpAuth", () => {
@@ -125,12 +138,26 @@ describe("erpAuth", () => {
     );
     expect(second.get("refresh_token")).toBe("rt-1");
     expect(second.get("client_id")).toBe("cid-1");
+    // Frappe keeps old refresh tokens working, so each replaced one is revoked.
+    const revoked = calls
+      .filter((c) => c.url === metadata.revocation_endpoint)
+      .map((c) => new URLSearchParams(c.body).get("token"));
+    expect(revoked).toEqual(["rt-0", "rt-1"]);
   });
 
   it("asks you to connect again when the sign-in was revoked", async () => {
-    const { doFetch } = server({ grant: "invalid" });
+    for (const grant of ["invalid", 403] as const) {
+      const { doFetch } = server({ grant });
+      await expect(erpAuth(creds, async () => {}, doFetch).token()).rejects.toThrow(
+        "expired or was revoked. Run `clockout connect erp",
+      );
+    }
+  });
+
+  it("says when the ERP itself isn't answering, rather than blaming the sign-in", async () => {
+    const { doFetch } = server({ grant: 502 });
     await expect(erpAuth(creds, async () => {}, doFetch).token()).rejects.toThrow(
-      "clockout connect erp",
+      "isn't answering right now (HTTP 502)",
     );
   });
 });

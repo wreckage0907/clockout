@@ -71,9 +71,13 @@ async function register(
     error_description?: string;
   } | null;
   if (res.status === 404) throw closed;
-  if (!res.ok || !body?.client_id) {
+  if (!body)
     throw new Error(
-      `The ERP refused to register Clockout${body?.error_description ? `: ${body.error_description}` : ""}.`,
+      "That address doesn't look like a Frappe site with next-pms. Check it's the one you sign in to for timesheets.",
+    );
+  if (!res.ok || !body.client_id) {
+    throw new Error(
+      `The ERP refused to register Clockout${body.error_description ? `: ${body.error_description}` : ""}.`,
     );
   }
   return body.client_id;
@@ -197,16 +201,22 @@ export function erpAuth(
     });
     const json = (await res.json().catch(() => null)) as { error?: string } | null;
     if (!res.ok) {
-      if (json?.error === "invalid_grant" || json?.error === "invalid_client") {
-        throw new Error(`The ERP sign-in expired or was revoked. ${RETRY}`);
-      }
-      throw new Error(`ERP sign-in refresh failed (HTTP ${res.status}).`);
+      // Frappe answers a revoked token or a deleted client with 403, not invalid_grant.
+      if (json?.error === "invalid_grant" || json?.error === "invalid_client" || res.status < 500)
+        throw new Error(`The ERP sign-in expired or was revoked. ${RETRY}`, {
+          cause: new Error(`token endpoint HTTP ${res.status} ${json?.error ?? ""}`.trim()),
+        });
+      throw new Error(`The ERP isn't answering right now (HTTP ${res.status}). Try again later.`);
     }
     const body = tokens.safeParse(json);
     if (!body.success) throw new Error("The ERP sent an unexpected sign-in response.");
     if (body.data.refresh_token && body.data.refresh_token !== current.refresh_token) {
+      const previous = current;
       current = { ...current, refresh_token: body.data.refresh_token };
       await save(current);
+      // Frappe keeps the old refresh token working; revoke it so only the saved one does.
+      const { revocation_endpoint } = await endpoints;
+      if (revocation_endpoint) await revokeAt(revocation_endpoint, previous, doFetch);
     }
     const life = (body.data.expires_in ?? 3600) * 1000;
     cached = { token: body.data.access_token, until: Date.now() + life - 60_000 };
@@ -230,8 +240,11 @@ export async function revokeErp(creds: ErpCredentials, doFetch: Fetch = fetch): 
   const { revocation_endpoint } = await discover(creds.url, doFetch).catch(() => ({
     revocation_endpoint: undefined,
   }));
-  if (!revocation_endpoint) return;
-  await doFetch(revocation_endpoint, {
+  if (revocation_endpoint) await revokeAt(revocation_endpoint, creds, doFetch);
+}
+
+function revokeAt(endpoint: string, creds: ErpCredentials, doFetch: Fetch): Promise<unknown> {
+  return doFetch(endpoint, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({

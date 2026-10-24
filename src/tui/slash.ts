@@ -124,6 +124,7 @@ export function parseSlash(text: string, today: string): { ok: Slash } | { error
     case "date": {
       const date = arg ? dateFrom(arg, today) : null;
       if (!date) return { error: "Which day? e.g. /date monday, /date -3 or /date 2026-10-16" };
+      if (date > today) return { error: `${date} hasn't happened yet` };
       return { ok: { name: "date", date } };
     }
     case "setup": {

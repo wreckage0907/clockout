@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { DescriptionStyle } from "../config/schema";
+import { hasSecret, redactSecrets } from "../core/secrets";
 import { prNumber } from "../core/summarize";
+import { cleanText } from "../core/text";
 import type { Block, Day } from "../core/types";
 import type { LlmBackend } from "./types";
 
@@ -107,10 +109,13 @@ export async function summarizeDay(
   if (todo.size === 0) return result;
 
   const asked = [...todo].flatMap(([signature, [b]]) => (b ? [{ signature, b }] : []));
-  const prompt = JSON.stringify(
-    asked.map(({ b }) => ({ id: b.id, ...evidenceOf(b) })),
-    null,
-    2,
+  // A session title can hold a pasted key: it isn't sent.
+  const prompt = redactSecrets(
+    JSON.stringify(
+      asked.map(({ b }) => ({ id: b.id, ...evidenceOf(b) })),
+      null,
+      2,
+    ),
   );
   const { summaries } = await backend.complete({
     system: systemFor(style),
@@ -121,7 +126,9 @@ export async function summarizeDay(
   for (const { id, summary } of summaries) {
     const signature = wanted.get(id);
     if (signature === undefined) continue;
-    const clean = summary.trim().replace(/\.$/, "");
+    const clean = cleanText(summary).replace(/\.$/, "");
+    // Never onto the timesheet: the title it came from stays instead.
+    if (hasSecret(clean)) continue;
     for (const b of todo.get(signature) ?? []) result.set(b.id, clean);
     cache[signature] = clean;
   }

@@ -53,7 +53,24 @@ export async function getGitHubToken(env: NodeJS.ProcessEnv): Promise<GitHubToke
 }
 
 export async function detectGitHub(ctx: Omit<SourceContext, "config">): Promise<Detected | null> {
-  const found = await getGitHubToken(ctx.env);
-  if (!found) return null;
-  return { summary: found.via === "gh" ? "logged in with the gh CLI" : `token from ${found.via}` };
+  return (await gitHubStatus(ctx.env)).found;
+}
+
+/** For init and Setup: how GitHub is reached, or in a few words what to do first. */
+export async function gitHubStatus(
+  env: NodeJS.ProcessEnv,
+): Promise<{ found: Detected | null; fix: string }> {
+  const r = await findGitHubToken(env);
+  if ("token" in r)
+    return {
+      found: { summary: r.via === "gh" ? "logged in with the gh CLI" : `token from ${r.via}` },
+      fix: "",
+    };
+  const missing = r.problem.includes("isn't installed");
+  return {
+    found: null,
+    fix: missing
+      ? "install gh (https://cli.github.com), then run gh auth login"
+      : "run gh auth login",
+  };
 }

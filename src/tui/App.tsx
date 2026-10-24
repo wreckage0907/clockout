@@ -401,7 +401,8 @@ export function App({
   /** Checks the ERP and shows what sending would change; asks for a task first where needed. */
   const erp = actions.send;
   const startSend = async (current = stored) => {
-    if (!erp || !current) return;
+    if (!erp) return showToast("Sign in to your ERP first: Setup (ctrl+p) → ERP");
+    if (!current) return;
     setView("day");
     if (asks) return showToast(`Answer the ${asks} meeting${asks === 1 ? "" : "s"} first`);
     setBusy(`Checking ${erp.site}…`);
@@ -413,7 +414,7 @@ export function App({
         setOverlay("task");
       } else setSending(plan);
     } catch (err) {
-      showToast(`Couldn't reach the ERP: ${(err as Error).message}`);
+      showToast((err as Error).message);
     } finally {
       setBusy(null);
     }
@@ -543,9 +544,18 @@ export function App({
     try {
       const r = await erp.apply(stored, plan);
       setStored(r.stored);
-      if (r.failed.length) {
-        setWarnings(r.failed.map((f) => f.error));
-        showToast(`Sent ${r.done}, ${r.failed.length} failed (see above)`);
+      if (r.failed.length || r.unconfirmed) {
+        setWarnings([
+          ...r.failed.map((f) => f.error),
+          ...(r.unconfirmed
+            ? [`Couldn't check what ${erp.site} now has (${r.unconfirmed}). Send again to check.`]
+            : []),
+        ]);
+        showToast(
+          r.failed.length
+            ? `Sent ${r.done}, ${r.failed.length} failed (see above)`
+            : `Sent ${r.done}; send again to check`,
+        );
       } else showToast(`✓ Sent ${r.done} change${r.done === 1 ? "" : "s"} to ${erp.site}`);
     } catch (err) {
       showToast(`Couldn't send: ${(err as Error).message}`);

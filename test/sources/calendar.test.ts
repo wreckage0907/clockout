@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { configSchema } from "../../src/config/schema";
 import { dayRange, localTime } from "../../src/core/time";
 import type { Activity } from "../../src/core/types";
-import { createCalendarSource } from "../../src/sources/calendar";
+import { describeError } from "../../src/log";
+import { createCalendarSource, fetchIcs } from "../../src/sources/calendar";
 
 const ics = await readFile(new URL("../fixtures/ics/calendar.ics", import.meta.url), "utf8");
 const config = configSchema.parse({
@@ -68,5 +69,24 @@ describe("calendar source", () => {
     };
     await expect(run()).rejects.toThrow(/HTTP 404/);
     await expect(run()).rejects.not.toThrow(/secret/);
+  });
+
+  it("says when the feed isn't a calendar, or was cut off", async () => {
+    const answer = (body: string) => async () => {
+      const source = createCalendarSource(async () => body);
+      for await (const _ of source.collect(dayRange("2026-10-16", "Asia/Kolkata"), cfg, ctx)) {
+      }
+    };
+    await expect(answer("<html>Sign in</html>")()).rejects.toThrow(/didn't return a calendar/);
+    await expect(answer("")()).rejects.toThrow(/didn't return a calendar/);
+    await expect(answer(ics.slice(0, ics.length / 2))()).rejects.toThrow(/was cut off/);
+  });
+
+  it("says to check the connection when the feed can't be reached, without the address", async () => {
+    const err = await fetchIcs("https://127.0.0.1:9/secret.ics").catch((e: Error) => e);
+    expect((err as Error).message).toMatch(
+      /couldn't reach the calendar feed\. Check your connection/,
+    );
+    expect(describeError(err)).not.toMatch(/secret/);
   });
 });

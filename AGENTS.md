@@ -40,7 +40,8 @@ pnpm check               # everything CI runs
 ## Module boundaries
 
 ```
-src/cli.ts        entry; wires commander to commands/
+src/cli.ts        entry; checks the Node version, then loads main.ts
+src/main.ts       wires commander to commands/
 src/commands/     one file per subcommand; thin
 src/core/         domain logic. No IO, no Ink, no process access.
 src/sources/      one folder per source; each only emits Activity records
@@ -55,6 +56,7 @@ src/targets/      timesheet systems the day is sent to (next-pms); read and writ
 src/push.ts       plans and applies sending a day to a target, keeps the record of what was sent
 src/oauth.ts      loopback + PKCE for browser sign-ins
 src/log.ts        local error log: full details behind the one-line messages, tokens redacted
+src/files.ts      readable reasons a file couldn't be written
 ```
 
 - `core/` must never import from `tui/`, `sources/`, `ai/` or Node built-ins with side effects. It may import `config/schema` (pure).

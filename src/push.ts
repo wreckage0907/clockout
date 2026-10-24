@@ -17,14 +17,14 @@ export async function preparePush(
   config: Config,
   target: Target,
 ): Promise<PushPlan> {
+  const rows = pushRows(timesheetRows(stored.day, config));
+  const total = rows.reduce((sum, r) => sum + r.hours, 0);
+  if (total > 24)
+    throw new Error(
+      `${stored.date} adds up to ${total.toFixed(2)}h, more than a day has. Fix the hours before sending.`,
+    );
   const remote = await target.day(stored.date);
-  return planPush(
-    stored.date,
-    pushRows(timesheetRows(stored.day, config)),
-    config.timesheet?.map ?? [],
-    remote,
-    stored.pushed ?? [],
-  );
+  return planPush(stored.date, rows, config.timesheet?.map ?? [], remote, stored.pushed ?? []);
 }
 
 export interface PushResult {
@@ -33,6 +33,8 @@ export interface PushResult {
   done: number;
   /** Items that failed, with the timesheet system's reason. */
   failed: { item: PushItem; error: string }[];
+  /** Why what was sent couldn't be read back (the record of it is then left as it was). */
+  unconfirmed?: string;
 }
 
 /**
@@ -61,7 +63,13 @@ export async function applyPush(
       failed.push({ item, error: (err as Error).message });
     }
   }
-  const after = await target.day(plan.date);
+  let after: Awaited<ReturnType<Target["day"]>>;
+  try {
+    after = await target.day(plan.date);
+  } catch (err) {
+    // Sending again matches what's already there, so nothing is added twice.
+    return { stored, done: done.size, failed, unconfirmed: (err as Error).message };
+  }
   const next: StoredDay = {
     ...stored,
     pushed: ledgerAfter(plan, done, after, stored.pushed ?? []),

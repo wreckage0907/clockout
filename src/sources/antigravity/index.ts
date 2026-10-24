@@ -8,6 +8,7 @@ import {
   changedSince,
   jsonLines,
   parseTime,
+  requireFolder,
   type SessionEvent,
   sessionActivities,
 } from "../agent-session";
@@ -60,6 +61,7 @@ export const antigravity: Source<AntigravityConfig> = {
   async *collect(range, cfg, ctx) {
     const resolveRepo = ctx.resolveRepo ?? repoForDir;
     const dir = agyDir(ctx, cfg.dir);
+    await requireFolder("Antigravity", dir);
     let index: Map<string, Summary> | undefined;
     for (const id of await conversationIds(dir)) {
       const file = transcriptPath(dir, id);

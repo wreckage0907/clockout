@@ -12,7 +12,7 @@ import {
 import { withErpSite } from "../config/edit";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths, tildify } from "../config/paths";
-import type { Config } from "../config/schema";
+import { type Config, isSafeSite } from "../config/schema";
 import { dayRange, localDate } from "../core/time";
 import { googleCalendar } from "../sources/google-calendar";
 import { connectGoogle, googleClient, revoke } from "../sources/google-calendar/oauth";
@@ -121,11 +121,15 @@ async function connectErpSite(url: string | undefined) {
 /** "erp.example.com" or a full address → "https://erp.example.com". */
 export function erpOrigin(site: string): string {
   const trimmed = site.trim().replace(/[.,!]+$/, "");
+  let origin: string;
   try {
-    return siteOrigin(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    origin = siteOrigin(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
   } catch {
     throw new Error(`"${site}" isn't a web address. Use e.g. https://erp.example.com`);
   }
+  // Before signing in: the sign-in and your timesheet would cross the network unencrypted.
+  if (!isSafeSite(origin)) throw new Error(`Use your ERP's https:// address (got ${origin}).`);
+  return origin;
 }
 
 /** Signs in to the ERP in the browser and keeps the sign-in. */

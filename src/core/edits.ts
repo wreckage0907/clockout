@@ -1,6 +1,7 @@
 import type { Config } from "../config/schema";
 import { ASK_GAP_MINUTES, computeGaps, gapQuestionText } from "./blocks";
 import { BREAK_PROJECT } from "./projects";
+import { cleanText } from "./text";
 import { addDays, atLocalTime, formatDuration, localTime, MINUTE, minutesBetween } from "./time";
 import { blockMinutes } from "./timesheet";
 import type { Block, Day, EditOp, Question } from "./types";
@@ -50,7 +51,8 @@ export function placeTimeOps(
   ];
 }
 
-export function applyEdits(day: Day, ops: readonly EditOp[], config: Config): EditResult {
+export function applyEdits(day: Day, given: readonly EditOp[], config: Config): EditResult {
+  const ops = given.map(cleanOp);
   const tz = day.timezone;
   const errors: string[] = [];
   const clarifications: string[] = [];
@@ -338,4 +340,12 @@ export function describeEdits(day: Day, ops: readonly EditOp[]): string[] {
         return op satisfies never;
     }
   });
+}
+
+/** The op with its words as one line of plain text (they come from the AI or a typed sentence). */
+function cleanOp(op: EditOp): EditOp {
+  const out: Record<string, unknown> = { ...op };
+  for (const k of ["project", "task", "summary", "question"])
+    if (typeof out[k] === "string") out[k] = cleanText(out[k] as string);
+  return out as unknown as EditOp;
 }

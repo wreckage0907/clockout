@@ -66,6 +66,23 @@ describe("parseCorrection", () => {
     expect(seen).not.toContain("refresh tokens expire early"); // prompt text never leaves the machine
   });
 
+  it("says when the AI's edits don't fit the day, before they're shown", async () => {
+    const answering = (ops: unknown[]): LlmBackend => ({
+      id: "fake",
+      label: "fake",
+      async complete<T>(req: CompleteRequest<T>) {
+        return req.schema.parse({ ops, reply: "Done." });
+      },
+    });
+    await expect(
+      parseCorrection("drop it", day, config, answering([{ op: "delete", id: "b999" }])),
+    ).rejects.toThrow("didn't fit this day");
+    const leak = { op: "update", id: "b2", summary: "token ghp_abcdefghijklmnopqrstuvwxyz0123" };
+    await expect(parseCorrection("rename it", day, config, answering([leak]))).rejects.toThrow(
+      "looks like a token",
+    );
+  });
+
   it("rejects ops with made-up shapes", () => {
     expect(
       correctionSchema.safeParse({ ops: [{ op: "delete", id: "block 4" }], reply: "" }).success,

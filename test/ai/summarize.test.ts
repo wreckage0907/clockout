@@ -37,6 +37,18 @@ describe("summarizeDay", async () => {
     expect(JSON.stringify(prompts)).not.toContain("refresh tokens expire early"); // a prompt's text
   });
 
+  it("keeps a description that looks like it holds a token off the timesheet", async () => {
+    const { b } = backend((ids) =>
+      ids.map((id) => ({
+        id,
+        summary: id === "b2" ? "Use ghp_abcdefghijklmnopqrstuvwxyz0123" : id,
+      })),
+    );
+    const result = await summarizeDay(day, b, {});
+    expect(result.has("b2")).toBe(false);
+    expect(result.get("b3")).toBe("b3");
+  });
+
   it("reuses cached summaries and only asks about new blocks", async () => {
     const b2 = day.blocks.find((x) => x.id === "b2");
     if (!b2) throw new Error("fixture changed");

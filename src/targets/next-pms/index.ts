@@ -47,6 +47,9 @@ const employeeData = z.object({ employee: z.string().nullable() });
 /** The readable message in a Frappe error response. */
 export function frappeError(body: unknown, status: number): string {
   const b = (body ?? {}) as { _server_messages?: unknown; exception?: unknown; message?: unknown };
+  // Every call is a next-pms method: the site doesn't have it, or one too old to have this one.
+  if (/is not installed|Failed to get method|is not whitelisted/.test(JSON.stringify(body ?? "")))
+    return "This ERP doesn't have next-pms, or its version is too old for Clockout. Check with whoever runs it.";
   if (typeof b._server_messages === "string") {
     try {
       const msgs = (JSON.parse(b._server_messages) as string[])
@@ -69,6 +72,7 @@ export function frappeError(body: unknown, status: number): string {
   if (status === 401 || status === 403) {
     return "The ERP refused access. Run `clockout connect erp <url>` again.";
   }
+  if (status >= 500) return `The ERP isn't answering right now (HTTP ${status}). Try again later.`;
   return `The ERP answered HTTP ${status}.`;
 }
 

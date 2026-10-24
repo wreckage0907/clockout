@@ -20,6 +20,9 @@ export const GOOGLE_DOCS =
  */
 const BUILT_IN = { client_id: "", client_secret: "" };
 
+/** Whether Google sign-in works without the user's own client first (docs/google-setup.md). */
+export const HAS_BUILT_IN_CLIENT = BUILT_IN.client_id !== "";
+
 export interface GoogleClient {
   client_id: string;
   client_secret: string;

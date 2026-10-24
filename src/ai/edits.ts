@@ -2,7 +2,8 @@ import { z } from "zod";
 import type { Config } from "../config/schema";
 import { aiSettingOpSchema, type ClaudeProjectRef, type SettingOp } from "../config/setting-ops";
 import { editOpSchema } from "../core/edit-schema";
-import { hasSecret } from "../core/secrets";
+import { applyEdits } from "../core/edits";
+import { hasSecret, redactSecrets } from "../core/secrets";
 import { prNumber } from "../core/summarize";
 import { localDate, localTime, minutesBetween } from "../core/time";
 import type { Day, EditOp } from "../core/types";
@@ -182,7 +183,35 @@ export async function parseCorrection(
     null,
     2,
   );
-  return backend.complete({ system: SYSTEM, prompt, schema: correctionSchema });
+  const answer = await backend.complete({
+    system: SYSTEM,
+    prompt: redactSecrets(prompt),
+    schema: correctionSchema,
+  });
+  checkAnswer(answer, day, config);
+  return answer;
+}
+
+/**
+ * Throws when the AI's edits wouldn't apply to this day (ids that aren't there, times that don't
+ * fit) or would put something that looks like a token on the timesheet: better to say so now
+ * than to show a proposal that fails, or lands, when accepted.
+ */
+function checkAnswer(answer: Correction, day: Day, config: Config): void {
+  const words = [answer.reply, ...answer.ops.flatMap((o) => Object.values(o))].filter(
+    (w): w is string => typeof w === "string",
+  );
+  if (words.some(hasSecret))
+    throw new Error(
+      "The AI's answer had something that looks like a token in it, so it wasn't used. Try saying it differently.",
+    );
+  const changes = answer.ops.filter((o) => o.op !== "clarify");
+  if (changes.length === 0) return;
+  const { errors } = applyEdits(day, changes, config);
+  if (errors.length)
+    throw new Error("The AI's answer didn't fit this day. Try saying it differently.", {
+      cause: new Error(errors.join(" ")),
+    });
 }
 
 const URLS = /\b(?:https?|webcal):\/\/[^\s<>"']+/gi;

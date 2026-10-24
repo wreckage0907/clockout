@@ -7,6 +7,7 @@ import {
   changedSince,
   jsonLines,
   parseTime,
+  requireFolder,
   type SessionEvent,
   sessionActivities,
 } from "../agent-session";
@@ -55,7 +56,9 @@ export const codex: Source<CodexConfig> = {
   },
   async *collect(range, cfg, ctx) {
     const resolveRepo = ctx.resolveRepo ?? repoForDir;
-    for await (const file of rolloutFiles(sessionsDir(ctx, cfg.sessions_dir), range)) {
+    const dir = sessionsDir(ctx, cfg.sessions_dir);
+    await requireFolder("Codex", dir);
+    for await (const file of rolloutFiles(dir, range)) {
       if (!(await changedSince(file, range.from))) continue;
       yield* sessionActivities("codex", await readCodexSession(file), range, resolveRepo);
     }

@@ -129,17 +129,18 @@ const taskMapping = z.object({
 });
 
 /** https, or plain http only on this machine (a local test site). */
+export function isSafeSite(url: string): boolean {
+  const { protocol, hostname } = new URL(url);
+  return (
+    protocol === "https:" ||
+    (protocol === "http:" &&
+      (hostname === "localhost" || hostname.endsWith(".localhost") || hostname === "127.0.0.1"))
+  );
+}
+
 const siteUrl = z
   .url({ protocol: /^https?$/, error: "use the site's address, e.g. https://erp.example.com" })
-  .refine((u) => {
-    const { protocol, hostname } = new URL(u);
-    return (
-      protocol === "https:" ||
-      hostname === "localhost" ||
-      hostname.endsWith(".localhost") ||
-      hostname === "127.0.0.1"
-    );
-  }, "use https:// (plain http only works for a site on this machine)");
+  .refine(isSafeSite, "use https:// (plain http only works for a site on this machine)");
 
 const nextPmsTarget = z.object({
   type: z.literal("next-pms"),

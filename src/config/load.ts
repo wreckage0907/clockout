@@ -33,6 +33,8 @@ export function parseConfig(text: string, file = "config.toml"): Config {
   } catch (err) {
     throw new ConfigError(file, (err as Error).message);
   }
+  if (raw && typeof raw === "object" && Object.keys(raw).length === 0)
+    throw new ConfigError(file, "It's empty. Run `clockout init --force` to write one.");
   const result = configSchema.safeParse(raw);
   if (!result.success) throw new ConfigError(file, z.prettifyError(result.error));
   return result.data;

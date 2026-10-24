@@ -7,6 +7,7 @@ import {
   changedSince,
   jsonLines,
   parseTime,
+  requireFolder,
   type SessionEvent,
   sessionActivities,
 } from "../agent-session";
@@ -50,6 +51,7 @@ export const pi: Source<PiConfig> = {
   async *collect(range, cfg, ctx) {
     const resolveRepo = ctx.resolveRepo ?? repoForDir;
     const dir = sessionsDir(ctx, cfg.sessions_dir);
+    await requireFolder("Pi", dir);
     const folders = await readdir(dir).catch(() => [] as string[]);
     for (const folder of folders) {
       const files = await readdir(join(dir, folder)).catch(() => [] as string[]);

@@ -19,4 +19,12 @@ describe("secrets", () => {
       "/Users/dev/.local/share/clockout/errors.log",
     );
   });
+
+  it("leaves links readable but still catches a key with slashes in it", () => {
+    const link = "see https://github.com/acme0907/clockout/blob/main/docs/google-setup.md";
+    expect(redactSecrets(link)).toBe(link);
+    expect(redactSecrets("key wJalrXUtnFEMI/K7MDENG/bPxRfiCY3x9Q81kd2Lm x")).toBe(
+      "key [redacted] x",
+    );
+  });
 });

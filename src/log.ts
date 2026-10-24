@@ -13,12 +13,22 @@ export function errorLogPath(env: NodeJS.ProcessEnv = process.env): string {
   return join(resolvePaths(env).dataDir, "errors.log");
 }
 
+/** A TypeError, RangeError and the like: a bug rather than a failure we explain, so its stack helps. */
+export function isBug(err: unknown): boolean {
+  return (
+    err instanceof TypeError ||
+    err instanceof RangeError ||
+    err instanceof ReferenceError ||
+    err instanceof SyntaxError
+  );
+}
+
 /** The message and every `cause` behind it, one per line. */
 export function describeError(err: unknown): string {
   const lines: string[] = [];
   let e: unknown = err;
   for (let depth = 0; e !== undefined && e !== null && depth < 5; depth++) {
-    lines.push(e instanceof Error ? e.message : String(e));
+    lines.push(e instanceof Error ? (isBug(e) ? (e.stack ?? e.message) : e.message) : String(e));
     e = e instanceof Error ? e.cause : undefined;
   }
   return lines.join("\n  caused by: ");

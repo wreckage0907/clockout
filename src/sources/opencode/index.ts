@@ -4,7 +4,7 @@ import { TEMP_PREFIX } from "../../ai/cli";
 import { tildify } from "../../config/paths";
 import { type AgentSession, type SessionEvent, sessionActivities } from "../agent-session";
 import { repoForDir } from "../git-remote";
-import { openReadOnly } from "../sqlite";
+import { openOrThrow, openReadOnly } from "../sqlite";
 import type { DateRange, Detected, Source, SourceContext } from "../types";
 
 export interface OpencodeConfig {
@@ -84,7 +84,16 @@ export async function readOpencodeSessions(
   file: string,
   range: DateRange,
 ): Promise<AgentSession[]> {
-  const db = await openReadOnly(file);
+  // The database is there but can't be read (busy, damaged, a layout this version doesn't know):
+  // that's a failure, so the day keeps the opencode time it had rather than losing it.
+  const unreadable = (cause: unknown) =>
+    new Error(
+      "opencode: couldn't read its database (busy, or a newer format). Time from it saved before is kept.",
+      { cause },
+    );
+  const db = await openOrThrow(file).catch((err: unknown) => {
+    throw unreadable(err);
+  });
   if (!db) return [];
   try {
     const sessions = db
@@ -117,8 +126,8 @@ export async function readOpencodeSessions(
       out.push({ sessionId: s.data.id, title: realTitle(s.data.title), events, skipped });
     }
     return out;
-  } catch {
-    return []; // an older layout without session_v2 / session_message
+  } catch (err) {
+    throw unreadable(err);
   } finally {
     db.close();
   }

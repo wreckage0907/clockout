@@ -4,6 +4,7 @@ import { addDays } from "../core/time";
 import { timesheetRows } from "../core/timesheet";
 import type { TimesheetRow } from "../core/types";
 import { toCsv, toMarkdown, toTsv } from "../export/formats";
+import { fileError } from "../files";
 import { logError } from "../log";
 import { type AppContext, appContext, commandAi, resolveDate } from "./context";
 
@@ -26,13 +27,18 @@ export async function runExport(
   app?: AppContext,
 ) {
   const { config, store } = app ?? (await appContext());
-  const format = (opts.format ?? "csv") as Format;
+  const format = (opts.format ?? "csv").toLowerCase() as Format;
   if (!FORMATS.includes(format))
     throw new Error(`Unknown format "${opts.format}". Use ${FORMATS.join(", ")}.`);
 
   const tz = config.me.timezone;
-  const from = resolveDate(opts.from ?? dateInput, tz);
-  const to = resolveDate(opts.to ?? opts.from ?? dateInput, tz);
+  if (dateInput && (opts.from || opts.to))
+    throw new Error(`Give a date or --from/--to, not both (got "${dateInput}" too).`);
+  const today = resolveDate(undefined, tz);
+  // A range may run past today (the whole month, mid-month); it stops at today.
+  const end = resolveDate(opts.to ?? opts.from ?? dateInput, tz, undefined, { future: true });
+  const to = end > today ? today : end;
+  const from = resolveDate(opts.from ?? (opts.to ? to : dateInput), tz);
   if (to < from) throw new Error(`--to (${to}) is before --from (${from}).`);
 
   const dates: string[] = [];
@@ -66,7 +72,9 @@ export async function runExport(
             )}\n`;
 
   if (opts.out) {
-    await writeFile(opts.out, text);
+    await writeFile(opts.out, text).catch((err: unknown) => {
+      throw fileError(opts.out ?? "", err);
+    });
     console.error(`Wrote ${rows.length} row${rows.length === 1 ? "" : "s"} to ${opts.out}.`);
   } else {
     process.stdout.write(text);

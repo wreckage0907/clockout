@@ -274,6 +274,10 @@ with anything that looks like a token redacted. Google sign-in problems are list
 Without an AI helper, Clockout says so when it opens. The cards, `/` commands and exports
 all work; only typed corrections and AI descriptions need one.
 
+If a saved day is damaged (`The saved day … is damaged`), move that file aside and open the
+day again: it's rebuilt from your activity, without the corrections made on it. On Node older
+than 22.12, Clockout says so and stops; update Node.
+
 </samp>
 </details>
 

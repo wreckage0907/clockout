@@ -31,7 +31,8 @@ export interface SetupState {
   codex: { found: string | null };
   opencode: { found: string | null };
   antigravity: { found: string | null };
-  github: { found: boolean };
+  /** `fix`: what to do first when it isn't found, e.g. "run gh auth login". */
+  github: { found: boolean; fix?: string };
   /** Agent CLIs installed here that can be the AI helper, in the order "auto" tries them. */
   helpers: { id: Exclude<Config["ai"]["backend"], "auto" | "none">; name: string }[];
   /** Signed in to the ERP in `config.timesheet`, and as whom. */
@@ -467,6 +468,12 @@ export function Setup({
     }
   }
 
+  /** Without an AI helper the chat bar can't change settings: point at the file instead. */
+  function sayOrEdit(say: string, key: string): string {
+    const off = config?.ai.backend === "none" || (state?.helpers.length ?? 0) === 0;
+    return off ? `edit ${key} in config.toml to change it` : `say ${say} to change it`;
+  }
+
   function has(type: string) {
     return config?.sources.some((s) => s.type === type) ?? false;
   }
@@ -549,7 +556,9 @@ export function Setup({
         label: "GitHub",
         on: has("github"),
         dead: !state.github.found && !has("github"),
-        note: !state.github.found ? "run gh auth login first" : "PRs, reviews, issues and comments",
+        note: !state.github.found
+          ? `${state.github.fix || "run gh auth login"} first`
+          : "PRs, reviews, issues and comments",
         press: () => void save(withSource(c, { type: "github" }, !has("github"))),
       },
     ];
@@ -616,7 +625,7 @@ export function Setup({
         group: "Counting",
         label: "Time zone",
         value: c.me.timezone,
-        note: 'say "my time zone is …" to change it',
+        note: sayOrEdit('"my time zone is …"', "me.timezone"),
       },
     ];
   }
@@ -713,7 +722,11 @@ export function Setup({
       { id: "t-work", label: "Coding", value: c.tasks.work },
       { id: "t-review", label: "Reviews", value: c.tasks.review },
       { id: "t-meeting", label: "Meetings", value: c.tasks.meeting },
-    ].map((r) => ({ ...r, group: "Default tasks" }));
+    ].map((r) => ({
+      ...r,
+      group: "Default tasks",
+      note: sayOrEdit(`"call the ${r.label.toLowerCase()} task …"`, "[tasks]"),
+    }));
     const rules: Row[] = c.projects.map((p, i) => ({
       id: `rule-${i}`,
       group: "Projects",

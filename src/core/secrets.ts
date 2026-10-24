@@ -6,6 +6,8 @@ const LONG = /[A-Za-z0-9_+/=-]{32,}/g;
 
 /** A long run of letters and digits mixed together, the way keys and tokens look. */
 function random(word: string): boolean {
+  // A link or path ("github.com/acme0907/app/blob/main/docs") has only short parts between slashes.
+  if (word.includes("/")) return word.split("/").some((part) => part.length >= 16 && random(part));
   return (word.match(/\d/g)?.length ?? 0) >= 4 && (word.match(/[A-Za-z]/g)?.length ?? 0) >= 4;
 }
 

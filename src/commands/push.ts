@@ -6,7 +6,7 @@ import { resolvePaths } from "../config/paths";
 import type { Config } from "../config/schema";
 import { changes, describeItem, type PushPlan, type PushRow } from "../core/push";
 import { logError } from "../log";
-import { applyPush, preparePush } from "../push";
+import { applyPush, type PushResult, preparePush } from "../push";
 import { openTarget } from "../targets";
 import type { RemoteTask, Target } from "../targets/types";
 import { type AppContext, appContext, commandAi, resolveDate } from "./context";
@@ -89,16 +89,20 @@ export async function runPush(
     }
   }
   const result = await applyPush(stored, plan, target, ctx.store);
-  report(result.done, result.failed);
+  report(result);
+  // So a script can tell something was left out.
+  if (plan.items.some((i) => i.action === "unmapped" || i.action === "blocked"))
+    process.exitCode = 1;
 }
 
-function report(
-  done: number,
-  failed: { item: Parameters<typeof describeItem>[0]; error: string }[],
-) {
+function report({ done, failed, unconfirmed }: PushResult) {
   console.log(`\nSent ${done} change${done === 1 ? "" : "s"}.`);
   for (const f of failed) console.error(`  ✗ ${describeItem(f.item)}\n    ${f.error}`);
-  if (failed.length) process.exitCode = 1;
+  if (unconfirmed)
+    console.error(
+      `Couldn't check what the ERP now has (${unconfirmed}). Run the same push again to check; nothing is sent twice.`,
+    );
+  if (failed.length || unconfirmed) process.exitCode = 1;
 }
 
 /** Asks which ERP task each unmapped project goes to and saves the answers in config. */

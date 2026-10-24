@@ -56,6 +56,31 @@ describe("sending a day", () => {
     expect(erp.entries).toHaveLength(rowCount);
   });
 
+  it("says when it couldn't read back what it sent, and sending again adds nothing twice", async () => {
+    const store = await setup();
+    const erp = fakeTarget();
+    const plan = await preparePush(fixtureStored, config, erp.target);
+    const down = { ...erp.target, day: () => Promise.reject(new Error("Couldn't reach the ERP.")) };
+    const r = await applyPush(fixtureStored, plan, down, store);
+    expect(r.done).toBe(rowCount);
+    expect(r.unconfirmed).toBe("Couldn't reach the ERP.");
+    expect(r.stored).toBe(fixtureStored);
+
+    const again = await preparePush(r.stored, config, erp.target);
+    expect(changes(again)).toEqual([]);
+  });
+
+  it("won't send a day that adds up to more than 24 hours", async () => {
+    const [first, ...rest] = fixtureStored.day.blocks;
+    const long = {
+      ...fixtureStored,
+      day: { ...fixtureStored.day, blocks: [{ ...first, minutes: 24 * 60 } as never, ...rest] },
+    };
+    await expect(preparePush(long, config, fakeTarget().target)).rejects.toThrow(
+      /more than a day has/,
+    );
+  });
+
   it("keeps going after a refused entry and sends it next time", async () => {
     const store = await setup();
     let refuse = true;

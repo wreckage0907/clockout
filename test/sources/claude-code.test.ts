@@ -1,3 +1,6 @@
+import { chmod, cp, mkdtemp, readdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { configSchema } from "../../src/config/schema";
 import { dayRange } from "../../src/core/time";
@@ -92,4 +95,61 @@ describe("isHumanPrompt", () => {
     ["local command output", "<local-command-stdout>done</local-command-stdout>", false],
     ["missing content", undefined, false],
   ])("%s", (_, content, expected) => expect(isHumanPrompt(content)).toBe(expected));
+
+  it("says when its folder is missing, instead of showing an empty day", async () => {
+    const run = async () => {
+      for await (const _ of claudeCode.collect(
+        dayRange("2026-10-16", "Asia/Kolkata"),
+        { type: "claude-code", projects_dir: "/nowhere/projects" },
+        ctx,
+      )) {
+      }
+    };
+    await expect(run()).rejects.toThrow("Claude Code: no folder at /nowhere/projects");
+  });
+
+  it("skips a session it can't read and keeps the rest", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "clockout-claude-"));
+    await cp(join(fixtures, "projects"), join(dir, "projects"), { recursive: true });
+    const [project] = await readdir(join(dir, "projects"));
+    const [file] = (await readdir(join(dir, "projects", project ?? ""))).filter((f) =>
+      f.endsWith(".jsonl"),
+    );
+    const locked = join(dir, "projects", project ?? "", file ?? "");
+    await chmod(locked, 0o000);
+    const out: Activity[] = [];
+    for await (const a of claudeCode.collect(
+      dayRange("2026-10-16", "Asia/Kolkata"),
+      { type: "claude-code" },
+      { ...ctx, env: { CLAUDE_CONFIG_DIR: dir } },
+    ))
+      out.push(a);
+    await chmod(locked, 0o600);
+    expect(out.length).toBeGreaterThan(0);
+  });
+
+  it("counts only what you sent, not messages Claude Code wrote in your place", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "clockout-claude-"));
+    const file = join(dir, "s.jsonl");
+    const user = (at: string, extra: object) =>
+      JSON.stringify({
+        type: "user",
+        timestamp: `2026-10-16T${at}:00Z`,
+        sessionId: "s",
+        message: { role: "user", content: "text" },
+        ...extra,
+      });
+    await writeFile(
+      file,
+      [
+        user("05:00", { origin: { kind: "human" }, promptSource: "typed" }),
+        user("05:10", { origin: { kind: "task-notification" }, promptSource: "system" }),
+        user("05:20", { origin: { kind: "peer" } }),
+        user("05:30", { isCompactSummary: true }),
+        user("05:40", {}), // older logs don't say who sent it
+      ].join("\n"),
+    );
+    const { events } = await readSession(file);
+    expect(events.map((e) => e.at.toISOString().slice(11, 16))).toEqual(["05:00", "05:40"]);
+  });
 });

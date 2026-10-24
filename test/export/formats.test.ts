@@ -40,4 +40,19 @@ describe("timesheet formats", () => {
       "2026-10-16\tacme/api\tDevelopment\t2.25\tFix auth, refresh",
     );
   });
+
+  it("keeps a cell that looks like a formula as text in spreadsheets", () => {
+    const evil = [{ ...rows[0], description: '=HYPERLINK("http://x")' } as TimesheetRow];
+    expect(toCsv(evil).split("\r\n")[1]).toBe(
+      `2026-10-16,acme/api,Development,2.25,"'=HYPERLINK(""http://x"")"`,
+    );
+    expect(toTsv(evil)).toMatch(/\t'=HYPERLINK/);
+  });
+
+  it("keeps a Markdown row on one line", () => {
+    const multi = [{ ...rows[0], description: "one\r\ntwo" } as TimesheetRow];
+    expect(toMarkdown(multi).split("\n")[2]).toBe(
+      "| 2026-10-16 | acme/api | Development | 2.25 | one two |",
+    );
+  });
 });
