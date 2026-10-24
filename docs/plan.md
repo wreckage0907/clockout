@@ -175,4 +175,6 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [ ] Settings operations for exports ("add a Harvest export with hours as h:mm"), shown in the AI's settings summary
 - [ ] `type = "api"` timesheet target: the five operations mapped onto any API's requests (paths, body templates, dotted paths into answers, hours units, auth pattern); the `http` target as one fixed mapping; tests against the mock PMS with a different API shape
 - [ ] Settings operations for the mapping, drafted from pasted API docs; token and other header values never in the summary
-- [ ] `type = "command"` target and export: JSON over stdin/stdout, no shell, timeout, own process group; set by hand or on the command line only, refused from the chat bar; an example script that talks to an MCP server
+- [ ] `type = "mcp"` timesheet target: a small MCP client (streamable HTTP, `initialize`, `tools/list`, `tools/call`), the five operations mapped onto tools, answers from `structuredContent` or JSON text, preview-then-confirm writes, `clockout connect mcp <url>` via MCP's authorization spec and `src/oauth.ts`; a mock MCP server in `test/` with the mock PMS's rules
+- [ ] Settings operations for the MCP mapping, drafted from the server's `tools/list`; only mapped tools are ever called
+- [ ] `type = "command"` target and export: JSON over stdin/stdout, no shell, timeout, own process group; set by hand or on the command line only, refused from the chat bar; how to use it with a local stdio MCP server
