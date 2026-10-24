@@ -11,8 +11,12 @@ import {
 } from "react";
 import type { MouseEvent } from "./mouse";
 
+export interface ClickModifiers {
+  shift: boolean;
+}
+
 interface Handlers {
-  click?: () => void;
+  click?: (modifiers: ClickModifiers) => void;
   wheel?: (dir: 1 | -1) => void;
   setHover?: (on: boolean) => void;
   /** Set on an overlay's own box: called for clicks that land outside it. */
@@ -100,7 +104,7 @@ export function MouseProvider({
         Boolean(t.on.current.click || t.on.current.outside),
       );
       const click = best?.on.current.click;
-      if (click) return click();
+      if (click) return click({ shift: e.shift });
       if (!best && top > 0) for (const t of all) if (t.layer === top) t.on.current.outside?.();
     };
     events.on("mouse", onMouse);
@@ -129,7 +133,7 @@ export function Clickable({
   children,
   ...box
 }: Omit<BoxProps, "children"> & {
-  onClick?: () => void;
+  onClick?: (modifiers: ClickModifiers) => void;
   onWheel?: (dir: 1 | -1) => void;
   children: ReactNode | ((hover: boolean) => ReactNode);
 }) {

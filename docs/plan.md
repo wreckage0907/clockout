@@ -96,6 +96,11 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Description style settings (format, length, instructions, examples): `[descriptions]`, Setup's AI helper section, or said in the chat bar
 - [x] Description prompt: a page in Setup's AI helper section to type or dictate how descriptions should read (up to 2000 characters)
 
+## Bulk review
+
+- [x] Card checkboxes, Space to toggle, Shift-click / Shift+↑↓ ranges, and a selection toolbar
+- [x] Copy selected rows, remove selected cards in one undoable edit, and map selected cards to one ERP task without changing project defaults
+
 ## Setup by chat
 
 - [x] ADR 0007: settings through the chat bar, one AI call, settings summary only

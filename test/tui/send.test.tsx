@@ -188,6 +188,31 @@ describe("which ERP task a card goes to", () => {
     );
   });
 
+  it("maps checked cards to one ERP task without changing project defaults", async () => {
+    const { ui, calls } = await openWithErp();
+    ui.stdin.write(DOWN); // Daily standup
+    await tick();
+    ui.stdin.write(" ");
+    await until(ui.lastFrame, "1 selected");
+    ui.stdin.write(DOWN); // Fix auth token refresh
+    await tick();
+    ui.stdin.write(" ");
+    await until(ui.lastFrame, "2 selected");
+    ui.stdin.write(CTRL_T);
+    await until(ui.lastFrame, "Which ERP task for 2 cards?");
+    expect(ui.lastFrame()).toContain("Only the selected cards. Project defaults are unchanged.");
+    ui.stdin.write(DOWN); // Bug fixing
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "2 cards → Bug fixing");
+    expect(calls.mapped).toEqual([]);
+    expect(calls.commits.at(-1)?.ops).toEqual([
+      { op: "send_to", id: "b1", task: "TASK-BUG", label: "Bug fixing" },
+      { op: "send_to", id: "b2", task: "TASK-BUG", label: "Bug fixing" },
+    ]);
+    expect(ui.lastFrame()).not.toContain("2 selected");
+  });
+
   it("makes a project's first pick its task for every card", async () => {
     const erp = { tasks: [{ id: "TASK-CLK", subject: "Clockout development", project: "C" }] };
     const target = fakeTarget(erp);

@@ -146,6 +146,28 @@ describe("day view", () => {
     expect(ui.lastFrame()).toContain("17 prompts in 1 session");
   });
 
+  it("Space checks cards; ctrl+y copies them and ctrl+d removes them together", async () => {
+    const { ui, calls } = await openDay();
+    await down(ui, 1); // Daily standup
+    ui.stdin.write(" ");
+    await until(ui.lastFrame, "1 selected");
+    await down(ui, 1); // Fix auth token refresh
+    ui.stdin.write(" ");
+    await until(ui.lastFrame, "2 selected");
+    ui.stdin.write("\u0019"); // ctrl+y
+    await until(ui.lastFrame, "Copied 2 selected rows");
+    expect(calls.copied[0]?.split("\n")).toHaveLength(2);
+
+    ui.stdin.write("\u0004"); // ctrl+d
+    await until(ui.lastFrame, "3h 15m of 8h");
+    expect(calls.commits.at(-1)?.ops).toEqual([
+      { op: "delete", id: "b1" },
+      { op: "delete", id: "b2" },
+    ]);
+    ui.stdin.write("\u001a"); // one undo restores the whole selection's removal
+    await until(ui.lastFrame, "6h of 8h");
+  });
+
   it("+ nudges the selected card by the rounding step, and ctrl+z undoes it", async () => {
     const { ui } = await openDay();
     await down(ui, 1); // Daily standup, 30m

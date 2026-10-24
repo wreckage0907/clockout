@@ -7,6 +7,8 @@ export interface MouseEvent {
   y: number;
   kind: "press" | "release" | "move" | "wheelUp" | "wheelDown";
   button: "left" | "middle" | "right" | "none";
+  /** Shift was held, for extending a selection. */
+  shift: boolean;
 }
 
 // SGR mouse reports: ESC [ < button ; column ; row (M press/move, m release).
@@ -18,7 +20,7 @@ const PARTIAL = /\u001b(?:\[(?:<[\d;]*)?)?$/;
 function parseSgr(code: number, col: number, row: number, final: string): MouseEvent {
   const base = code & 3;
   const button = base === 0 ? "left" : base === 1 ? "middle" : base === 2 ? "right" : "none";
-  const at = { x: col - 1, y: row - 1 };
+  const at = { x: col - 1, y: row - 1, shift: Boolean(code & 4) };
   if (code & 64) return { ...at, kind: base === 0 ? "wheelUp" : "wheelDown", button: "none" };
   if (code & 32) return { ...at, kind: "move", button };
   return { ...at, kind: final === "m" ? "release" : "press", button };

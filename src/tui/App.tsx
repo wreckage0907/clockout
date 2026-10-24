@@ -7,7 +7,13 @@ import { describeSettings, type SettingEffect, type SettingOp } from "../config/
 import { describeEdits, placeTimeOps } from "../core/edits";
 import { changes, mappingFor, type PushPlan, type PushRow } from "../core/push";
 import { addDays, parseDuration } from "../core/time";
-import { removeRowOps, sendRowOps, setRowMinutesOps, timesheetRows } from "../core/timesheet";
+import {
+  removeRowOps,
+  rowKey,
+  sendRowOps,
+  setRowMinutesOps,
+  timesheetRows,
+} from "../core/timesheet";
 import type { Day, EditOp } from "../core/types";
 import { toCsv, toMarkdown, toTsv } from "../export/formats";
 import type { PushResult } from "../push";
@@ -104,6 +110,8 @@ interface Picking {
   send: boolean;
   /** Picking for one card (its row key) rather than for the whole project. */
   card?: string;
+  /** Picking for checked cards only; unlike a project's first pick, this never changes config. */
+  cards?: string[];
 }
 
 /** Turns of the chat kept for follow-ups. */
@@ -149,6 +157,9 @@ export function App({
   const [turns, setTurns] = useState<Turn[]>([]);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [sel, setSel] = useState(-1);
+  /** Checked timesheet row keys. `sel` remains the one focused card for keyboard editing. */
+  const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
+  const anchor = useRef(-1);
   const [chip, setChip] = useState(0);
   const [editing, setEditing] = useState<string | null>(null);
   const [toast, showToast] = useToast();
@@ -215,10 +226,26 @@ export function App({
   const items: (Card | "add")[] = [...cards, "add"];
   const current = sel >= 0 ? items[Math.min(sel, items.length - 1)] : undefined;
   const card = current && current !== "add" ? current : undefined;
+  const checkedCards = cards.filter(
+    (c): c is Card & { kind: "row" } => c.kind === "row" && checked.has(c.key),
+  );
+  const checkedMinutes = checkedCards.reduce((sum, c) => sum + c.minutes, 0);
+
+  // An AI edit can regroup rows and invalidate their keys; never keep invisible cards checked.
+  useEffect(() => {
+    setChecked((before) => {
+      const next = new Set(
+        [...before].filter((key) => cards.some((c) => c.kind === "row" && c.key === key)),
+      );
+      return next.size === before.size ? before : next;
+    });
+  }, [cards]);
 
   const goTo = (d: string) => {
     setDate(d);
     setSel(-1);
+    setChecked(new Set());
+    anchor.current = -1;
     setEditing(null);
     setProposal(null);
     setSending(null);
@@ -251,6 +278,33 @@ export function App({
       `✓ ${c.title} → ${hm(m)} · day ${hm(minutes - c.minutes + m)}`,
     );
   };
+  /** Focus a card, toggle its checkbox, or extend a range from the last anchor. */
+  const selectAt = (i: number, range: boolean, toggle: boolean) => {
+    const c = items[i];
+    if (!c || c === "add") return;
+    setSel(i);
+    setChip(0);
+    if (range && anchor.current >= 0 && c.kind === "row") {
+      const from = Math.min(anchor.current, i);
+      const to = Math.max(anchor.current, i);
+      setChecked(
+        new Set(
+          items
+            .slice(from, to + 1)
+            .flatMap((item) => (item !== "add" && item.kind === "row" ? [item.key] : [])),
+        ),
+      );
+      return;
+    }
+    anchor.current = i;
+    if (toggle && c.kind === "row")
+      setChecked((before) => {
+        const next = new Set(before);
+        if (next.has(c.key)) next.delete(c.key);
+        else next.add(c.key);
+        return next;
+      });
+  };
   /** Takes a card off the day: a row's blocks, or a meeting you weren't in. */
   const remove = (c: Card) => {
     if (!day) return;
@@ -258,6 +312,16 @@ export function App({
       c.kind === "ask" ? [{ op: "delete", id: c.key.slice(4) }] : removeRowOps(day, c.key);
     const left = minutes - (c.kind === "row" ? c.minutes : 0);
     void commit(ops, `✓ Removed “${c.title}” · day ${hm(left)}`);
+  };
+  const removeChecked = () => {
+    if (!day || checkedCards.length === 0) return;
+    const ops = checkedCards.flatMap((c) => removeRowOps(day, c.key));
+    const n = checkedCards.length;
+    setChecked(new Set());
+    void commit(
+      ops,
+      `✓ Removed ${n} card${n === 1 ? "" : "s"} · day ${hm(minutes - checkedMinutes)}`,
+    );
   };
   const choose = (c: Choice) => void commit(c.ops, `✓ ${c.label}`);
   const undo = async () => {
@@ -268,18 +332,24 @@ export function App({
       showToast("↶ Undone");
     } else showToast("Nothing to undo");
   };
-  const copy = async (format: CopyFormat = "tsv") => {
+  const copy = async (format: CopyFormat = "tsv", only?: ReadonlySet<string>) => {
     if (!day) return;
-    const rows = timesheetRows(day, config);
-    if (rows.length === 0) return showToast("Nothing to copy yet");
+    const rows = timesheetRows(day, config).filter(
+      (r) =>
+        !only || only.has(rowKey({ project: r.project, task: r.task, summary: r.description })),
+    );
+    if (rows.length === 0)
+      return showToast(only ? "No selected rows to copy" : "Nothing to copy yet");
     const as = { tsv: toTsv, md: toMarkdown, csv: toCsv }[format];
     const kind = { tsv: "", md: " as Markdown", csv: " as CSV" }[format];
+    const total = only ? checkedMinutes : minutes;
     try {
       await actions.copy(as(rows));
       // Meetings you haven't answered aren't on the sheet yet; say so rather than refuse.
-      const waiting = asks ? ` · ${asks} meeting${asks === 1 ? "" : "s"} unanswered, left out` : "";
+      const waiting =
+        !only && asks ? ` · ${asks} meeting${asks === 1 ? "" : "s"} unanswered, left out` : "";
       showToast(
-        `✓ Copied ${rows.length} row${rows.length === 1 ? "" : "s"}${kind} · ${hm(minutes)}${waiting}`,
+        `✓ Copied ${rows.length}${only ? " selected" : ""} row${rows.length === 1 ? "" : "s"}${kind} · ${hm(total)}${waiting}`,
       );
     } catch {
       showToast("Couldn't reach the clipboard. Use `clockout export` instead.");
@@ -346,10 +416,31 @@ export function App({
     });
     setOverlay("task");
   };
+  const pickChecked = () => {
+    if (checkedCards.length === 0) return;
+    if (!erp) return showToast("Sign in to your ERP first: Setup (ctrl+p) → ERP");
+    const n = checkedCards.length;
+    setUnmapped({
+      project: `${n} selected card${n === 1 ? "" : "s"}`,
+      label: hm(checkedMinutes),
+      description: checkedCards.map((c) => c.title).join(" · "),
+      send: false,
+      cards: checkedCards.map((c) => c.key),
+    });
+    setOverlay("task");
+  };
   const pickTask = async (p: Picking, task: RemoteTask) => {
     if (!erp) return;
     setOverlay(null);
     setUnmapped(null);
+    if (p.cards && day) {
+      const ops = p.cards.flatMap((key) =>
+        sendRowOps(day, key, { task: task.id, label: task.subject }),
+      );
+      const n = p.cards.length;
+      setChecked(new Set());
+      return void commit(ops, `✓ ${n} card${n === 1 ? "" : "s"} → ${task.subject}`);
+    }
     const projectTask = projectTaskOf(p);
     if (p.card && projectTask && day) {
       // The project's own task needs no exception; anything else holds for this card alone.
@@ -584,7 +675,7 @@ export function App({
         if (key.return) return void send(draft.value.trim());
       }
       if (key.ctrl && ch === "s") return void startSend();
-      if (key.ctrl && ch === "y") return void copy();
+      if (key.ctrl && ch === "y") return void copy("tsv", checked.size ? checked : undefined);
       if (key.ctrl && ch === "z") return void undo();
       if (key.pageUp) return goTo(addDays(date, -1));
       if (key.pageDown) return goTo(addDays(date, 1));
@@ -602,12 +693,27 @@ export function App({
       }
       if (key.upArrow || key.downArrow) {
         const d = key.upArrow ? -1 : 1;
-        setSel((s) => Math.max(0, Math.min(items.length - 1, s + d)));
-        setChip(0);
+        const next = Math.max(0, Math.min(items.length - 1, sel + d));
+        if (key.shift) {
+          if (anchor.current < 0) anchor.current = sel >= 0 ? sel : next;
+          selectAt(next, true, false);
+        } else {
+          setSel(next);
+          anchor.current = next;
+          setChip(0);
+        }
         return;
       }
-      if (key.ctrl && ch === "d") return card ? remove(card) : undefined;
-      if (key.ctrl && ch === "t") return card ? pickFor(card) : undefined;
+      if (key.ctrl && ch === "d") {
+        if (checked.size) return removeChecked();
+        return card ? remove(card) : undefined;
+      }
+      if (key.ctrl && ch === "t") {
+        if (checked.size) return pickChecked();
+        return card ? pickFor(card) : undefined;
+      }
+      if (ch === " " && draft.value === "" && card?.kind === "row")
+        return selectAt(sel, key.shift, true);
       if (draft.value === "" && card?.kind === "row") {
         if (ch === "+" || ch === "=") return setMinutes(card, card.minutes + step);
         if (ch === "-" || ch === "_")
@@ -619,6 +725,7 @@ export function App({
       }
       if (key.escape) {
         if (draft.value) return draft.setValue("");
+        if (checked.size) return setChecked(new Set());
         if (sel >= 0) return setSel(-1);
         return setView("home");
       }
@@ -734,6 +841,7 @@ export function App({
           }}
           {...(unmapped.query ? { query: unmapped.query } : {})}
           {...cardPick(unmapped)}
+          {...(unmapped.cards ? { selection: unmapped.cards.length } : {})}
           search={erp.searchTasks}
           screen={screen}
           onPick={(t) => void pickTask(unmapped, t)}
@@ -820,7 +928,8 @@ export function App({
     1 -
     2 -
     (proposal ? proposal.lines.length + 4 : 0) -
-    (sending ? sending.items.length + 5 : 0);
+    (sending ? sending.items.length + 5 : 0) -
+    (checkedCards.length ? 2 : 0);
   const cap = Math.max(1, Math.floor((avail + 1) / 6));
   const focus = Math.max(0, sel);
   if (focus < offset.current) offset.current = focus;
@@ -862,6 +971,22 @@ export function App({
       <Box width={listW} flexShrink={0}>
         {warning}
       </Box>
+      {checkedCards.length ? (
+        <Box width={listW} flexDirection="column" flexShrink={0}>
+          <Text>
+            <Text color={T.primary} bold>
+              {checkedCards.length} selected
+            </Text>
+            <Text color={T.muted}> · {hm(checkedMinutes)} · shift-click for a range</Text>
+          </Text>
+          <Box gap={1}>
+            {erp ? <Button label="Map task" tone="primary" onClick={pickChecked} /> : null}
+            <Button label="Copy" onClick={() => void copy("tsv", checked)} />
+            <Button label="Remove" onClick={removeChecked} />
+            <Button label="Clear" tone="quiet" onClick={() => setChecked(new Set())} />
+          </Box>
+        </Box>
+      ) : null}
       <Clickable
         flexDirection="column"
         flexGrow={1}
@@ -898,10 +1023,12 @@ export function App({
                   width={listW}
                   step={step}
                   selected={i === sel}
+                  checked={checked.has(it.key)}
                   chip={i === sel ? chip : -1}
                   editing={editing === it.key}
                   typed={pill.value}
-                  onSelect={() => setSel(i)}
+                  onSelect={(range) => selectAt(i, range, false)}
+                  onToggle={(range) => selectAt(i, range, true)}
                   onEdit={() => startEdit(i)}
                   onMinutes={(m) => setMinutes(it, m)}
                   onRemove={() => remove(it)}
@@ -1004,10 +1131,12 @@ function CardView({
   width,
   step,
   selected,
+  checked,
   chip,
   editing,
   typed,
   onSelect,
+  onToggle,
   onEdit,
   onMinutes,
   onRemove,
@@ -1018,10 +1147,12 @@ function CardView({
   width: number;
   step: number;
   selected: boolean;
+  checked: boolean;
   chip: number;
   editing: boolean;
   typed: string;
-  onSelect: () => void;
+  onSelect: (range: boolean) => void;
+  onToggle: (range: boolean) => void;
   onEdit: () => void;
   onMinutes: (m: number) => void;
   onRemove: () => void;
@@ -1057,9 +1188,16 @@ function CardView({
   else
     body = (
       <>
-        <Text color={T.text} bold wrap="truncate-end">
-          {c.title}
-        </Text>
+        <Box>
+          <Clickable onClick={({ shift }) => onToggle(shift)} marginRight={1} flexShrink={0}>
+            {(hover) => (
+              <Text color={checked || hover ? T.primary : T.muted}>{checked ? "[x]" : "[ ]"}</Text>
+            )}
+          </Clickable>
+          <Text color={T.text} bold wrap="truncate-end">
+            {c.title}
+          </Text>
+        </Box>
         <Box>
           <Box flexShrink={1}>
             <Text wrap="truncate-end">
@@ -1089,7 +1227,7 @@ function CardView({
       </>
     );
   return (
-    <Clickable onClick={onSelect} marginBottom={1} flexShrink={0}>
+    <Clickable onClick={({ shift }) => onSelect(shift)} marginBottom={1} flexShrink={0}>
       {(hover) => (
         <Box
           width={width}
@@ -1099,11 +1237,13 @@ function CardView({
               ? ask
                 ? T.ask
                 : T.text
-              : ask
-                ? mix(T.bg, T.ask, 0.5)
-                : hover
-                  ? T.muted
-                  : T.border
+              : checked
+                ? T.primary
+                : ask
+                  ? mix(T.bg, T.ask, 0.5)
+                  : hover
+                    ? T.muted
+                    : T.border
           }
           paddingX={2}
         >

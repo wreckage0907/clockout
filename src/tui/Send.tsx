@@ -97,6 +97,7 @@ export function TaskPicker({
   query: initial = "",
   only,
   reset,
+  selection,
   search,
   screen,
   onPick,
@@ -109,6 +110,8 @@ export function TaskPicker({
   only?: { projectTask: string };
   /** The card has its own task: a first choice that goes back to the project's. */
   reset?: { label: string; onPick: () => void };
+  /** Number of checked cards; the choice applies only to them, never to project config. */
+  selection?: number;
   search: (query: string) => Promise<RemoteTask[]>;
   screen: { width: number; height: number };
   onPick: (task: RemoteTask) => void;
@@ -175,7 +178,16 @@ export function TaskPicker({
 
   const width = Math.min(84, screen.width - 4);
   return (
-    <Dialog title="Which ERP task is this?" width={width} screen={screen} onClose={onClose}>
+    <Dialog
+      title={
+        selection
+          ? `Which ERP task for ${selection} card${selection === 1 ? "" : "s"}?`
+          : "Which ERP task is this?"
+      }
+      width={width}
+      screen={screen}
+      onClose={onClose}
+    >
       <Text color={T.text} wrap="truncate-end">
         {row.project} <Text color={T.muted}>· {row.task}</Text>
       </Text>
@@ -185,7 +197,12 @@ export function TaskPicker({
       <Box height={1} />
       <Box backgroundColor={T.element} paddingX={1} width={width - 6}>
         <Text wrap="truncate-start">
-          <Typed value={draft.value} placeholder={`search tasks, e.g. ${name}`} />
+          <Typed
+            value={draft.value}
+            placeholder={
+              selection ? "search tasks for the selected cards" : `search tasks, e.g. ${name}`
+            }
+          />
         </Text>
       </Box>
       <Box height={1} />
@@ -227,9 +244,11 @@ export function TaskPicker({
       )}
       <Box height={1} />
       <Text color={only ? T.info : T.muted} wrap="wrap">
-        {only
-          ? `Only this card. The rest of ${row.project} goes to ${only.projectTask}.`
-          : `Every ${row.project} row goes there from now on.`}
+        {selection
+          ? `Only the selected card${selection === 1 ? "" : "s"}. Project defaults are unchanged.`
+          : only
+            ? `Only this card. The rest of ${row.project} goes to ${only.projectTask}.`
+            : `Every ${row.project} row goes there from now on.`}
       </Text>
       <Text color={T.faint}>↑↓ choose · enter pick · esc cancel</Text>
     </Dialog>

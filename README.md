@@ -134,9 +134,9 @@
 | | Step | What happens |
 |---|---|---|
 | **1** | **Run `init`** | Clockout detects local agent logs, GitHub and Claude Code, then asks for your time zone, working hours and calendar. |
-| **2** | **Open the day** | Press Enter to expand the timesheet cards. Select with **↑ ↓**, edit a duration with **Enter**, and nudge it with **− / +**. |
+| **2** | **Open the day** | Press Enter to expand the timesheet cards. Move with **↑ ↓**, edit a duration with **Enter**, and nudge it with **− / +**. Click checkboxes or press **Space** to select several; **Shift-click** selects a range. |
 | **3** | **Say what is wrong** | Type or dictate a correction. Review the proposed operations, **Enter** to apply, **Esc** to revise, **Ctrl+Z** to undo. |
-| **4** | **Take the sheet** | **Ctrl+Y** copies tab-separated rows. Use `export` for a file, another format or a range of dates. |
+| **4** | **Take the sheet** | **Ctrl+Y** copies tab-separated rows, or only the checked rows when any are selected. The selection toolbar can also map or remove several cards together. Use `export` for a file, another format or a range of dates. |
 | **5** | **Pick another day** | Run `yesterday` or `day 2026-10-16`; in the review screen, click the date or use **PgUp / PgDn**. |
 
 **One command, a finished sheet**
@@ -236,7 +236,9 @@ node dist/cli.js connect erp https://erp.example.com
 ```
 
 Press **Ctrl+S** in the review screen, pick an ERP task for each project, inspect the plan and
-press **Enter** to send. From scripts, preview and apply the same flow with:
+press **Enter** to send. To reroute several cards at once, check them and choose **Map task**;
+this changes only those cards, not the saved project mappings. From scripts, preview and apply
+the same flow with:
 
 ```sh
 node dist/cli.js push yesterday --dry-run
