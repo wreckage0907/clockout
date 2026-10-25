@@ -4,16 +4,22 @@ import {
   credentialsPath,
   loadErpCredentials,
   loadGoogleCredentials,
+  loadMcpCredentials,
+  type McpCredentials,
   removeErpCredentials,
   removeGoogleCredentials,
+  removeMcpCredentials,
   saveErpCredentials,
   saveGoogleCredentials,
+  saveMcpCredentials,
 } from "../config/credentials";
 import { withErpSite } from "../config/edit";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths, tildify } from "../config/paths";
-import { type Config, isSafeSite } from "../config/schema";
+import { type Config, isSafeSite, mcpServer } from "../config/schema";
+import { cleanText } from "../core/text";
 import { dayRange, localDate } from "../core/time";
+import { clientFor, connectMcp, revokeMcp } from "../mcp";
 import { googleCalendar } from "../sources/google-calendar";
 import { connectGoogle, googleClient, revoke } from "../sources/google-calendar/oauth";
 import { connectErp, revokeErp, siteOrigin } from "../targets/next-pms/oauth";
@@ -32,18 +38,23 @@ const openInBrowser = (what: string) => async (url: string) => {
   await execa(cmd, args as string[]).catch(() => undefined);
 };
 
-function check(service: string): "google" | "erp" {
-  if (service !== "google" && service !== "erp")
-    throw new Error(`Connect "google" (your calendar) or "erp" (where your timesheet goes).`);
-  return service;
+function check(service: string): "google" | "erp" | "mcp" {
+  if (service === "google" || service === "erp") return service;
+  if (/^[a-z][a-z0-9-]{0,31}$/.test(service)) return "mcp";
+  throw new Error(
+    `Connect "google" (your calendar), "erp" (where your timesheet goes) or an MCP server by a short lowercase name: clockout connect <name> <https://…/mcp>`,
+  );
 }
 
 /**
  * `clockout connect google`: sign in once; Clockout reads your calendar from then on.
  * `clockout connect erp <url>`: sign in to your ERP so `clockout push` can fill your timesheet.
+ * `clockout connect <name> [url]`: sign in to an MCP server, kept in `[[mcp]]`.
  */
 export async function runConnect(service: string, url?: string) {
-  if (check(service) === "erp") return connectErpSite(url);
+  const kind = check(service);
+  if (kind === "erp") return connectErpSite(url);
+  if (kind === "mcp") return connectMcpServer(service, url);
   const { configFile } = resolvePaths();
   const config = await loadConfig(configFile);
   const client = googleClient(config);
@@ -161,8 +172,71 @@ export async function signOutGoogle(): Promise<boolean> {
   return creds !== null;
 }
 
-/** `clockout disconnect google|erp`: revokes access and forgets the sign-in. */
+async function connectMcpServer(name: string, url: string | undefined) {
+  const { configFile } = resolvePaths();
+  const config = await loadConfig(configFile);
+  if (!config) throw new Error(`Run \`clockout init\` first, then \`clockout connect ${name}\`.`);
+  const known = config.mcp.find((s) => s.name === name);
+  const address = url?.trim() ?? known?.url;
+  if (!address)
+    throw new Error(
+      `There's no MCP server called "${name}" in your config. Give its address: clockout connect ${name} https://example.com/mcp`,
+    );
+  const parsed = mcpServer.safeParse({ name, url: address });
+  if (!parsed.success)
+    throw new Error(`${name}: ${parsed.error.issues[0]?.message ?? "not a usable address"}.`);
+  const server = parsed.data;
+  console.log(
+    `Clockout signs in to ${new URL(server.url).host} as you. It only calls the tools Clockout needs.`,
+  );
+
+  const signedIn = await connectMcp(name, server.url, openInBrowser(name));
+  let creds: McpCredentials | null = signedIn;
+  const client = await clientFor(server, {
+    creds,
+    save: async (next) => {
+      creds = next;
+    },
+  });
+  const info = await client.initialize();
+  const tools = await client.listTools();
+
+  if (creds) await saveMcpCredentials(name, creds);
+  if (!known || known.url !== server.url) {
+    const others = config.mcp.filter((s) => s.name !== name);
+    await saveConfig(configFile, { ...config, mcp: [...others, server] });
+  }
+  const names = tools.map((t) => cleanText(t.name)).filter(Boolean);
+  const shown = names.length > 8 ? `${names.slice(0, 8).join(", ")}, …` : names.join(", ");
+  console.log(
+    `Connected to ${name} (${info.name}). It offers ${names.length} tool${names.length === 1 ? "" : "s"}${shown ? `: ${shown}` : ""}.`,
+  );
+  console.log(
+    signedIn
+      ? `The sign-in is kept in ${tildify(credentialsPath(), homedir())} (only you can read it).`
+      : "It didn't ask for a sign-in.",
+  );
+}
+
+/** Revokes an MCP server's sign-in and forgets it; the server stays in `[[mcp]]`. */
+export async function signOutMcp(name: string): Promise<boolean> {
+  const creds = await loadMcpCredentials(name);
+  if (creds) await revokeMcp(creds);
+  await removeMcpCredentials(name);
+  return creds !== null;
+}
+
+/** `clockout disconnect google|erp|<name>`: revokes access and forgets the sign-in. */
 export async function runDisconnect(service: string) {
+  if (check(service) === "mcp") {
+    const had = await signOutMcp(service);
+    console.log(
+      had
+        ? `Disconnected from ${service}. It stays in your config's [[mcp]] list until you remove it.`
+        : `${service} wasn't connected.`,
+    );
+    return;
+  }
   if (check(service) === "erp") {
     const url = await signOutErp();
     console.log(

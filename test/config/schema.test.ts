@@ -36,6 +36,29 @@ describe("configSchema", () => {
     expect(c.sources.map((s) => s.type)).toEqual(["claude-code", "github", "calendar"]);
   });
 
+  it("takes MCP servers by name, https or on this machine only", () => {
+    const c = configSchema.parse({
+      ...minimal,
+      mcp: [
+        { name: "wispr", url: "https://api.wisprflow.ai/connect/mcp" },
+        { name: "mock", url: "http://127.0.0.1:4200/mcp" },
+      ],
+    });
+    expect(c.mcp.map((s) => s.name)).toEqual(["wispr", "mock"]);
+    expect(configSchema.parse(minimal).mcp).toEqual([]);
+    expect(
+      issues({ ...minimal, mcp: [{ name: "notes", url: "http://notes.example.com/mcp" }] }),
+    ).toEqual(["mcp.0.url"]);
+    expect(
+      issues({ ...minimal, mcp: [{ name: "My Notes", url: "https://n.example.com" }] }),
+    ).toEqual(["mcp.0.name"]);
+    expect(issues({ ...minimal, mcp: [{ name: "erp", url: "https://n.example.com" }] })).toEqual([
+      "mcp.0.name",
+    ]);
+    const twice = { name: "notes", url: "https://n.example.com/mcp" };
+    expect(issues({ ...minimal, mcp: [twice, twice] })).toEqual(["mcp"]);
+  });
+
   it("rejects an unknown time zone", () => {
     expect(issues({ ...minimal, me: { ...minimal.me, timezone: "India/Bangalore" } })).toEqual([
       "me.timezone",

@@ -20,12 +20,20 @@ export interface Ran {
   stderr: string;
 }
 
+/** A CLI run still going, for commands that wait on something (a browser sign-in). */
+export interface Running {
+  /** Resolves with stdout so far once it matches. */
+  waitFor(pattern: RegExp, timeoutMs?: number): Promise<RegExpExecArray>;
+  done: Promise<Ran>;
+}
+
 export interface Sandbox {
   home: string;
   config: string;
   data: string;
   env: Record<string, string>;
   run(args: string[], opts?: { env?: Record<string, string>; input?: string }): Promise<Ran>;
+  start(args: string[]): Running;
   writeConfig(toml: string): Promise<void>;
 }
 
@@ -52,6 +60,7 @@ export async function sandbox(): Promise<Sandbox> {
     data,
     env,
     run: (args, opts = {}) => runCli(args, { ...env, ...opts.env }, home, opts.input),
+    start: (args) => startCli(args, env, home),
     async writeConfig(toml) {
       await mkdir(config, { recursive: true, mode: 0o700 });
       await writeFile(join(config, "config.toml"), toml, { mode: 0o600 });
@@ -79,6 +88,52 @@ function runCli(
     child.on("close", (code) => resolve({ code, stdout, stderr }));
     child.stdin.end(input);
   });
+}
+
+function startCli(args: string[], env: Record<string, string>, cwd: string): Running {
+  const child = spawn(process.execPath, [bin, ...args], { env, cwd });
+  let stdout = "";
+  let stderr = "";
+  const waiting = new Set<() => void>();
+  child.stdout.on("data", (d) => {
+    stdout += d;
+    for (const check of waiting) check();
+  });
+  child.stderr.on("data", (d) => {
+    stderr += d;
+  });
+  child.stdin.end();
+  const done = new Promise<Ran>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (code) => {
+      for (const check of waiting) check();
+      resolve({ code, stdout, stderr });
+    });
+  });
+  return {
+    done,
+    waitFor: (pattern, timeoutMs = 10_000) =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          waiting.delete(check);
+          reject(new Error(`No ${pattern} in stdout:\n${stdout}\nstderr:\n${stderr}`));
+        }, timeoutMs);
+        function check() {
+          const m = pattern.exec(stdout);
+          if (m) {
+            clearTimeout(timer);
+            waiting.delete(check);
+            resolve(m);
+          } else if (child.exitCode !== null) {
+            clearTimeout(timer);
+            waiting.delete(check);
+            reject(new Error(`Exited ${child.exitCode} before ${pattern}:\n${stdout}\n${stderr}`));
+          }
+        }
+        waiting.add(check);
+        check();
+      }),
+  };
 }
 
 /**

@@ -161,6 +161,23 @@ const httpTarget = z.object({
   map: z.array(taskMapping).default([]),
 });
 
+/** Names `clockout connect` already uses for something else. */
+export const RESERVED_SERVER_NAMES = ["google", "erp"];
+
+/** A remote MCP server (streamable HTTP), connected with `clockout connect <name>`. */
+export const mcpServer = z.object({
+  /** How you refer to it: `clockout connect wispr`. */
+  name: z
+    .string()
+    .regex(/^[a-z][a-z0-9-]{0,31}$/, "use a short lowercase name, e.g. wispr or notion")
+    .refine((n) => !RESERVED_SERVER_NAMES.includes(n), "google and erp are taken; choose another"),
+  /** The server's MCP endpoint, e.g. "https://api.example.com/mcp". */
+  url: z
+    .url({ protocol: /^https?$/, error: "use the server's address, e.g. https://example.com/mcp" })
+    .refine(isSafeSite, "use https:// (plain http only works for a server on this machine)"),
+});
+export type McpServer = z.output<typeof mcpServer>;
+
 export const timesheetTarget = z.discriminatedUnion("type", [nextPmsTarget, httpTarget]);
 
 export const configSchema = z.object({
@@ -222,6 +239,14 @@ export const configSchema = z.object({
     .prefault({}),
   sources: z.array(sourceConfig).default([]),
   projects: z.array(projectRule).default([]),
+  /** MCP servers Clockout can sign in to and call ([ADR 0010](../../docs/adr/0010-mcp-as-source-and-destination.md)). */
+  mcp: z
+    .array(mcpServer)
+    .refine(
+      (servers) => new Set(servers.map((s) => s.name)).size === servers.length,
+      "each MCP server needs its own name",
+    )
+    .default([]),
   /** Where `clockout push` sends the day. Connect with `clockout connect erp <url>`. */
   timesheet: timesheetTarget.optional(),
 });

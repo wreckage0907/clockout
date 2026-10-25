@@ -98,7 +98,11 @@ describe("arguments", () => {
     ],
     [
       ["connect", "dropbox"],
-      'clockout: Connect "google" (your calendar) or "erp" (where your timesheet goes).',
+      'clockout: There\'s no MCP server called "dropbox" in your config. Give its address: clockout connect dropbox https://example.com/mcp',
+    ],
+    [
+      ["connect", "Drop Box"],
+      /^clockout: Connect "google" \(your calendar\), "erp" \(where your timesheet goes\) or an MCP server/,
     ],
     [
       ["connect", "erp", "http://erp.example.com"],

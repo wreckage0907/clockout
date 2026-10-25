@@ -260,6 +260,26 @@ node dist/cli.js push yesterday --yes
 </details>
 
 <details>
+<summary><b>🧩 MCP servers</b></summary>
+<br>
+<samp>
+
+Give a remote MCP server a short name and its address; Clockout signs in through the browser
+(OAuth with dynamic registration) and lists the server's tools to show it works:
+
+```sh
+node dist/cli.js connect notes https://notes.example.com/mcp
+node dist/cli.js connect notes      # sign in again later
+node dist/cli.js disconnect notes   # revoke and forget the sign-in
+```
+
+The server is kept in `[[mcp]]` in the config. Meeting recordings and note destinations that
+use it are on their way ([ADR 0010](docs/adr/0010-mcp-as-source-and-destination.md)).
+
+</samp>
+</details>
+
+<details>
 <summary><b>↗️ Any other timesheet or PMS</b></summary>
 <br>
 <samp>

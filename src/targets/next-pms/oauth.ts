@@ -1,19 +1,24 @@
 import { z } from "zod";
 import type { ErpCredentials } from "../../config/credentials";
-import { loopback, pkcePair, randomState } from "../../oauth";
+import {
+  type AuthServer,
+  authServerMetadata,
+  type Fetch,
+  loopback,
+  pkcePair,
+  randomState,
+  registerPublicClient,
+} from "../../oauth";
 
 // Signing in to a Frappe site (next-pms runs on Frappe) as a public OAuth client: discover the
 // server, register Clockout for this sign-in's loopback address, PKCE, refresh token.
 
-export type Fetch = typeof fetch;
+export type { Fetch };
 
-const metadata = z.object({
-  authorization_endpoint: z.string(),
-  token_endpoint: z.string(),
-  registration_endpoint: z.string().optional(),
-  revocation_endpoint: z.string().optional(),
-});
-type Endpoints = z.infer<typeof metadata>;
+type Endpoints = Pick<
+  AuthServer,
+  "authorization_endpoint" | "token_endpoint" | "registration_endpoint" | "revocation_endpoint"
+>;
 
 const tokens = z.object({
   access_token: z.string(),
@@ -31,11 +36,10 @@ export function siteOrigin(url: string): string {
 /** Where to sign in, from the server's metadata (RFC 8414), or Frappe's usual paths. */
 export async function discover(url: string, doFetch: Fetch = fetch): Promise<Endpoints> {
   const origin = siteOrigin(url);
-  const res = await doFetch(`${origin}/.well-known/oauth-authorization-server`).catch(() => {
+  const found = await authServerMetadata(origin, doFetch, { openid: false }).catch(() => {
     throw new Error(`Couldn't reach ${origin}. Check the address and your connection.`);
   });
-  const found = res.ok ? metadata.safeParse(await res.json().catch(() => null)) : null;
-  if (found?.success) return found.data;
+  if (found) return found;
   const m = `${origin}/api/method/frappe.integrations.oauth2`;
   return {
     authorization_endpoint: `${m}.authorize`,
@@ -54,33 +58,14 @@ async function register(
     "This ERP doesn't let apps sign in on their own. Ask an admin to turn on “Enable Dynamic Client Registration” in OAuth Settings.",
   );
   if (!endpoint) throw closed;
-  const res = await doFetch(endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      client_name: "Clockout",
-      client_uri: "https://github.com/wreckage0907/clockout",
-      redirect_uris: [redirectUri],
-      grant_types: ["authorization_code", "refresh_token"],
-      response_types: ["code"],
-      token_endpoint_auth_method: "none",
-    }),
-  });
-  const body = (await res.json().catch(() => null)) as {
-    client_id?: string;
-    error_description?: string;
-  } | null;
-  if (res.status === 404) throw closed;
-  if (!body)
+  const r = await registerPublicClient(endpoint, redirectUri, doFetch);
+  if (r.ok) return r.clientId;
+  if (r.status === 404) throw closed;
+  if (!r.json)
     throw new Error(
       "That address doesn't look like a Frappe site with next-pms. Check it's the one you sign in to for timesheets.",
     );
-  if (!res.ok || !body.client_id) {
-    throw new Error(
-      `The ERP refused to register Clockout${body.error_description ? `: ${body.error_description}` : ""}.`,
-    );
-  }
-  return body.client_id;
+  throw new Error(`The ERP refused to register Clockout${r.error ? `: ${r.error}` : ""}.`);
 }
 
 export interface ErpConnected {

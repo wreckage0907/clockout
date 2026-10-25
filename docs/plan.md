@@ -160,9 +160,9 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 [ADR 0009](adr/0009-change-clockout-through-config.md): what people change to fit their own timesheet is config the AI can propose, never code. [ADR 0010](adr/0010-mcp-as-source-and-destination.md): MCP servers as a source and as a destination. Both ship in stages: see ADR 0009's Rollout.
 
 - [x] Accept ADR 0009 (in two stages) and ADR 0010
-- [ ] MCP client (`src/mcp/`): streamable HTTP, `initialize`, `tools/list`, `tools/call`, answers from `structuredContent` or JSON text, `isError` as that system's error
-- [ ] MCP sign-in: protected-resource metadata, authorization-server discovery, dynamic registration, PKCE + loopback, refresh; next-pms's discovery made general without changing how it signs in; `[[mcp]]` servers, `clockout connect <name>` / `disconnect <name>`
-- [ ] Mock MCP server (`test/mock-mcp/`): OAuth with registration, meeting tools, a note-writing tool
+- [x] MCP client (`src/mcp/`): streamable HTTP, `initialize`, `tools/list`, `tools/call`, answers from `structuredContent` or JSON text, `isError` as that system's error
+- [x] MCP sign-in: protected-resource metadata, authorization-server discovery, dynamic registration, PKCE + loopback, refresh; next-pms's discovery made general without changing how it signs in; `[[mcp]]` servers, `clockout connect <name>` / `disconnect <name>`
+- [x] Mock MCP server (`test/mock-mcp/`): OAuth with registration, meeting tools, a note-writing tool
 - [ ] `[[exports]]`: named formats (csv, tsv, markdown, json, text), columns with headers and formats (dates, hours as decimal / h:mm / minutes), merge, text line templates; built-ins unchanged, formula guard kept
 - [ ] Use them: `export --format <name>`, `/copy <name>`, a default for Ctrl+Y; README
 - [ ] Settings operations for exports ("add a Harvest export with hours as h:mm"), shown in the AI's settings summary

@@ -25,9 +25,28 @@ const erpCredentials = z.object({
 });
 export type ErpCredentials = z.infer<typeof erpCredentials>;
 
+const mcpCredentials = z.object({
+  /** The MCP server's address this sign-in is for; a changed address needs a new sign-in. */
+  url: z.string().min(1),
+  /** The protected resource the tokens are for (RFC 8707). */
+  resource: z.string().min(1),
+  token_endpoint: z.string().min(1),
+  revocation_endpoint: z.string().optional(),
+  /** The public OAuth client Clockout registered with that server. */
+  client_id: z.string().min(1),
+  refresh_token: z.string().min(1).optional(),
+  access_token: z.string().min(1),
+  /** When the access token stops working (ISO time); without it, until the server says so. */
+  expires_at: z.string().optional(),
+  connected_at: z.string(),
+});
+export type McpCredentials = z.infer<typeof mcpCredentials>;
+
 const file = z.object({
   google: googleCredentials.optional(),
   erp: erpCredentials.optional(),
+  /** By the name in `[[mcp]]`. */
+  mcp: z.record(z.string(), mcpCredentials).optional(),
 });
 type CredentialsFile = z.infer<typeof file>;
 
@@ -77,6 +96,28 @@ export async function saveErpCredentials(
 export async function removeErpCredentials(path = credentialsPath()): Promise<void> {
   const { erp: _, ...rest } = await read(path);
   await write(path, rest);
+}
+
+export async function loadMcpCredentials(
+  name: string,
+  path = credentialsPath(),
+): Promise<McpCredentials | null> {
+  return (await read(path)).mcp?.[name] ?? null;
+}
+
+export async function saveMcpCredentials(
+  name: string,
+  creds: McpCredentials,
+  path = credentialsPath(),
+): Promise<void> {
+  const current = await read(path);
+  await write(path, { ...current, mcp: { ...current.mcp, [name]: creds } });
+}
+
+export async function removeMcpCredentials(name: string, path = credentialsPath()): Promise<void> {
+  const { mcp, ...rest } = await read(path);
+  const { [name]: _, ...others } = mcp ?? {};
+  await write(path, Object.keys(others).length ? { ...rest, mcp: others } : rest);
 }
 
 /** Saves the file readable only by you, or removes it when nothing is left. */

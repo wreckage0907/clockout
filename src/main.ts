@@ -69,14 +69,16 @@ program
 
 program
   .command("connect")
-  .argument("<service>", "google or erp")
-  .argument("[url]", "for erp: your ERP's address, e.g. https://erp.example.com")
-  .description("Sign in once: google reads your calendar, erp lets Clockout fill your timesheet")
+  .argument("<service>", "google, erp, or a name for an MCP server")
+  .argument("[url]", "for erp: your ERP's address; for an MCP server: its https:// address")
+  .description(
+    "Sign in once: google reads your calendar, erp lets Clockout fill your timesheet, a named MCP server is added to [[mcp]]",
+  )
   .action((service: string, url?: string) => runConnect(service, url));
 
 program
   .command("disconnect")
-  .argument("<service>", "google or erp")
+  .argument("<service>", "google, erp, or an MCP server's name")
   .description("Revoke access and forget the sign-in")
   .action((service: string) => runDisconnect(service));
 
