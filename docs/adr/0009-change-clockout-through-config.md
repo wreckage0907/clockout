@@ -1,6 +1,6 @@
 # 0009. Change Clockout through config, not code
 
-Status: proposed (2026-10-24)
+Status: accepted (2026-10-25), in two stages (see Rollout)
 
 ## Context
 
@@ -29,7 +29,7 @@ columns = [
 ]
 
 [[exports]]
-name = "standup"
+name = "slack"
 type = "text"
 line = "{project}: {description} ({hours})"
 ```
@@ -38,6 +38,7 @@ line = "{project}: {description} ({hours})"
 - Templates only fill in fields. No expressions, no conditionals, nothing evaluated.
 - `clockout export --format harvest`, `/copy harvest`, and a default for Ctrl+Y.
 - CSV/TSV keep the formula guard; a format can't turn it off.
+- Where an export's text goes besides the clipboard (a file, an MCP tool) is [ADR 0010](0010-mcp-as-source-and-destination.md).
 
 ### 2. A mapped HTTP target
 
@@ -112,6 +113,15 @@ ADR 0006's reasons for next-pms to use REST still hold: its MCP tools are generi
 - The API mapping: its host, paths and field mappings, so it can draft one from pasted API docs and fix it from an error. Header values other than the token pattern stay out of the summary.
 - The MCP mapping: the server's host, the mapped tools and arguments, and the server's tool list while drafting one. Tokens are never in what it sees.
 - Everything is applied by pure functions and validated with the config schema, shown as a proposal, and saved on Enter, as in ADR 0007.
+
+## Rollout
+
+Not all of this ships before `clockout-cli@0.1.0`:
+
+- **Before 0.1.0:** layer 1 (export formats), the MCP client and sign-in from layer 3 (also used by ADR 0010), and layer 4 (`command` target and export).
+- **After 0.1.0:** layer 2 (`type = "api"`), the rest of layer 3 (`type = "mcp"` timesheet target), and the AI drafting either mapping. Until then, a timesheet system Clockout can't send to answers the `http` target's five requests ([timesheet-api.md](../timesheet-api.md)) or sits behind a `command`.
+
+Why: each mapping needs a second mock PMS with a different API shape, lock and preview-then-confirm handling, and the AI's drafts tested against it. That is more than fits before the release. The other parts are small, and ADR 0010 builds on them.
 
 ## Consequences
 

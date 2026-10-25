@@ -139,6 +139,14 @@ No single method covers everyone. `clockout init` asks which calendar you use an
 
 Windows (Outlook COM) and Linux (khal/vdirsyncer folders) OS stores come later. Paid unified calendar APIs (Nylas, Cronofy) don't fit a free local tool.
 
+### Meetings you record *(planned, before release)*
+
+A calendar says a meeting was planned; a recording says you were there and for how long ([ADR 0010](adr/0010-mcp-as-source-and-destination.md)).
+
+| Source | Reads | When |
+|---|---|---|
+| `wispr-flow` | Wispr Flow's remote MCP server (`clockout connect wispr`, OAuth with dynamic registration): recorded meetings with title, times, attendees and their calendar event. Needs Notetaker with MCP access. A recording counts as attended for its recorded length and settles that calendar event's attendance question; core keeps one meeting, not two. Summaries show in the card's evidence only, never to the AI or an export; transcripts and dictation history aren't read | before release |
+
 ### Generic
 
 - **`command`**: runs your command with `CLOCKOUT_FROM` / `CLOCKOUT_TO` env vars and reads JSONL `Activity` from stdout.
@@ -267,14 +275,14 @@ collect → store → resolve projects → blocks → attendance → summarize �
 6. **Summarize**: one verb-first line per block, ≤ 8 words by default; `[descriptions]` sets the verb form, the length, your own prompt (`instructions`: who reads the timesheet, what to lead with, words to use or avoid; it follows Clockout's fixed rules, so descriptions still only state facts from the evidence) and examples. AI backend if available, else aiTitle → PR title → commit subject → branch name (the style only applies to the AI's). A style other than the default is part of the summary cache key, so changing it writes them again. Blocks with the same evidence are asked about once and share one description, so the wording never splits one piece of work into two timesheet rows.
 7. **Gaps**: unaccounted time inside working hours. A gap of 30 min or more gets a question: 2h or more asks what you were working on and names the work before and after it; a shorter one offers lunch (only when it touches 12:00–15:00), a break, or work. One sentence can fill several gaps ("everything between 12:45 and 16:00 was next-pms"). `--plain` lists blocks, then the timesheet rows, which add up to the header's total.
 8. **Review**: type or dictate. The AI returns operations (`add`, `update`, `delete`, `split`, `merge`, `fill_gap`, `clarify`), never a rewritten sheet. Clockout validates them, shows the diff, applies on `y`, and supports undo.
-9. **Export**: one row per block with **date, project, task, hours, description** — the fields most timesheet forms ask for. Clipboard, Markdown, CSV, TSV, JSON. A CSV/TSV cell starting with `=`, `+`, `-` or `@` gets a leading `'` so spreadsheets keep it as text (meeting titles can come from anyone); a Markdown row stays on one line. `export --to D` alone exports that one day; a date together with `--from`/`--to` is refused; `-f` takes any case. Task comes from config rules (by activity kind, e.g. meeting → "Meetings", review → "Code Review", or a default per project) and can be changed by voice. After the MVP: user-defined export templates (own columns and formats) and documented presets for common timesheet tools.
+9. **Export**: one row per block with **date, project, task, hours, description** — the fields most timesheet forms ask for. Clipboard, Markdown, CSV, TSV, JSON. A CSV/TSV cell starting with `=`, `+`, `-` or `@` gets a leading `'` so spreadsheets keep it as text (meeting titles can come from anyone); a Markdown row stays on one line. `export --to D` alone exports that one day; a date together with `--from`/`--to` is refused; `-f` takes any case. Task comes from config rules (by activity kind, e.g. meeting → "Meetings", review → "Code Review", or a default per project) and can be changed by voice. *Planned, before release:* your own named formats in `[[exports]]` (columns, headers, date and hours formats, text line templates; [ADR 0009](adr/0009-change-clockout-through-config.md)), each optionally sent somewhere: a file such as an Obsidian daily note, or a tool on a connected MCP server, after a preview ([ADR 0010](adr/0010-mcp-as-source-and-destination.md)).
 10. **Send** *(when a timesheet system is set up)*: see below.
 
 ### Sending the day
 
 Copy-paste is the step people skip, so Clockout can write the day into the timesheet system itself ([ADR 0006](adr/0006-send-to-timesheet-system.md)).
 
-- **Targets** (`src/targets/`): read the day's entries, search tasks, create / update / delete. First: **next-pms** on Frappe/ERPNext, through the methods its own web app calls (`timesheet.save`, `update_timesheet_detail`, `delete`, `get_timesheet_data`, `task.get_task_list`), so its rules apply. **http**: any timesheet or PMS system answering Clockout's five-request JSON API ([timesheet-api.md](timesheet-api.md)) with a bearer token read from an environment variable (`token_env`, never stored); `pnpm mock-pms` runs one for trying it, and the end-to-end tests send to it. Later: Harvest, Toggl, Clockify, Jira/Tempo, a `command` target.
+- **Targets** (`src/targets/`): read the day's entries, search tasks, create / update / delete. First: **next-pms** on Frappe/ERPNext, through the methods its own web app calls (`timesheet.save`, `update_timesheet_detail`, `delete`, `get_timesheet_data`, `task.get_task_list`), so its rules apply. **http**: any timesheet or PMS system answering Clockout's five-request JSON API ([timesheet-api.md](timesheet-api.md)) with a bearer token read from an environment variable (`token_env`, never stored); `pnpm mock-pms` runs one for trying it, and the end-to-end tests send to it. *Planned, before release:* a `command` target (JSON over stdin/stdout, set by hand only). *After release:* `api` and `mcp` targets that map the five operations onto any API or MCP server's tools, drafted by the AI ([ADR 0009](adr/0009-change-clockout-through-config.md)); Harvest, Toggl, Clockify, Jira/Tempo through them.
 - **Sign-in**: `clockout connect erp <url>`: OAuth 2 with PKCE as a public client registered for the loopback redirect (RFC 7591/8252), refresh token in `credentials.json`. Frappe rotates refresh tokens; the new one is saved on every refresh.
 - **Mapping**: next-pms needs a task per entry. `[[timesheet.map]]` maps a Clockout project (optionally only one of its tasks) to an ERP task, picked once from a searchable list in the review screen or `clockout push`.
 - **Per card**: with an ERP set up, each card shows where it goes (`→ API maintenance`). Clicking that or Ctrl+T opens the same task search. A project's first pick becomes its mapping; once it has one, a different pick holds for that card only, stored on its blocks as `sendTo` through a `send_to` edit (so Ctrl+Z undoes it and it's replayed when the day is rebuilt). The search then offers "Back to <project's task>" first. Checked cards can share one pick: it applies only to those cards and never changes project mappings. `sendTo` wins over the mapping when planning a send; it isn't part of the export.
@@ -282,6 +290,17 @@ Copy-paste is the step people skip, so Clockout can write the day into the times
 - **Checks**: a day adding up to more than 24 hours isn't sent (fix the hours first). The ERP's address must be https (plain http only on this machine), checked before signing in. Frappe keeps old refresh tokens working, so each one replaced on a refresh is revoked; a 400/401/403 from the token endpoint asks you to connect again, a 5xx says the ERP isn't answering. A site without next-pms (or one too old) is named as such.
 - **Record**: the day's JSON keeps `pushed` (row key → ERP entry id) and `pushedAt`, and keeps them when the day is rebuilt. A create returns no id, so the day is re-read after sending and entries matched by task, hours and description. One failed entry doesn't stop the rest. If the day can't be re-read after sending (the site went down), it says how many were sent and to send again to check; the record is left as it was, and the next send matches what's already there, so nothing is added twice. `push --yes` exits 1 when anything failed or was left out (no task, blocked).
 - **What leaves the machine**: date, task id, hours and description per row, to your own ERP, only when you confirm.
+
+### Standups *(planned, before release)*
+
+The same evidence that fills the timesheet writes the next morning's standup.
+
+- `clockout standup [date]` and `/standup` in the chat bar; copied to the clipboard, and can go to an export destination (a daily note).
+- **Yesterday**: the previous working day's saved day (Friday on a Monday), with your corrections.
+- **Today**: today's calendar (a standup may read today's and later events; other commands still refuse future days) and unfinished work: open PRs, review requests, branches without a merged PR.
+- **Blockers**: only what you say. Never guessed.
+- **Your format**: `[standup]` (format, length, instructions, examples), like `[descriptions]`, set in Setup's AI helper section or said in the chat bar.
+- One AI call with titles and summaries only. Without an AI helper, a plain template.
 
 ## 9. MVP (must ship)
 
@@ -299,6 +318,17 @@ Copy-paste is the step people skip, so Clockout can write the day into the times
 - [ ] VHS demo GIF (records a real day; the `--demo` command was removed)
 - [ ] README + demo video
 
+### Before release (added 2026-10-25)
+
+See [plan.md](plan.md) for the order.
+
+- [ ] MCP client and sign-in; `[[mcp]]` servers
+- [ ] `[[exports]]` named formats, by hand or proposed by the AI
+- [ ] Standups
+- [ ] Wispr Flow meetings source
+- [ ] Export destinations: a file (Obsidian), an MCP tool
+- [ ] `command` target and export
+
 ## 10. Stretch
 
 - `clockout mcp` + skill
@@ -306,9 +336,8 @@ Copy-paste is the step people skip, so Clockout can write the day into the times
 - Sources: Copilot CLI, Gemini CLI, Goose, Crush; CalDAV; Microsoft Graph
 - `clockout hooks install`, OTLP receiver
 - `clockout serve`
-- Export templates for Toggl / Harvest / Clockify / Jira, and any timesheet API or MCP server, as config the AI can propose ([ADR 0009](adr/0009-change-clockout-through-config.md), proposed)
+- Any timesheet API or MCP server as a mapped target the AI drafts, and presets for Toggl / Harvest / Clockify / Jira ([ADR 0009](adr/0009-change-clockout-through-config.md), after release)
 - Saving repeated corrections as rules
-- Standup mode
 
 ## 11. Out of scope
 

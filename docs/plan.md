@@ -155,6 +155,27 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] ~~`--demo` on bundled fixtures~~ (removed — not needed in the app)
 - [x] README: install, quick start, config, privacy
 
+## Before release, day 1 (2026-10-25) — config and MCP
+
+[ADR 0009](adr/0009-change-clockout-through-config.md): what people change to fit their own timesheet is config the AI can propose, never code. [ADR 0010](adr/0010-mcp-as-source-and-destination.md): MCP servers as a source and as a destination. Both ship in stages: see ADR 0009's Rollout.
+
+- [x] Accept ADR 0009 (in two stages) and ADR 0010
+- [ ] MCP client (`src/mcp/`): streamable HTTP, `initialize`, `tools/list`, `tools/call`, answers from `structuredContent` or JSON text, `isError` as that system's error
+- [ ] MCP sign-in: protected-resource metadata, authorization-server discovery, dynamic registration, PKCE + loopback, refresh; next-pms's discovery made general without changing how it signs in; `[[mcp]]` servers, `clockout connect <name>` / `disconnect <name>`
+- [ ] Mock MCP server (`test/mock-mcp/`): OAuth with registration, meeting tools, a note-writing tool
+- [ ] `[[exports]]`: named formats (csv, tsv, markdown, json, text), columns with headers and formats (dates, hours as decimal / h:mm / minutes), merge, text line templates; built-ins unchanged, formula guard kept
+- [ ] Use them: `export --format <name>`, `/copy <name>`, a default for Ctrl+Y; README
+- [ ] Settings operations for exports ("add a Harvest export with hours as h:mm"), shown in the AI's settings summary
+
+## Before release, day 2 (2026-10-26) — standups, Wispr Flow, destinations
+
+- [ ] Standups: `clockout standup [date]` and `/standup`. Yesterday from the previous working day's saved day (Friday on a Monday); today from today's calendar and unfinished work (open PRs, review requests, branches without a merged PR); blockers only from what you say, never guessed. Copied to the clipboard; can go to an export destination
+- [ ] `[standup]` style (format, length, instructions, examples) like `[descriptions]`: Setup's AI helper section and the chat bar. One AI call with titles and summaries only; a plain template without an AI helper
+- [ ] Wispr Flow source (ADR 0010): `clockout connect wispr`, recorded meetings for the range, a recording counts as attended for its recorded length, merged with its calendar event in core, summaries on screen only (never to the AI or an export); tests against the mock MCP server
+- [ ] Export destinations (ADR 0010): `to = { file, append }` (an Obsidian daily note, written directly) and `to = { mcp, tool, arguments }`; preview, then confirm; file paths never from the AI
+- [ ] `type = "command"` target and export: JSON over stdin/stdout, no shell, timeout, own process group; set by hand or on the command line only, refused from the chat bar; how to use it with a local stdio MCP server
+- [ ] Spec, README and Setup for all of the above
+
 ## Day 12 — Publish (milestone)
 
 - [x] npm trusted publishing workflow on version tags (needs one-time setup on npmjs.com)
@@ -165,16 +186,11 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [ ] VHS demo GIF, demo video
 - [ ] Repo public, final #NoHandsChallenge post
 
-## Change Clockout through config
+## After release
 
-[ADR 0009](adr/0009-change-clockout-through-config.md): what people change to fit their own timesheet is config the AI can propose, never code.
+The rest of ADR 0009 (see its Rollout). The MCP client and sign-in are already in from day 1.
 
-- [ ] Accept ADR 0009
-- [ ] `[[exports]]`: named formats (csv, tsv, markdown, json, text), columns with headers and formats (dates, hours as decimal / h:mm / minutes), merge, text line templates; built-ins unchanged, formula guard kept
-- [ ] Use them: `export --format <name>`, `/copy <name>`, a default for Ctrl+Y; README
-- [ ] Settings operations for exports ("add a Harvest export with hours as h:mm"), shown in the AI's settings summary
 - [ ] `type = "api"` timesheet target: the five operations mapped onto any API's requests (paths, body templates, dotted paths into answers, hours units, auth pattern); the `http` target as one fixed mapping; tests against the mock PMS with a different API shape
 - [ ] Settings operations for the mapping, drafted from pasted API docs; token and other header values never in the summary
-- [ ] `type = "mcp"` timesheet target: a small MCP client (streamable HTTP, `initialize`, `tools/list`, `tools/call`), the five operations mapped onto tools, answers from `structuredContent` or JSON text, preview-then-confirm writes, `clockout connect mcp <url>` via MCP's authorization spec and `src/oauth.ts`; a mock MCP server in `test/` with the mock PMS's rules
+- [ ] `type = "mcp"` timesheet target: the five operations mapped onto a server's tools, preview-then-confirm writes; a mock MCP server with the mock PMS's rules
 - [ ] Settings operations for the MCP mapping, drafted from the server's `tools/list`; only mapped tools are ever called
-- [ ] `type = "command"` target and export: JSON over stdin/stdout, no shell, timeout, own process group; set by hand or on the command line only, refused from the chat bar; how to use it with a local stdio MCP server
