@@ -8,6 +8,7 @@ import {
   withExport,
   withoutExport,
   withSource,
+  withStandup,
   withTaskMapping,
 } from "./edit";
 import { type Config, configSchema, EXPORT_FIELDS, HOURS_FORMATS } from "./schema";
@@ -107,6 +108,29 @@ const descriptions = z
       .describe("Descriptions they wrote before, to match the style of; [] removes them"),
   })
   .describe("How the AI writes each timesheet row's description");
+const standup = z
+  .object({
+    op: z.literal("standup"),
+    format: z
+      .enum(["bullets", "prose"])
+      .optional()
+      .describe("bullets: a list per section; prose: a sentence or two per section"),
+    length: z
+      .enum(["short", "medium", "long"])
+      .optional()
+      .describe("short: up to 3 items of a few words; medium: up to 5 sentences; long: up to 8"),
+    instructions: z
+      .string()
+      .max(2000)
+      .optional()
+      .describe('Their own instructions, in their words; "" removes them'),
+    examples: z
+      .array(z.string().min(1).max(1000))
+      .max(3)
+      .optional()
+      .describe("Standups they wrote before, to match the style of; [] removes them"),
+  })
+  .describe("How the AI writes their standup");
 const projectRule = z
   .object({
     op: z.literal("project_rule"),
@@ -194,6 +218,7 @@ export const aiSettingOpSchema = z.discriminatedUnion("op", [
   taskNames,
   ai,
   descriptions,
+  standup,
   projectRule,
   removeProjectRule,
   exportFormat,
@@ -212,6 +237,7 @@ export const settingOpSchema = z.discriminatedUnion("op", [
   taskNames,
   ai,
   descriptions,
+  standup,
   projectRule,
   removeProjectRule,
   exportFormat,
@@ -300,6 +326,11 @@ export function applySettings(
       case "descriptions": {
         const { op: _, ...style } = op;
         next = withDescriptions(next, defined(style));
+        break;
+      }
+      case "standup": {
+        const { op: _, ...style } = op;
+        next = withStandup(next, defined(style));
         break;
       }
       case "project_rule": {
@@ -465,6 +496,23 @@ function describeSetting(op: SettingOp): string {
             : "no examples",
       ].filter(Boolean);
       return parts.length ? `Descriptions: ${parts.join(", ")}` : "No change to descriptions";
+    }
+    case "standup": {
+      const parts = [
+        op.format ? (op.format === "prose" ? "a sentence or two each" : "bullet points") : "",
+        op.length ? `${op.length} length` : "",
+        op.instructions === undefined
+          ? ""
+          : op.instructions.trim()
+            ? `follow “${op.instructions.trim()}”`
+            : "no instructions of your own",
+        op.examples === undefined
+          ? ""
+          : op.examples.length
+            ? `match ${op.examples.length} example${op.examples.length === 1 ? "" : "s"}`
+            : "no examples",
+      ].filter(Boolean);
+      return parts.length ? `Standup: ${parts.join(", ")}` : "No change to the standup";
     }
     case "project_rule": {
       const what = [

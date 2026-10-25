@@ -54,7 +54,10 @@ let env: Record<string, string>;
 beforeAll(async () => {
   sb = await sandbox();
   const contributions = await fixtureJson("github/contributions-2026-10-16.json");
-  github = await fakeServer(() => ({ json: contributions }));
+  const open = await fixtureJson("github/open-work.json");
+  github = await fakeServer((req) => ({
+    json: req.body.includes("query OpenWork") ? open : contributions,
+  }));
   env = { GITHUB_TOKEN: "test-token", GITHUB_GRAPHQL_URL: `${github.origin}/graphql` };
   await sb.writeConfig(await fixtureSourcesToml(sb, `\n[[sources]]\ntype = "github"\n${EXPORTS}`));
 });
@@ -214,3 +217,36 @@ describe("without an AI helper", () => {
 function row(project: string, task: string, hours: number, description: string): Row {
   return { date: DATE, project, task, hours, description };
 }
+
+describe("the standup", () => {
+  it("writes Monday's from Friday's saved day, your blockers as you gave them", async () => {
+    const r = await sb.run(
+      ["standup", "2026-10-19", "--no-ai", "-b", "Waiting on API keys", "-b", "Staging is down"],
+      { env },
+    );
+    expect(r.stderr).toBe("");
+    expect(r.code).toBe(0);
+    const [friday = "", today = "", blockers = ""] = r.stdout.trimEnd().split("\n\n");
+    expect(friday.split("\n")[0]).toBe("Friday");
+    expect(friday).toContain("- Fix auth token refresh (acme/api)");
+    expect(today.split("\n")[0]).toBe("Today");
+    expect(blockers).toBe("Blockers\n- Waiting on API keys\n- Staging is down");
+  });
+
+  it("adds what's still open on GitHub to today's", async () => {
+    const r = await sb.run(["standup", "--no-ai"], { env });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("- Follow up on PR #88 Rate limit the login endpoint (acme/api)");
+    expect(r.stdout).toContain(
+      "- Review PR #92 Dark mode for the dashboard (acme/web, sam-example)",
+    );
+    expect(r.stdout).not.toContain("\u001b");
+  });
+
+  it("refuses a day that hasn't happened yet", async () => {
+    const r = await sb.run(["standup", "2099-01-01", "--no-ai"], { env });
+    expect(r.code).toBe(1);
+    expect(r.stdout).toBe("");
+    expect(r.stderr).toMatch(/^clockout: 2099-01-01 hasn't happened yet/);
+  });
+});

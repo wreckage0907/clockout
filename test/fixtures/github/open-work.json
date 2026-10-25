@@ -1,0 +1,41 @@
+{
+  "data": {
+    "viewer": {
+      "open": {
+        "nodes": [
+          {
+            "number": 88,
+            "title": "Rate limit the login endpoint",
+            "isDraft": false,
+            "headRefName": "feat/login-rate-limit",
+            "repository": { "nameWithOwner": "acme/api" }
+          },
+          {
+            "number": 49,
+            "title": "Export to\u001b[31m CSV",
+            "isDraft": true,
+            "headRefName": "feat/export",
+            "repository": { "nameWithOwner": "dev-example/clockout" }
+          }
+        ]
+      },
+      "finished": {
+        "nodes": [
+          { "headRefName": "fix/auth-refresh", "repository": { "nameWithOwner": "acme/api" } },
+          { "headRefName": "chore/deps", "repository": { "nameWithOwner": "acme/api" } }
+        ]
+      }
+    },
+    "reviews": {
+      "nodes": [
+        {
+          "number": 92,
+          "title": "Dark mode for the dashboard",
+          "author": { "login": "sam-example" },
+          "repository": { "nameWithOwner": "acme/web" }
+        },
+        {}
+      ]
+    }
+  }
+}

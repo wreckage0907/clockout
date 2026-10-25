@@ -343,6 +343,19 @@ export const configSchema = z.object({
       examples: z.array(z.string().min(1).max(200)).max(5).optional(),
     })
     .prefault({}),
+  /** How the AI writes `clockout standup`. Without the AI, a plain template is used. */
+  standup: z
+    .object({
+      /** bullets: a list under Yesterday, Today, Blockers; prose: a sentence or two for each. */
+      format: z.enum(["bullets", "prose"]).default("bullets"),
+      /** short: up to 3 items, a few words; medium: up to 5, a sentence; long: up to 8. */
+      length: z.enum(["short", "medium", "long"]).default("short"),
+      /** Your own prompt, e.g. "mention ticket keys, leave out meetings". */
+      instructions: z.string().min(1).max(2000).optional(),
+      /** Standups you've written before; the AI matches their style. */
+      examples: z.array(z.string().min(1).max(1000)).max(3).optional(),
+    })
+    .prefault({}),
   sources: z.array(sourceConfig).default([]),
   projects: z.array(projectRule).default([]),
   /** MCP servers Clockout can sign in to and call ([ADR 0010](../../docs/adr/0010-mcp-as-source-and-destination.md)). */
@@ -374,6 +387,7 @@ export type SourceConfig = z.output<typeof sourceConfig>;
 export type TimesheetTarget = z.output<typeof timesheetTarget>;
 export type TaskMapping = z.output<typeof taskMapping>;
 export type DescriptionStyle = Config["descriptions"];
+export type StandupStyle = Config["standup"];
 
 export function durationMinutes(s: string): number {
   const m = durationPattern.exec(s);

@@ -12,6 +12,7 @@ import {
   withoutTaskMapping,
   withProject,
   withSource,
+  withStandup,
 } from "../config/edit";
 import { type Config, durationMinutes } from "../config/schema";
 import { FORMAT_WORDS, HELPER_NAMES } from "../config/setting-ops";
@@ -143,6 +144,8 @@ export function Setup({
   const [focus, setFocus] = useState<"nav" | "rows">("nav");
   const [sel, setSel] = useState(0);
   const [page, setPage] = useState<"claude" | "prompt" | null>(null);
+  /** Which prompt the prompt page edits. */
+  const [promptFor, setPromptFor] = useState<PromptFor>("descriptions");
   const [pick, setPick] = useState(0);
   const search = useDraft(page === "claude");
   const prompt = useDraft(page === "prompt");
@@ -277,8 +280,9 @@ export function Setup({
     if (search.edit(ch, key)) setPick(0);
   }
 
-  function openPrompt() {
-    prompt.setValue(config?.descriptions.instructions ?? "");
+  function openPrompt(which: PromptFor) {
+    setPromptFor(which);
+    prompt.setValue(config?.[which].instructions ?? "");
     setPage("prompt");
   }
 
@@ -287,7 +291,11 @@ export function Setup({
     const text = prompt.value.trim();
     if (text.length > PROMPT_MAX)
       return setError(`The prompt is ${text.length} characters; keep it to ${PROMPT_MAX}.`);
-    await save(withDescriptions(config, { instructions: text }));
+    await save(
+      promptFor === "standup"
+        ? withStandup(config, { instructions: text })
+        : withDescriptions(config, { instructions: text }),
+    );
     setPage(null);
   }
 
@@ -366,6 +374,7 @@ export function Setup({
         >
           {page === "prompt" ? (
             <PromptPage
+              kind={promptFor}
               width={paneWidth}
               value={prompt.value}
               onSave={() => void savePrompt()}
@@ -439,7 +448,7 @@ export function Setup({
       case "day":
         return "How the day is counted and rounded.";
       case "ai":
-        return "Writes the descriptions and reads what you type in the chat bar. It gets titles, branch names and commit subjects, never code or your prompts.";
+        return "Writes the descriptions and your standup, and reads what you type in the chat bar. It gets titles, branch names and commit subjects, never code or your prompts.";
       case "projects":
         return 'Projects you log time to, and rules that name your work. Add one below or say it in the chat bar: "add a project called Internal", "anything in acme/api is Acme Website", "leave out my dotfiles".';
       case "erp": {
@@ -707,7 +716,7 @@ export function Setup({
         dead: !on,
         value: c.descriptions.instructions ? clip(c.descriptions.instructions, 36) : "none",
         note: c.descriptions.instructions ? "" : "describe how they should read",
-        opens: openPrompt,
+        opens: () => openPrompt("descriptions"),
       },
       {
         id: "d-examples",
@@ -716,6 +725,42 @@ export function Setup({
           ? `${c.descriptions.examples.length} to match`
           : "none",
         note: 'say "write them like: …"',
+      },
+      {
+        id: "s-format",
+        group: "Standup",
+        label: "Reads as",
+        dead: !on,
+        options: (["bullets", "prose"] as const).map((f) => ({
+          label: f === "bullets" ? "Bullets" : "Sentences",
+          on: c.standup.format === f,
+          pick: () => void save(withStandup(c, { format: f })),
+        })),
+      },
+      {
+        id: "s-length",
+        label: "Length",
+        dead: !on,
+        options: (["short", "medium", "long"] as const).map((l) => ({
+          label: l[0]?.toUpperCase() + l.slice(1),
+          on: c.standup.length === l,
+          pick: () => void save(withStandup(c, { length: l })),
+        })),
+        note: { short: "up to 3 items", medium: "up to 5", long: "up to 8" }[c.standup.length],
+      },
+      {
+        id: "s-prompt",
+        label: "Prompt",
+        dead: !on,
+        value: c.standup.instructions ? clip(c.standup.instructions, 36) : "none",
+        note: c.standup.instructions ? "" : "how your standup should read",
+        opens: () => openPrompt("standup"),
+      },
+      {
+        id: "s-examples",
+        label: "Examples",
+        value: c.standup.examples?.length ? `${c.standup.examples.length} to match` : "none",
+        note: 'say "write my standup like: …"',
       },
     ];
   }
@@ -1047,12 +1092,33 @@ function clip(text: string, n: number): string {
  * Your own prompt for the descriptions, in your words: what they should say and how they
  * should read. Clockout's own rules (only facts from the evidence, plain text) still come first.
  */
+type PromptFor = "descriptions" | "standup";
+
+const PROMPT_PAGES: Record<PromptFor, { title: string; about: string; placeholder: string }> = {
+  descriptions: {
+    title: "Description prompt",
+    about:
+      "Describe how each row's description should read: who reads your timesheet, what to lead with, words to use or avoid. It goes to the AI with the titles and PRs; it still only states facts from them.",
+    placeholder:
+      "e.g. Lead with the ticket key from the branch. Write for a client who isn't technical: what changed for them, no jargon. Past tense.",
+  },
+  standup: {
+    title: "Standup prompt",
+    about:
+      "Describe how your standup should read: who listens, what to lead with, what to leave out. It goes to the AI with your timesheet rows, meetings and open PRs; blockers are only ever yours.",
+    placeholder:
+      "e.g. Lead with tickets moved forward, name the PR numbers, leave out routine meetings, first person.",
+  },
+};
+
 function PromptPage({
+  kind,
   width,
   value,
   onSave,
   onBack,
 }: {
+  kind: PromptFor;
   width: number;
   value: string;
   onSave: () => void;
@@ -1070,7 +1136,7 @@ function PromptPage({
         </Clickable>
         <Text color={T.faint}>/</Text>
         <Text color={T.text} bold>
-          Description prompt
+          {PROMPT_PAGES[kind].title}
         </Text>
         <Box flexGrow={1} />
         <Text color={over ? T.danger : T.faint}>
@@ -1079,17 +1145,12 @@ function PromptPage({
       </Box>
       <Box marginBottom={1} width={width}>
         <Text color={T.muted} wrap="wrap">
-          Describe how each row's description should read: who reads your timesheet, what to lead
-          with, words to use or avoid. It goes to the AI with the titles and PRs; it still only
-          states facts from them.
+          {PROMPT_PAGES[kind].about}
         </Text>
       </Box>
       <Box backgroundColor={T.element} paddingX={1} paddingY={1} width={width} minHeight={5}>
         <Text wrap="wrap">
-          <Typed
-            value={shown}
-            placeholder="e.g. Lead with the ticket key from the branch. Write for a client who isn't technical: what changed for them, no jargon. Past tense."
-          />
+          <Typed value={shown} placeholder={PROMPT_PAGES[kind].placeholder} />
         </Text>
       </Box>
       <Box marginTop={1} gap={1}>

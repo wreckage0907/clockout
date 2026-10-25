@@ -169,8 +169,8 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 ## Before release, day 2 (2026-10-26) — standups, Wispr Flow, destinations
 
-- [ ] Standups: `clockout standup [date]` and `/standup`. Yesterday from the previous working day's saved day (Friday on a Monday); today from today's calendar and unfinished work (open PRs, review requests, branches without a merged PR); blockers only from what you say, never guessed. Copied to the clipboard; can go to an export destination
-- [ ] `[standup]` style (format, length, instructions, examples) like `[descriptions]`: Setup's AI helper section and the chat bar. One AI call with titles and summaries only; a plain template without an AI helper
+- [x] Standups: `clockout standup [date]` and `/standup`. Yesterday from the previous working day's saved day (Friday on a Monday); today from today's calendar and unfinished work (open PRs, review requests, branches without a merged PR); blockers only from what you say, never guessed. Copied to the clipboard; sending it to an export destination comes with export destinations below
+- [x] `[standup]` style (format, length, instructions, examples) like `[descriptions]`: Setup's AI helper section and the chat bar. One AI call with titles and summaries only; a plain template without an AI helper
 - [ ] Wispr Flow source (ADR 0010): `clockout connect wispr`, recorded meetings for the range, a recording counts as attended for its recorded length, merged with its calendar event in core, summaries on screen only (never to the AI or an export); tests against the mock MCP server
 - [ ] Export destinations (ADR 0010): `to = { file, append }` (an Obsidian daily note, written directly) and `to = { mcp, tool, arguments }`; preview, then confirm; file paths never from the AI
 - [ ] `type = "command"` target and export: JSON over stdin/stdout, no shell, timeout, own process group; set by hand or on the command line only, refused from the chat bar; how to use it with a local stdio MCP server

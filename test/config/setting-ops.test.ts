@@ -206,6 +206,39 @@ describe("applySettings", () => {
   });
 });
 
+describe("standup style by chat", () => {
+  it("changes only what was said, and takes your own words back out", () => {
+    const r = applySettings(config, [
+      {
+        op: "standup",
+        format: "prose",
+        instructions: "Lead with tickets",
+        examples: ["Y: a. T: b."],
+      },
+    ]);
+    expect(r.errors).toEqual([]);
+    expect(r.config.standup).toEqual({
+      format: "prose",
+      length: "short",
+      instructions: "Lead with tickets",
+      examples: ["Y: a. T: b."],
+    });
+    const back = applySettings(r.config, [{ op: "standup", instructions: "", examples: [] }]);
+    expect(back.config.standup).toEqual({ format: "prose", length: "short" });
+    expect(
+      describeSettings([
+        { op: "standup", format: "bullets", length: "medium" },
+        { op: "standup", instructions: "Lead with tickets" },
+        { op: "standup" },
+      ]),
+    ).toEqual([
+      "Standup: bullet points, medium length",
+      "Standup: follow “Lead with tickets”",
+      "No change to the standup",
+    ]);
+  });
+});
+
 describe("export formats by chat", () => {
   const harvest: SettingOp = {
     op: "export_format",

@@ -12,6 +12,8 @@ export type Slash =
   /** A built-in format or one of yours from `[[exports]]`; none for the default. */
   | { name: "copy"; format?: string }
   | { name: "undo" }
+  /** Blockers are what you typed after it, split at semicolons. */
+  | { name: "standup"; blockers: string[] }
   | { name: "add" }
   | { name: "date"; date: string }
   | { name: "setup"; section?: SetupSection }
@@ -39,6 +41,11 @@ export const COMMANDS: SlashCommand[] = [
   { name: "send", about: "Send the day to your ERP", key: "ctrl+s" },
   { name: "copy", args: "[md | csv | your export]", about: "Copy the timesheet", key: "ctrl+y" },
   { name: "undo", about: "Undo the last change", key: "ctrl+z" },
+  {
+    name: "standup",
+    args: "[blockers]",
+    about: "Copy your standup; anything after it is a blocker",
+  },
   { name: "add", about: "Add time nothing recorded" },
   { name: "today", about: "Go to today" },
   { name: "yesterday", about: "Go to yesterday" },
@@ -106,6 +113,17 @@ export function parseSlash(
       return none({ name: "send" });
     case "undo":
       return none({ name: "undo" });
+    case "standup":
+      return {
+        ok: {
+          name: "standup",
+          blockers: args
+            .join(" ")
+            .split(";")
+            .map((b) => b.trim())
+            .filter(Boolean),
+        },
+      };
     case "add":
       return none({ name: "add" });
     case "problems":

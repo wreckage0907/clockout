@@ -29,6 +29,7 @@ import { gitHubStatus } from "../sources/github/token";
 import { connectGoogle, googleClient } from "../sources/google-calendar/oauth";
 import { opencode } from "../sources/opencode";
 import { pi } from "../sources/pi";
+import { buildStandup } from "../standup";
 import { openTarget } from "../targets";
 import type { Target } from "../targets/types";
 import { App, type AppActions, type SendActions } from "./App";
@@ -193,6 +194,15 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
     commit: (stored, ops, text) => commitEdits(stored, ops, config, store, text),
     undo: (stored) => undoEdit(stored, store),
     copy: (text) => clipboard.write(text),
+    async standup(blockers) {
+      const today = localDate(new Date(), config.me.timezone);
+      const { text, warnings } = await buildStandup(today, today, config, store, {
+        blockers,
+        ai,
+        log: logError,
+      });
+      return { text, warnings };
+    },
     savedDates: () => store.dates(),
     async moreProjects(date) {
       // Newest first: what you worked on lately comes before what you did a month ago.

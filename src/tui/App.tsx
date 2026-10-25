@@ -71,6 +71,8 @@ export interface AppActions {
   ): Promise<{ stored: StoredDay; errors: string[] }>;
   undo(stored: StoredDay): Promise<StoredDay | null>;
   copy(text: string): Promise<void>;
+  /** Today's standup, with what couldn't be read; blockers only from what you typed. */
+  standup(blockers: string[]): Promise<{ text: string; warnings: string[] }>;
   /** Dates with a saved day, for the date picker. */
   savedDates(): Promise<string[]>;
   /** Projects from other days and the ERP, for adding time by hand. */
@@ -394,6 +396,17 @@ export function App({
       showToast("Couldn't reach the clipboard. Use `clockout export` instead.");
     }
   };
+  /** Writes today's standup and copies it. */
+  const standup = async (blockers: string[]) => {
+    showToast("Writing your standup…");
+    try {
+      const { text, warnings } = await actions.standup(blockers);
+      await actions.copy(text);
+      showToast(`✓ Standup copied${warnings[0] ? ` · ${warnings[0]}` : ""}`);
+    } catch (err) {
+      showToast(`Couldn't copy the standup: ${(err as Error).message}`);
+    }
+  };
   /** Checks the ERP and shows what sending would change; asks for a task first where needed. */
   const erp = actions.send;
   const startSend = async (current = stored) => {
@@ -617,6 +630,7 @@ export function App({
     if (s.name === "refresh") return askRebuild();
     if (s.name === "undo") return void undo();
     if (s.name === "copy") return void copy(s.format);
+    if (s.name === "standup") return void standup(s.blockers);
     if (s.name === "add") return day ? setOverlay("add") : undefined;
     if (s.name === "send") {
       if (!erp) return showToast("Sign in to your ERP first: /connect erp <address>");

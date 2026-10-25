@@ -57,6 +57,7 @@ export function fakeActions(
     refreshes: 0,
     commits: [] as { ops: EditOp[]; text?: string }[],
     copied: [] as string[],
+    standups: [] as string[][],
     saved: [] as unknown[],
     mapped: [] as TaskMapping[],
     configured: [] as SettingOp[][],
@@ -132,6 +133,13 @@ export function fakeActions(
     },
     copy: async (t) => {
       calls.copied.push(t);
+    },
+    standup: async (blockers) => {
+      calls.standups.push(blockers);
+      return {
+        text: `Yesterday\n- Fix auth token refresh\n\nToday\n- Design sync 15:00\n\nBlockers\n${blockers.map((b) => `- ${b}`).join("\n") || "- None"}`,
+        warnings: [],
+      };
     },
     savedDates: async () => [FIXTURE_DATE],
     ...(erp

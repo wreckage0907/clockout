@@ -54,6 +54,14 @@ export function withDescriptions(config: Config, change: Partial<Config["descrip
   return { ...config, descriptions: next };
 }
 
+/** Changes how standups are written; an empty `instructions` or `examples` removes them. */
+export function withStandup(config: Config, change: Partial<Config["standup"]>): Config {
+  const next = { ...config.standup, ...change };
+  if (!next.instructions?.trim()) delete next.instructions;
+  if (!next.examples?.length) delete next.examples;
+  return { ...config, standup: next };
+}
+
 /** 450 → "7h30m", the duration format config.toml uses. */
 export function durationText(minutes: number): string {
   const h = Math.floor(minutes / 60);

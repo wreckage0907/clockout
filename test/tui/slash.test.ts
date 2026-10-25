@@ -77,6 +77,15 @@ describe("parseSlash", () => {
     expect(error("/copy pdf")).toBe("Copy as md or csv, or leave it out for rows to paste.");
   });
 
+  it("writes the standup, with what follows it as blockers", () => {
+    expect(ok("/standup")).toEqual({ name: "standup", blockers: [] });
+    expect(ok("/standup Waiting on API keys; staging is down")).toEqual({
+      name: "standup",
+      blockers: ["Waiting on API keys", "staging is down"],
+    });
+    expect(ok("Slash standup.")).toEqual({ name: "standup", blockers: [] });
+  });
+
   it("copies as one of your own exports", () => {
     const exports = ["harvest", "slack"];
     expect(parseSlash("/copy harvest", TODAY, exports)).toEqual({

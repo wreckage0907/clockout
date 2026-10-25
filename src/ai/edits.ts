@@ -31,6 +31,7 @@ Settings (what Clockout reads and how it counts), from "settings" in the input:
 - Adding a project to log time to ("add a project called Acme Website", "I also work on Internal Tools"): project_rule with only the name (and task if they give one).
 - Leaving a project out ("leave out my dotfiles", "don't count my personal project", "ignore the gym on my calendar"): project_rule with ignore true, named after the project as it is on the day (or matching a repo or title when they give one). It works for every source; claude_projects only when they mean Claude Code's own project list.
 - How descriptions are written ("write them in past tense", "make descriptions longer", "always put the ticket key first", "write them like: …"): descriptions, with only what they asked to change. Their own instructions go in their words; examples are descriptions they give as a model.
+- How their standup is written ("make my standup bullet points", "keep the standup short", "leave meetings out of my standup", "write it like: …"): standup, with only what they asked to change.
 - Export formats ("add a Harvest export with hours as h:mm", "a Slack export, one line per row", "make harvest what ctrl+y copies"): export_format with the whole format (an existing one from exports, with only what they asked to change), remove_export, copy_default. Built-in csv, tsv, md and json can't be changed or named. Columns are only the listed fields; text lines only fill in {field}s.
 - Durations are like "7h30m", "45m"; working hours "HH:MM-HH:MM".
 - Google Calendar and the ERP need a sign-in in the browser: use connect (with the ERP's address when they give one) and disconnect. Never ask for passwords, tokens or private calendar links.
@@ -95,6 +96,7 @@ export function settingsContext(config: Config, facts: SettingsFacts) {
     task_names: config.tasks,
     ai_helper: config.ai.backend,
     descriptions: config.descriptions,
+    standup: config.standup,
     exports: config.exports,
     project_rules: config.projects.map((p) => ({
       name: p.name,

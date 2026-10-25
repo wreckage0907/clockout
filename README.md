@@ -139,7 +139,8 @@
 | **2** | **Open the day** | Press Enter to expand the timesheet cards. Move with **↑ ↓**, edit a duration with **Enter**, and nudge it with **− / +**. Click checkboxes or press **Space** to select several; **Shift-click** (or **Option-click**, e.g. inside herdr) a card to tick it, or a range once one is ticked. |
 | **3** | **Say what is wrong** | Type or dictate a correction. Review the proposed operations, **Enter** to apply, **Esc** to revise, **Ctrl+Z** to undo. |
 | **4** | **Take the sheet** | **Ctrl+Y** copies tab-separated rows (or your default export), or only the checked rows when any are selected; `/copy md`, `/copy csv` or `/copy <your export>` copy another format. The selection toolbar can also map or remove several cards together. Use `export` for a file, another format or a range of dates. |
-| **5** | **Pick another day** | Run `yesterday` or `day 2026-10-16`; in the review screen, click the date or use **PgUp / PgDn**. |
+| **5** | **Say your standup** | `clockout standup` (or `/standup` in the app) writes it from the previous working day, today's meetings and your open PRs, and copies it. Blockers are only what you add: `-b "waiting on API keys"` or `/standup waiting on API keys`. |
+| **6** | **Pick another day** | Run `yesterday` or `day 2026-10-16`; in the review screen, click the date or use **PgUp / PgDn**. |
 
 **One command, a finished sheet**
 
@@ -207,6 +208,33 @@ called Internal") are offered whenever you add time; so are recent days' and you
 rules separate development, reviews and meetings. Rows are rounded to your configured step,
 unconfirmed meetings and breaks are left out, and repeated exports merge the same work.
 Configuration lives in `~/.config/clockout/config.toml`; **Ctrl+P** opens setup in the app.
+
+</samp>
+</details>
+
+<details>
+<summary><b>🗣️ Standups from the same evidence</b></summary>
+<br>
+<samp>
+
+```text
+Friday
+- Scoped project ToDo access and opened PR #2308
+- Built /refresh and /connect slash commands in clockout
+
+Today
+- Review PR #2214 docs: update readme
+- Continue PR #2308 project ToDo access
+
+Blockers
+- Waiting on the npm publisher setup
+```
+
+Yesterday is the previous working day's timesheet with your corrections (Friday on a Monday).
+Today is your calendar plus what's still open on GitHub: your PRs, reviews asked of you, and
+branches with no PR yet. Blockers are never guessed and never sent to the AI. Without an AI
+helper (or with `--no-ai`) a plain template lists the same facts. Choose bullets or sentences,
+a length and your own prompt in Setup → AI helper → Standup, or say "keep my standup short".
 
 </samp>
 </details>

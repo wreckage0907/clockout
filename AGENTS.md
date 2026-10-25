@@ -45,7 +45,7 @@ src/cli.ts        entry; checks the Node version, then loads main.ts
 src/main.ts       wires commander to commands/
 src/commands/     one file per subcommand; thin
 src/core/         domain logic. No IO, no Ink, no process access.
-src/sources/      one folder per source; each only emits Activity records
+src/sources/      one folder per source; each only emits Activity records (GitHub's open-work.ts also answers what's still open, for standups)
 src/ai/           LlmBackend interface + backends; prompts and output schemas
 src/tui/          Ink components. Render state; never fetch.
 src/export/       formatters for clipboard, Markdown, CSV
@@ -55,6 +55,7 @@ src/collect.ts    runs sources for a day, builds and saves it (openDay)
 src/corrections.ts applies edits to a stored day with undo
 src/targets/      timesheet systems the day is sent to (next-pms, http); read and write entries only
 src/push.ts       plans and applies sending a day to a target, keeps the record of what was sent
+src/standup.ts    gathers a standup's facts (previous working day, today's calendar, open GitHub work) and writes it
 src/mcp/          MCP client (streamable HTTP) and its sign-in; calls only tools named in config or code
 src/oauth.ts      loopback + PKCE, discovery and registration for browser sign-ins
 src/log.ts        local error log: full details behind the one-line messages, tokens redacted

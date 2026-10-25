@@ -278,6 +278,16 @@ describe("day view", () => {
     expect(calls.copied).toHaveLength(2);
   });
 
+  it("/standup copies the standup, with what you typed after it as blockers", async () => {
+    const { ui, calls } = await openDay();
+    ui.stdin.write("/standup waiting on API keys");
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Standup copied");
+    expect(calls.standups).toEqual([["waiting on API keys"]]);
+    expect(calls.copied[0]).toContain("Blockers\n- waiting on API keys");
+  });
+
   it("sends a sentence to the AI, shows the proposal, and applies it with Enter", async () => {
     const { ui, calls } = await openDay({
       parse: async () => ({
@@ -809,6 +819,23 @@ describe("setup", () => {
     expect(lastSaved(calls)?.descriptions.instructions).toBe(
       "Lead with the ticket key. Write for a client, no jargon.",
     );
+  });
+
+  it("writes a standup prompt on its own page, under Standup", async () => {
+    const { ui, calls } = await openSetup();
+    await down(ui, 2); // AI helper
+    await until(ui.lastFrame, "how your standup should read");
+    ui.stdin.write(RIGHT); // Helper
+    await tick();
+    await down(ui, 7); // Starts with, Length, Prompt, Examples, Reads as, Length, Prompt
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Standup prompt");
+    ui.stdin.write(PASTE("Lead with tickets moved forward."));
+    await tick();
+    ui.stdin.write("\r");
+    for (let i = 0; i < 50 && !lastSaved(calls)?.standup.instructions; i++) await tick();
+    expect(lastSaved(calls)?.standup.instructions).toBe("Lead with tickets moved forward.");
+    expect(lastSaved(calls)?.descriptions.instructions).toBeUndefined();
   });
 
   it("won't save a description prompt longer than config.toml takes", async () => {

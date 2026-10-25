@@ -6,6 +6,7 @@ import { runEdit, runUndo } from "./commands/edit";
 import { runExport } from "./commands/export";
 import { runInit } from "./commands/init";
 import { runPush } from "./commands/push";
+import { runStandup } from "./commands/standup";
 import { tildify } from "./config/paths";
 import { errorLogPath, isBug, logError } from "./log";
 
@@ -66,6 +67,19 @@ program
   .option("-y, --yes", "send without asking")
   .option("--no-ai", "use session and PR titles instead of AI summaries")
   .action((date, opts) => runPush(date, opts));
+
+program
+  .command("standup")
+  .argument("[date]", "the standup's day: today, yesterday, -N or YYYY-MM-DD (default: today)")
+  .description("Write your standup: the previous working day, today's meetings and open work")
+  .option(
+    "-b, --blocker <text>",
+    "something in your way, as you'd say it (repeat for more)",
+    (v: string, all: string[] = []) => [...all, v],
+  )
+  .option("--no-ai", "use the plain template instead of the AI helper")
+  .option("--no-copy", "only print it, don't copy it to the clipboard")
+  .action((date, opts) => runStandup(date, opts));
 
 program
   .command("connect")
