@@ -9,13 +9,7 @@ import { describeEdits, placeTimeOps } from "../core/edits";
 import { addTimeProjects } from "../core/projects";
 import { changes, mappingFor, type PushPlan, type PushRow } from "../core/push";
 import { addDays, parseDuration } from "../core/time";
-import {
-  removeRowOps,
-  rowKey,
-  sendRowOps,
-  setRowMinutesOps,
-  timesheetRows,
-} from "../core/timesheet";
+import { removeRowOps, rowKey, sendRowOps, setRowMinutesOps } from "../core/timesheet";
 import type { Day, EditOp } from "../core/types";
 import { copyDefault, type ExportChoice, findExport, render, rowsFor } from "../export/named";
 import type { PushResult } from "../push";
