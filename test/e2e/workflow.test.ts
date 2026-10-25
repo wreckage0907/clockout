@@ -29,6 +29,24 @@ interface DayJson {
   rows: Row[];
 }
 
+const EXPORTS = `
+[[exports]]
+name = "harvest"
+type = "csv"
+columns = [
+  { field = "date", header = "Date", format = "dd/MM/yyyy" },
+  { field = "project", header = "Client project" },
+  { field = "hours", header = "Time", format = "h:mm" },
+]
+
+[[exports]]
+name = "slack"
+type = "text"
+merge = false
+line = "{project}: {description} ({hours})"
+columns = [{ field = "hours", format = "hm" }]
+`;
+
 let sb: Sandbox;
 let github: Awaited<ReturnType<typeof fakeServer>>;
 let env: Record<string, string>;
@@ -38,7 +56,7 @@ beforeAll(async () => {
   const contributions = await fixtureJson("github/contributions-2026-10-16.json");
   github = await fakeServer(() => ({ json: contributions }));
   env = { GITHUB_TOKEN: "test-token", GITHUB_GRAPHQL_URL: `${github.origin}/graphql` };
-  await sb.writeConfig(await fixtureSourcesToml(sb, '\n[[sources]]\ntype = "github"\n'));
+  await sb.writeConfig(await fixtureSourcesToml(sb, `\n[[sources]]\ntype = "github"\n${EXPORTS}`));
 });
 afterAll(() => github.close());
 
@@ -134,6 +152,23 @@ describe("exporting the saved day", () => {
     const tsv = await sb.run(["export", DATE, "-f", "tsv", "--no-ai"], { env });
     expect(tsv.stdout.trimEnd().split("\n")[1]).toBe(
       "2026-10-16\tacme/api\tDevelopment\t1.25\tFix auth token refresh",
+    );
+  });
+
+  it("writes your own formats from [[exports]], and names them when one is unknown", async () => {
+    const harvest = await sb.run(["export", DATE, "-f", "harvest", "--no-ai"], { env });
+    expect(harvest.code).toBe(0);
+    const lines = harvest.stdout.split("\r\n");
+    expect(lines.slice(0, 2)).toEqual(["Date,Client project,Time", "16/10/2026,Meetings,0:30"]);
+
+    const slack = await sb.run(["export", DATE, "-f", "slack", "--no-ai"], { env });
+    expect(slack.stdout.split("\n")[0]).toBe("Meetings: Daily standup (30m)");
+
+    const unknown = await sb.run(["export", DATE, "-f", "jira", "--no-ai"], { env });
+    expect(unknown.code).toBe(1);
+    expect(unknown.stdout).toBe("");
+    expect(unknown.stderr.trim()).toBe(
+      'clockout: Unknown format "jira". Use csv, md, tsv, json, harvest, slack.',
     );
   });
 

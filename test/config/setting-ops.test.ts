@@ -1,4 +1,6 @@
+import { stringify } from "smol-toml";
 import { describe, expect, it } from "vitest";
+import { parseConfig } from "../../src/config/load";
 import { configSchema } from "../../src/config/schema";
 import {
   aiSettingOpSchema,
@@ -201,6 +203,114 @@ describe("applySettings", () => {
       { project: "acme/api", erp_task: "TASK-1", label: "Hackathon" },
     ]);
     expect(applySettings(config, [op]).errors[0]).toMatch(/Connect your ERP first/);
+  });
+});
+
+describe("export formats by chat", () => {
+  const harvest: SettingOp = {
+    op: "export_format",
+    name: "Harvest",
+    type: "csv",
+    columns: [
+      { field: "date", header: "Date", format: "dd/MM/yyyy" },
+      { field: "hours", header: "Time", format: "h:mm" },
+      { field: "description", header: "Notes" },
+    ],
+  };
+
+  it("adds one, named in lowercase, merged by default", () => {
+    const r = applySettings(config, [harvest]);
+    expect(r.errors).toEqual([]);
+    expect(r.config.exports).toEqual([
+      {
+        name: "harvest",
+        type: "csv",
+        merge: true,
+        columns: [
+          { field: "date", header: "Date", format: "dd/MM/yyyy" },
+          { field: "hours", header: "Time", format: "h:mm" },
+          { field: "description", header: "Notes" },
+        ],
+      },
+    ]);
+  });
+
+  it("saves to config.toml and reads back the same", () => {
+    const r = applySettings(config, [harvest, { op: "export_format", name: "plain", type: "tsv" }]);
+    expect(r.config.exports[1]).toEqual({ name: "plain", type: "tsv", merge: true });
+    const text = stringify(r.config);
+    expect(text).toContain("[[exports]]");
+    expect(parseConfig(text).exports).toEqual(r.config.exports);
+  });
+
+  it("replaces one by name, and a new default takes over", () => {
+    const first = applySettings(config, [
+      harvest,
+      {
+        op: "export_format",
+        name: "slack",
+        type: "text",
+        line: "{project}: {description}",
+        default: true,
+      },
+    ]).config;
+    const r = applySettings(first, [{ ...harvest, default: true } as SettingOp]);
+    expect(r.errors).toEqual([]);
+    expect(r.config.exports.map((e) => [e.name, e.default ?? false])).toEqual([
+      ["slack", false],
+      ["harvest", true],
+    ]);
+    expect(r.config.exports[0]).not.toHaveProperty("default");
+  });
+
+  it("checks a format like config.toml", () => {
+    const r = applySettings(config, [
+      { op: "export_format", name: "csv", type: "text", line: "{client}" },
+    ]);
+    expect(r.errors).toEqual([
+      "exports.0.name: csv, tsv, md, markdown, json are built in; choose another name",
+      "exports.0.line: {client} isn't a field; use {date} {project} {task} {hours} {description} {erp_task} {erp_task_name}",
+    ]);
+  });
+
+  it("sets what Ctrl+Y copies, and removes one", () => {
+    const added = applySettings(config, [harvest]).config;
+    expect(
+      applySettings(added, [{ op: "copy_default", name: "harvest" }]).config.exports[0]?.default,
+    ).toBe(true);
+    expect(applySettings(added, [{ op: "copy_default", name: "md" }]).errors).toEqual([
+      "There's no export called “md”. Add one first (built-in formats can't be the default).",
+    ]);
+    expect(applySettings(added, [{ op: "remove_export", name: "Harvest" }]).config.exports).toEqual(
+      [],
+    );
+    expect(applySettings(added, [{ op: "remove_export", name: "jira" }]).errors).toEqual([
+      "There's no export called “jira”.",
+    ]);
+  });
+
+  it("says each change in a line", () => {
+    expect(
+      describeSettings([
+        harvest,
+        {
+          op: "export_format",
+          name: "slack",
+          type: "text",
+          line: "{project}: {description}",
+          merge: false,
+        },
+        { op: "copy_default", name: "harvest" },
+        { op: "copy_default", name: "" },
+        { op: "remove_export", name: "slack" },
+      ]),
+    ).toEqual([
+      "Export harvest: CSV with Date (dd/MM/yyyy), Time (h:mm), Notes",
+      "Export slack: lines like “{project}: {description}” · one row per block",
+      "Ctrl+Y copies as harvest",
+      "Ctrl+Y copies rows to paste",
+      "Remove the export slack",
+    ]);
   });
 });
 

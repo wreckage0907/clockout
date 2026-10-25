@@ -49,6 +49,20 @@ export function timesheetRows(day: Day, config: Config): TimesheetRow[] {
   }));
 }
 
+/** One row per block of time, in time order, for an export that doesn't merge the same work. */
+export function blockRows(day: Day, config: Config): TimesheetRow[] {
+  return countedBlocks(day)
+    .toSorted((a, b) => a.start.getTime() - b.start.getTime())
+    .map((b) => ({
+      date: day.date,
+      project: b.project,
+      task: b.task,
+      hours: blockHours(b, config),
+      description: b.summary,
+      ...(b.sendTo ? { sendTo: b.sendTo } : {}),
+    }));
+}
+
 /**
  * Edits that make a timesheet row count `minutes`: the first block carries the length, the
  * rest count zero. Times don't move.

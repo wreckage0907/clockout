@@ -180,6 +180,112 @@ export type McpServer = z.output<typeof mcpServer>;
 
 export const timesheetTarget = z.discriminatedUnion("type", [nextPmsTarget, httpTarget]);
 
+/** Names the built-in export formats use; an `[[exports]]` name can't take them. */
+export const BUILT_IN_FORMATS = ["csv", "tsv", "md", "markdown", "json"] as const;
+
+/** What a timesheet row offers an export. The ERP task is the row's own pick or its mapping. */
+export const EXPORT_FIELDS = [
+  "date",
+  "project",
+  "task",
+  "hours",
+  "description",
+  "erp_task",
+  "erp_task_name",
+] as const;
+export type ExportField = (typeof EXPORT_FIELDS)[number];
+
+/** decimal: 1.25 · h:mm: 1:15 · minutes: 75 · hm: 1h 15m */
+export const HOURS_FORMATS = ["decimal", "h:mm", "minutes", "hm"] as const;
+
+/** Date pattern tokens: yyyy yy MMMM MMM MM M dd d EEEE EEE; anything else is kept as it is. */
+export const DATE_TOKENS = /yyyy|yy|MMMM|MMM|MM|M|dd|d|EEEE|EEE/g;
+
+const exportColumn = z
+  .object({
+    field: z.enum(EXPORT_FIELDS),
+    /** The column's title; the field's name when left out. */
+    header: z.string().max(80).optional(),
+    /** Dates: a pattern like "dd/MM/yyyy". Hours: decimal, h:mm, minutes or hm. */
+    format: z.string().min(1).max(40).optional(),
+    /** Hours as decimal: places after the point (0–4, default 2). */
+    decimals: z.number().int().min(0).max(4).optional(),
+  })
+  .superRefine((c, ctx) => {
+    if (c.format === undefined) {
+      if (c.decimals !== undefined && c.field !== "hours")
+        ctx.addIssue({ code: "custom", message: "decimals is only for hours" });
+      return;
+    }
+    if (c.field === "hours") {
+      if (!(HOURS_FORMATS as readonly string[]).includes(c.format))
+        ctx.addIssue({
+          code: "custom",
+          path: ["format"],
+          message: `hours are ${HOURS_FORMATS.join(", ")}`,
+        });
+      else if (c.decimals !== undefined && c.format !== "decimal")
+        ctx.addIssue({ code: "custom", message: "decimals is only for hours as decimal" });
+    } else if (c.field === "date") {
+      if (!c.format.match(DATE_TOKENS))
+        ctx.addIssue({
+          code: "custom",
+          path: ["format"],
+          message: 'use a date pattern like "dd/MM/yyyy" or "yyyy-MM-dd"',
+        });
+    } else
+      ctx.addIssue({
+        code: "custom",
+        path: ["format"],
+        message: "only dates and hours have a format",
+      });
+  });
+
+const LINE_FIELD = /\{([^{}]*)\}/g;
+
+/**
+ * Your own export format ([ADR 0009](../../docs/adr/0009-change-clockout-through-config.md)):
+ * named columns, or for text a line per row with `{field}`s filled in. Nothing is evaluated.
+ */
+export const exportFormat = z
+  .object({
+    /** How you ask for it: `clockout export -f harvest`, `/copy harvest`. */
+    name: z
+      .string()
+      .regex(/^[a-z][a-z0-9-]{0,31}$/, "use a short lowercase name, e.g. harvest")
+      .refine(
+        (n) => !(BUILT_IN_FORMATS as readonly string[]).includes(n),
+        `${BUILT_IN_FORMATS.join(", ")} are built in; choose another name`,
+      ),
+    type: z.enum(["csv", "tsv", "markdown", "json", "text"]),
+    /** The same work in one row (true), or one row per block of time. */
+    merge: z.boolean().default(true),
+    /** Leave out for date, project, task, hours, description. A text export uses only their formats. */
+    columns: z.array(exportColumn).min(1).max(20).optional(),
+    /** Text exports: one line per row, e.g. "{project}: {description} ({hours})". */
+    line: z.string().min(1).max(500).optional(),
+    /** What Ctrl+Y, Copy sheet and a bare /copy use. */
+    default: z.boolean().optional(),
+  })
+  .superRefine((e, ctx) => {
+    if (e.type === "text" && !e.line)
+      ctx.addIssue({
+        code: "custom",
+        path: ["line"],
+        message: 'a text export needs a line, e.g. "{project}: {description} ({hours})"',
+      });
+    if (e.type !== "text" && e.line)
+      ctx.addIssue({ code: "custom", path: ["line"], message: "line is only for text exports" });
+    for (const [, f] of e.line?.matchAll(LINE_FIELD) ?? [])
+      if (!(EXPORT_FIELDS as readonly string[]).includes(f ?? ""))
+        ctx.addIssue({
+          code: "custom",
+          path: ["line"],
+          message: `{${f}} isn't a field; use ${EXPORT_FIELDS.map((x) => `{${x}}`).join(" ")}`,
+        });
+  });
+export type ExportFormat = z.output<typeof exportFormat>;
+
 export const configSchema = z.object({
   me: z.object({
     name: z.string().min(1),
@@ -249,6 +355,15 @@ export const configSchema = z.object({
     .default([]),
   /** Where `clockout push` sends the day. Connect with `clockout connect erp <url>`. */
   timesheet: timesheetTarget.optional(),
+  /** Your own export formats, next to the built-in csv, tsv, md and json. */
+  exports: z
+    .array(exportFormat)
+    .refine(
+      (all) => new Set(all.map((e) => e.name)).size === all.length,
+      "each export needs its own name",
+    )
+    .refine((all) => all.filter((e) => e.default).length <= 1, "only one export can be the default")
+    .default([]),
 });
 
 /** Config as written in config.toml (defaults optional). */

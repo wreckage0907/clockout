@@ -2,12 +2,15 @@ import { z } from "zod";
 import {
   withAi,
   withClaudeExclude,
+  withCopyDefault,
   withDay,
   withDescriptions,
+  withExport,
+  withoutExport,
   withSource,
   withTaskMapping,
 } from "./edit";
-import { type Config, configSchema } from "./schema";
+import { type Config, configSchema, EXPORT_FIELDS, HOURS_FORMATS } from "./schema";
 
 // Settings changes said in the chat bar. The AI returns these operations; it never writes the
 // config. They're applied here (pure), then the whole config is validated like config.toml is.
@@ -125,6 +128,52 @@ const projectRule = z
 const removeProjectRule = z
   .object({ op: z.literal("remove_project_rule"), name: z.string().min(1) })
   .describe("Remove the project (and its rules) with this name");
+const exportFormat = z
+  .object({
+    op: z.literal("export_format"),
+    name: z
+      .string()
+      .min(1)
+      .describe('Short lowercase name, e.g. "harvest"; not csv, tsv, md, json'),
+    type: z.enum(["csv", "tsv", "markdown", "json", "text"]),
+    merge: z
+      .boolean()
+      .optional()
+      .describe("false for one row per block of time; leave out to merge the same work"),
+    columns: z
+      .array(
+        z.object({
+          field: z.enum(EXPORT_FIELDS),
+          header: z.string().optional().describe("The column's title, as they name it"),
+          format: z
+            .string()
+            .optional()
+            .describe(
+              `Dates: a pattern of yyyy yy MMMM MMM MM M dd d EEEE EEE, e.g. "dd/MM/yyyy". Hours: ${HOURS_FORMATS.join(", ")} (hm is "1h 15m")`,
+            ),
+          decimals: z.number().int().optional().describe("Hours as decimal: places, 0–4"),
+        }),
+      )
+      .optional()
+      .describe("In order; leave out for date, project, task, hours, description"),
+    line: z
+      .string()
+      .optional()
+      .describe('Text only: one line per row, e.g. "{project}: {description} ({hours})"'),
+    default: z.boolean().optional().describe("What Ctrl+Y and a bare /copy use"),
+  })
+  .describe(
+    "Add an export format, or replace the one with this name (send it whole, with what they asked to change)",
+  );
+const removeExport = z
+  .object({ op: z.literal("remove_export"), name: z.string().min(1) })
+  .describe("Remove the export format with this name");
+const copyDefault = z
+  .object({
+    op: z.literal("copy_default"),
+    name: z.string().describe('One of their exports, or "" for rows to paste'),
+  })
+  .describe("What Ctrl+Y and a bare /copy copy as");
 const connect = z
   .object({
     op: z.literal("connect"),
@@ -147,6 +196,9 @@ export const aiSettingOpSchema = z.discriminatedUnion("op", [
   descriptions,
   projectRule,
   removeProjectRule,
+  exportFormat,
+  removeExport,
+  copyDefault,
   connect,
   disconnect,
   erpTask,
@@ -162,6 +214,9 @@ export const settingOpSchema = z.discriminatedUnion("op", [
   descriptions,
   projectRule,
   removeProjectRule,
+  exportFormat,
+  removeExport,
+  copyDefault,
   connect,
   disconnect,
   erpTask.extend({
@@ -270,6 +325,35 @@ export function applySettings(
         if (left.length === next.projects.length)
           errors.push(`There's no project rule called “${op.name}”.`);
         next = { ...next, projects: left };
+        break;
+      }
+      case "export_format": {
+        const { op: _, name, type, columns, ...rest } = op;
+        next = withExport(next, {
+          ...defined(rest),
+          name: name.trim().toLowerCase(),
+          type,
+          // TOML has no undefined: leave out what wasn't said.
+          ...(columns
+            ? { columns: columns.map(({ field, ...c }) => ({ field, ...defined(c) })) }
+            : {}),
+        });
+        break;
+      }
+      case "remove_export":
+        if (!next.exports.some((e) => same(e.name, op.name)))
+          errors.push(`There's no export called “${op.name}”.`);
+        next = withoutExport(next, op.name.trim().toLowerCase());
+        break;
+      case "copy_default": {
+        const name = op.name.trim().toLowerCase();
+        if (name && !next.exports.some((e) => e.name === name)) {
+          errors.push(
+            `There's no export called “${op.name}”. Add one first (built-in formats can't be the default).`,
+          );
+          break;
+        }
+        next = withCopyDefault(next, name || undefined);
         break;
       }
       case "calendar_feed":
@@ -394,6 +478,14 @@ function describeSetting(op: SettingOp): string {
     }
     case "remove_project_rule":
       return `Remove the project ${op.name}`;
+    case "export_format":
+      return describeExport(op);
+    case "remove_export":
+      return `Remove the export ${op.name}`;
+    case "copy_default":
+      return op.name.trim()
+        ? `Ctrl+Y copies as ${op.name.trim().toLowerCase()}`
+        : "Ctrl+Y copies rows to paste";
     case "calendar_feed":
       return "Read your calendar from its private link (kept on this machine)";
     case "connect":
@@ -409,6 +501,25 @@ function describeSetting(op: SettingOp): string {
         ? `Send ${op.project}${op.task ? ` · ${op.task}` : ""} rows to ${op.label ?? op.erp_task}`
         : `Pick the ERP task for ${op.project}${op.task ? ` · ${op.task}` : ""} (searching “${op.search}”)`;
   }
+}
+
+const TYPE_NAMES = { csv: "CSV", tsv: "TSV", markdown: "Markdown", json: "JSON", text: "Text" };
+
+/** "Export harvest: CSV with Date (dd/MM/yyyy), Client project, Time (h:mm), Notes" */
+function describeExport(op: z.infer<typeof exportFormat>): string {
+  const column = (c: NonNullable<typeof op.columns>[number]) => {
+    const how = c.format ?? (c.decimals !== undefined ? `${c.decimals} decimals` : "");
+    return `${c.header ?? c.field}${how ? ` (${how})` : ""}`;
+  };
+  const what =
+    op.type === "text"
+      ? `lines like “${op.line ?? ""}”`
+      : `${TYPE_NAMES[op.type]}${op.columns ? ` with ${op.columns.map(column).join(", ")}` : ""}`;
+  const extras = [
+    op.merge === false ? "one row per block" : "",
+    op.default ? "what Ctrl+Y copies" : "",
+  ].filter(Boolean);
+  return `Export ${op.name.trim().toLowerCase()}: ${what}${extras.length ? ` · ${extras.join(" · ")}` : ""}`;
 }
 
 function defined<T extends object>(o: T): Partial<T> {

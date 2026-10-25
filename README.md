@@ -59,8 +59,8 @@
     <td width="50%" valign="top"><samp>
       <b>Rows that fit the form</b>
       <br><br>
-      Export date, project, task, hours and description as Markdown, CSV, TSV or JSON.
-      Copy a day to the clipboard, print one day, or export a date range from scripts.
+      Export date, project, task, hours and description as Markdown, CSV, TSV or JSON, or in
+      your own named formats. Copy a day to the clipboard, print one day, or export a date range from scripts.
     </samp></td>
     <td width="50%" valign="top"><samp>
       <b>Send only what changed</b>
@@ -138,7 +138,7 @@
 | **1** | **Run `init`** | Clockout detects local agent logs, GitHub and an AI helper, then asks for your time zone, working hours and calendar. |
 | **2** | **Open the day** | Press Enter to expand the timesheet cards. Move with **↑ ↓**, edit a duration with **Enter**, and nudge it with **− / +**. Click checkboxes or press **Space** to select several; **Shift-click** (or **Option-click**, e.g. inside herdr) a card to tick it, or a range once one is ticked. |
 | **3** | **Say what is wrong** | Type or dictate a correction. Review the proposed operations, **Enter** to apply, **Esc** to revise, **Ctrl+Z** to undo. |
-| **4** | **Take the sheet** | **Ctrl+Y** copies tab-separated rows, or only the checked rows when any are selected. The selection toolbar can also map or remove several cards together. Use `export` for a file, another format or a range of dates. |
+| **4** | **Take the sheet** | **Ctrl+Y** copies tab-separated rows (or your default export), or only the checked rows when any are selected; `/copy md`, `/copy csv` or `/copy <your export>` copy another format. The selection toolbar can also map or remove several cards together. Use `export` for a file, another format or a range of dates. |
 | **5** | **Pick another day** | Run `yesterday` or `day 2026-10-16`; in the review screen, click the date or use **PgUp / PgDn**. |
 
 **One command, a finished sheet**
@@ -207,6 +207,42 @@ called Internal") are offered whenever you add time; so are recent days' and you
 rules separate development, reviews and meetings. Rows are rounded to your configured step,
 unconfirmed meetings and breaks are left out, and repeated exports merge the same work.
 Configuration lives in `~/.config/clockout/config.toml`; **Ctrl+P** opens setup in the app.
+
+</samp>
+</details>
+
+<details>
+<summary><b>📋 Your own export formats</b></summary>
+<br>
+<samp>
+
+When your timesheet wants other columns, add a named format to `config.toml`, or say it in
+the chat bar ("add a Harvest export with hours as h:mm", "make it what ctrl+y copies"):
+
+```toml
+[[exports]]
+name = "harvest"
+type = "csv"                 # csv | tsv | markdown | json | text
+merge = true                 # the same work in one row (false: one row per block)
+default = true               # what Ctrl+Y and a bare /copy use
+columns = [
+  { field = "date", header = "Date", format = "dd/MM/yyyy" },
+  { field = "project", header = "Client project" },
+  { field = "hours", header = "Time", format = "h:mm" },   # decimal | h:mm | minutes | hm
+  { field = "description", header = "Notes" },
+]
+
+[[exports]]
+name = "slack"
+type = "text"
+line = "{project}: {description} ({hours})"
+```
+
+Fields are `date`, `project`, `task`, `hours`, `description`, `erp_task` and `erp_task_name`.
+Dates take a pattern of `yyyy yy MMMM MMM MM M dd d EEEE EEE`; hours as decimal take
+`decimals` (0–4). Templates only fill in fields. Use them with `clockout export -f harvest`
+or `/copy harvest`. CSV and TSV cells that look like spreadsheet formulas are always kept as
+text.
 
 </samp>
 </details>

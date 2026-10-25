@@ -154,6 +154,7 @@ describe("settings in the chat", () => {
       signed_in: false,
       sends: [{ project: "acme/api", to: "API work" }],
     });
+    expect(ctx.exports).toEqual([]);
     const text = JSON.stringify(ctx);
     expect(text).not.toContain("private-x");
     expect(text).not.toContain("-Users-dev");

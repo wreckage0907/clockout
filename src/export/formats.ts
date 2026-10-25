@@ -14,7 +14,7 @@ export function formatHours(h: number): string {
  * A spreadsheet runs a cell starting with = + - or @ as a formula, and meeting titles can come
  * from anyone: a leading ' keeps it text.
  */
-function inert(v: string): string {
+export function inert(v: string): string {
   return /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
 }
 

@@ -69,12 +69,26 @@ describe("parseSlash", () => {
     expect(error("/disconnect github")).toBe("/disconnect erp or /disconnect google?");
   });
 
-  it("copies as rows to paste, Markdown or CSV", () => {
-    expect(ok("/copy")).toEqual({ name: "copy", format: "tsv" });
+  it("copies as the default, Markdown or CSV", () => {
+    expect(ok("/copy")).toEqual({ name: "copy" });
     expect(ok("/copy md")).toEqual({ name: "copy", format: "md" });
     expect(ok("/copy markdown")).toEqual({ name: "copy", format: "md" });
     expect(ok("/copy csv")).toEqual({ name: "copy", format: "csv" });
-    expect(error("/copy pdf")).toContain("md or csv");
+    expect(error("/copy pdf")).toBe("Copy as md or csv, or leave it out for rows to paste.");
+  });
+
+  it("copies as one of your own exports", () => {
+    const exports = ["harvest", "slack"];
+    expect(parseSlash("/copy harvest", TODAY, exports)).toEqual({
+      ok: { name: "copy", format: "harvest" },
+    });
+    expect(parseSlash("Slash copy Slack.", TODAY, exports)).toEqual({
+      ok: { name: "copy", format: "slack" },
+    });
+    expect(parseSlash("/copy jira", TODAY, exports)).toEqual({
+      error: "Copy as harvest, slack, md or csv, or leave it out for your default.",
+    });
+    expect(parseSlash("/copy harvest now", TODAY, exports)).toHaveProperty("error");
   });
 
   it("goes to a day by word, days ago, weekday or date", () => {

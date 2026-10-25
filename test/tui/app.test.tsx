@@ -18,13 +18,13 @@ async function until(frame: () => string | undefined, text: string) {
   for (let i = 0; i < 50 && !(frame() ?? "").includes(text); i++) await tick();
 }
 
-function open(opts: Parameters<typeof fakeActions>[0] = {}) {
+function open(opts: Parameters<typeof fakeActions>[0] = {}, cfg: Config = config) {
   const fake = fakeActions(opts);
   const ui = render(
     <App
       initialDate={FIXTURE_DATE}
       today={FIXTURE_DATE}
-      config={config}
+      config={cfg}
       actions={fake.actions}
       width={W}
       height={H}
@@ -33,8 +33,8 @@ function open(opts: Parameters<typeof fakeActions>[0] = {}) {
   return { ui, ...fake };
 }
 
-async function openDay(opts: Parameters<typeof fakeActions>[0] = {}) {
-  const app = open(opts);
+async function openDay(opts: Parameters<typeof fakeActions>[0] = {}, cfg: Config = config) {
+  const app = open(opts, cfg);
   await until(app.ui.lastFrame, "6h of 8h");
   app.ui.stdin.write("\r");
   await until(app.ui.lastFrame, "Copy sheet");
@@ -235,6 +235,47 @@ describe("day view", () => {
     // Paste-ready rows, no header; the standup counts the 45 minutes you set.
     expect(lines[0]).toBe("2026-10-16\tMeetings\tMeetings\t0.75\tDaily standup");
     expect(lines).toHaveLength(5);
+  });
+
+  it("copies as your default export with ctrl+y, and as another one with /copy <name>", async () => {
+    const withExports: Config = {
+      ...config,
+      exports: [
+        {
+          name: "slack",
+          type: "text",
+          merge: true,
+          line: "{project}: {description} ({hours})",
+          columns: [{ field: "hours", format: "hm" }],
+          default: true,
+        },
+        {
+          name: "harvest",
+          type: "csv",
+          merge: true,
+          columns: [
+            { field: "date", header: "Date", format: "dd/MM/yyyy" },
+            { field: "hours", header: "Time", format: "h:mm" },
+          ],
+        },
+      ],
+    };
+    const { ui, calls } = await openDay({}, withExports);
+    ui.stdin.write("\u0019"); // ctrl+y
+    await until(ui.lastFrame, "as slack");
+    expect(calls.copied[0]?.split("\n")[0]).toBe("Meetings: Daily standup (30m)");
+    expect(calls.copied[0]).not.toMatch(/\n$/);
+    ui.stdin.write("/copy harvest");
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "as harvest");
+    expect(calls.copied[1]?.split("\r\n").slice(0, 2)).toEqual(["Date,Time", "16/10/2026,0:30"]);
+    ui.stdin.write("/copy jira");
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "Copy as slack");
+    expect(ui.lastFrame()).toContain("Copy as slack, harvest, md or csv");
+    expect(calls.copied).toHaveLength(2);
   });
 
   it("sends a sentence to the AI, shows the proposal, and applies it with Enter", async () => {

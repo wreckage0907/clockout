@@ -1,4 +1,4 @@
-import type { Config, SourceConfig, TaskMapping } from "./schema";
+import type { Config, ExportFormat, SourceConfig, TaskMapping } from "./schema";
 
 // Small pure changes to a config, for the setup screen. Each returns a new config; saving it
 // (and validating) is the caller's job.
@@ -93,4 +93,34 @@ export function withErpSite(config: Config, origin: string): Config {
   const t = config.timesheet;
   const same = t && new URL(t.url).origin === new URL(origin).origin;
   return { ...config, timesheet: same ? t : { type: "next-pms", url: origin, map: [] } };
+}
+
+type ExportFormatInput = Omit<ExportFormat, "merge"> & { merge?: boolean };
+
+/** Adds an export format, or replaces the one with its name; a new default takes over from the old. */
+export function withExport(config: Config, format: ExportFormatInput): Config {
+  const others = config.exports
+    .filter((e) => e.name !== format.name)
+    .map((e) => (format.default && e.default ? withoutDefault(e) : e));
+  return { ...config, exports: [...others, { merge: true, ...format }] };
+}
+
+/** Removes the export format called `name`. */
+export function withoutExport(config: Config, name: string): Config {
+  return { ...config, exports: config.exports.filter((e) => e.name !== name) };
+}
+
+/** Makes `name` what Ctrl+Y copies as; none goes back to rows to paste. */
+export function withCopyDefault(config: Config, name?: string): Config {
+  return {
+    ...config,
+    exports: config.exports.map((e) =>
+      e.name === name ? { ...e, default: true } : withoutDefault(e),
+    ),
+  };
+}
+
+function withoutDefault(e: ExportFormat): ExportFormat {
+  const { default: _, ...rest } = e;
+  return rest;
 }

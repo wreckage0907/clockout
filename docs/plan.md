@@ -163,9 +163,9 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] MCP client (`src/mcp/`): streamable HTTP, `initialize`, `tools/list`, `tools/call`, answers from `structuredContent` or JSON text, `isError` as that system's error
 - [x] MCP sign-in: protected-resource metadata, authorization-server discovery, dynamic registration, PKCE + loopback, refresh; next-pms's discovery made general without changing how it signs in; `[[mcp]]` servers, `clockout connect <name>` / `disconnect <name>`
 - [x] Mock MCP server (`test/mock-mcp/`): OAuth with registration, meeting tools, a note-writing tool
-- [ ] `[[exports]]`: named formats (csv, tsv, markdown, json, text), columns with headers and formats (dates, hours as decimal / h:mm / minutes), merge, text line templates; built-ins unchanged, formula guard kept
-- [ ] Use them: `export --format <name>`, `/copy <name>`, a default for Ctrl+Y; README
-- [ ] Settings operations for exports ("add a Harvest export with hours as h:mm"), shown in the AI's settings summary
+- [x] `[[exports]]`: named formats (csv, tsv, markdown, json, text), columns with headers and formats (dates, hours as decimal / h:mm / minutes), merge, text line templates; built-ins unchanged, formula guard kept
+- [x] Use them: `export --format <name>`, `/copy <name>`, a default for Ctrl+Y; README
+- [x] Settings operations for exports ("add a Harvest export with hours as h:mm"), shown in the AI's settings summary
 
 ## Before release, day 2 (2026-10-26) — standups, Wispr Flow, destinations
 

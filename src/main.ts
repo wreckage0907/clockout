@@ -37,7 +37,7 @@ program
   .command("export")
   .argument("[date]", "today, yesterday, -N or YYYY-MM-DD (default: today)")
   .description("Write the timesheet: date, project, task, hours, description")
-  .option("-f, --format <format>", "csv, md, tsv or json", "csv")
+  .option("-f, --format <format>", "csv, md, tsv, json, or a name from [[exports]]", "csv")
   .option("-o, --out <file>", "write to a file instead of the terminal")
   .option("--from <date>", "first day of a range")
   .option("--to <date>", "last day of a range")

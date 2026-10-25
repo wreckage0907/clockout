@@ -17,7 +17,7 @@ import {
   timesheetRows,
 } from "../core/timesheet";
 import type { Day, EditOp } from "../core/types";
-import { toCsv, toMarkdown, toTsv } from "../export/formats";
+import { copyDefault, type ExportChoice, findExport, render, rowsFor } from "../export/named";
 import type { PushResult } from "../push";
 import type { StoredDay } from "../store/json-store";
 import type { RemoteTask } from "../targets/types";
@@ -45,7 +45,6 @@ import { short } from "./questions";
 import { SendPanel, TaskPicker } from "./Send";
 import { Setup, type SetupActions } from "./Setup";
 import {
-  type CopyFormat,
   matching,
   parseSlash,
   type SetupSection,
@@ -376,19 +375,21 @@ export function App({
       showToast("↶ Undone");
     } else showToast("Nothing to undo");
   };
-  const copy = async (format: CopyFormat = "tsv", only?: ReadonlySet<string>) => {
+  /** Copies the sheet (or only the checked rows) as `format`, or your default export. */
+  const copy = async (format?: string, only?: ReadonlySet<string>) => {
     if (!day) return;
-    const rows = timesheetRows(day, config).filter(
+    const as = (format && findExport(format, config)) || copyDefault(config);
+    const rows = rowsFor(as, day, config).filter(
       (r) =>
         !only || only.has(rowKey({ project: r.project, task: r.task, summary: r.description })),
     );
     if (rows.length === 0)
       return showToast(only ? "No selected rows to copy" : "Nothing to copy yet");
-    const as = { tsv: toTsv, md: toMarkdown, csv: toCsv }[format];
-    const kind = { tsv: "", md: " as Markdown", csv: " as CSV" }[format];
-    const total = only ? checkedMinutes : minutes;
+    const kind = copyKind(as);
+    const total = Math.round(rows.reduce((sum, r) => sum + r.hours, 0) * 60);
     try {
-      await actions.copy(as(rows));
+      // One line or row less to clean up after pasting.
+      await actions.copy(render(as, rows, config).replace(/\r?\n$/, ""));
       // Meetings you haven't answered aren't on the sheet yet; say so rather than refuse.
       const waiting =
         !only && asks ? ` · ${asks} meeting${asks === 1 ? "" : "s"} unanswered, left out` : "";
@@ -648,7 +649,11 @@ export function App({
    * projects").
    */
   const send = async (text: string) => {
-    const slash = parseSlash(text, today);
+    const slash = parseSlash(
+      text,
+      today,
+      config.exports.map((e) => e.name),
+    );
     if (slash) {
       if ("error" in slash) return showToast(slash.error);
       draft.setValue("");
@@ -731,7 +736,7 @@ export function App({
         if (key.return) return void send(draft.value.trim());
       }
       if (key.ctrl && ch === "s") return void startSend();
-      if (key.ctrl && ch === "y") return void copy("tsv", checked.size ? checked : undefined);
+      if (key.ctrl && ch === "y") return void copy(undefined, checked.size ? checked : undefined);
       if (key.ctrl && ch === "z") return void undo();
       if (key.pageUp) return goTo(addDays(date, -1));
       if (key.pageDown) return goTo(addDays(date, 1));
@@ -1065,7 +1070,7 @@ export function App({
           </Text>
           <Box gap={1}>
             {erp ? <Button label="Map task" tone="primary" onClick={pickChecked} /> : null}
-            <Button label="Copy" onClick={() => void copy("tsv", checked)} />
+            <Button label="Copy" onClick={() => void copy(undefined, checked)} />
             <Button label="Remove" onClick={removeChecked} />
             <Button label="Clear" tone="quiet" onClick={() => setChecked(new Set())} />
           </Box>
@@ -1433,4 +1438,10 @@ function AddCard({
       ))}
     </Box>
   );
+}
+
+/** How a copy toast names the format: nothing for rows to paste. */
+function copyKind(as: ExportChoice): string {
+  if (as.kind === "named") return ` as ${as.format.name}`;
+  return { tsv: "", md: " as Markdown", csv: " as CSV", json: " as JSON" }[as.name];
 }

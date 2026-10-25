@@ -1,7 +1,6 @@
 import { addDays, isDate } from "../core/time";
 
 export type SetupSection = "sources" | "day" | "ai" | "projects" | "erp";
-export type CopyFormat = "tsv" | "md" | "csv";
 type Service = "erp" | "google";
 
 /** A command typed after a `/` in the chat bar. These never go to the AI. */
@@ -10,7 +9,8 @@ export type Slash =
   | { name: "connect"; service: Service; url?: string }
   | { name: "disconnect"; service: Service }
   | { name: "send" }
-  | { name: "copy"; format: CopyFormat }
+  /** A built-in format or one of yours from `[[exports]]`; none for the default. */
+  | { name: "copy"; format?: string }
   | { name: "undo" }
   | { name: "add" }
   | { name: "date"; date: string }
@@ -37,7 +37,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: "connect", args: "erp <address> | google", needsArgs: true, about: "Sign in" },
   { name: "disconnect", args: "erp | google", needsArgs: true, about: "Sign out" },
   { name: "send", about: "Send the day to your ERP", key: "ctrl+s" },
-  { name: "copy", args: "[md | csv]", about: "Copy the timesheet", key: "ctrl+y" },
+  { name: "copy", args: "[md | csv | your export]", about: "Copy the timesheet", key: "ctrl+y" },
   { name: "undo", about: "Undo the last change", key: "ctrl+z" },
   { name: "add", about: "Add time nothing recorded" },
   { name: "today", about: "Go to today" },
@@ -81,9 +81,14 @@ export function matching(text: string): SlashCommand[] {
 
 /**
  * Reads a slash command: null when the text isn't one, an error to show when it can't be read.
- * `today` is the user's local date, for `/today`, `/yesterday` and `/date`.
+ * `today` is the user's local date, for `/today`, `/yesterday` and `/date`; `exports` the names
+ * of your own export formats, for `/copy <name>`.
  */
-export function parseSlash(text: string, today: string): { ok: Slash } | { error: string } | null {
+export function parseSlash(
+  text: string,
+  today: string,
+  exports: readonly string[] = [],
+): { ok: Slash } | { error: string } | null {
   const t = slashText(text);
   if (t === null) return null;
   const [word = "", ...args] = t.slice(1).split(/\s+/).filter(Boolean);
@@ -113,11 +118,13 @@ export function parseSlash(text: string, today: string): { ok: Slash } | { error
     case "yesterday":
       return none({ name: "date", date: addDays(today, -1) });
     case "copy": {
-      if (!arg) return { ok: { name: "copy", format: "tsv" } };
+      if (!arg) return { ok: { name: "copy" } };
       const format = arg === "markdown" ? "md" : arg;
-      if (format === "md" || format === "csv" || format === "tsv")
+      if (args.length === 1 && ["md", "csv", "tsv", ...exports].includes(format))
         return { ok: { name: "copy", format } };
-      return { error: "Copy as md or csv, or leave it out for rows to paste." };
+      return {
+        error: `Copy as ${[...exports, "md", "csv"].join(", ").replace(/, ([^,]*)$/, " or $1")}, or leave it out for ${exports.length ? "your default" : "rows to paste"}.`,
+      };
     }
     case "connect":
     case "disconnect": {

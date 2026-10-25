@@ -1,9 +1,8 @@
 import { writeFile } from "node:fs/promises";
 import { openDay } from "../collect";
 import { addDays } from "../core/time";
-import { timesheetRows } from "../core/timesheet";
 import type { TimesheetRow } from "../core/types";
-import { toCsv, toMarkdown, toTsv } from "../export/formats";
+import { exportNames, findExport, render, rowsFor } from "../export/named";
 import { fileError } from "../files";
 import { logError } from "../log";
 import { type AppContext, appContext, commandAi, resolveDate } from "./context";
@@ -16,20 +15,21 @@ export interface ExportOptions {
   ai?: boolean;
 }
 
-const FORMATS = ["csv", "md", "tsv", "json"] as const;
-type Format = (typeof FORMATS)[number];
 const MAX_DAYS = 62;
 
-/** `clockout export [date]` or `clockout export --from 2026-10-01 --to 2026-10-31 --format csv --out oct.csv` */
+/**
+ * `clockout export [date]` or `clockout export --from 2026-10-01 --to 2026-10-31 --format csv --out oct.csv`.
+ * The format is built in (csv, md, tsv, json) or one of yours from `[[exports]]`.
+ */
 export async function runExport(
   dateInput: string | undefined,
   opts: ExportOptions,
   app?: AppContext,
 ) {
   const { config, store } = app ?? (await appContext());
-  const format = (opts.format ?? "csv").toLowerCase() as Format;
-  if (!FORMATS.includes(format))
-    throw new Error(`Unknown format "${opts.format}". Use ${FORMATS.join(", ")}.`);
+  const format = findExport(opts.format ?? "csv", config);
+  if (!format)
+    throw new Error(`Unknown format "${opts.format}". Use ${exportNames(config).join(", ")}.`);
 
   const tz = config.me.timezone;
   if (dateInput && (opts.from || opts.to))
@@ -54,22 +54,11 @@ export async function runExport(
   for (const date of dates) {
     const { stored, warnings } = await openDay(date, config, store, { ai, log: logError });
     for (const w of warnings) console.error(`warning (${date}): ${w}`);
-    rows.push(...timesheetRows(stored.day, config));
+    rows.push(...rowsFor(format, stored.day, config));
     open += stored.day.questions.length;
   }
 
-  const text =
-    format === "csv"
-      ? toCsv(rows)
-      : format === "tsv"
-        ? `${toTsv(rows)}\n`
-        : format === "md"
-          ? `${toMarkdown(rows)}\n`
-          : `${JSON.stringify(
-              rows.map(({ sendTo: _, ...r }) => r),
-              null,
-              2,
-            )}\n`;
+  const text = render(format, rows, config);
 
   if (opts.out) {
     await writeFile(opts.out, text).catch((err: unknown) => {
