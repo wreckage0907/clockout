@@ -174,7 +174,7 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Wispr Flow source (ADR 0010): `clockout connect wispr`, recorded meetings for the range, a recording counts as attended for its recorded length, merged with its calendar event in core, summaries on screen only (never to the AI or an export); tests against the mock MCP server
 - [x] Export destinations (ADR 0010): `to = { file, append }` (an Obsidian daily note, written directly) and `to = { mcp, tool, arguments }`; preview, then confirm; file paths never from the AI
 - [x] `type = "command"` target and export: JSON over stdin/stdout, no shell, timeout, own process group; set by hand or on the command line only, refused from the chat bar; how to use it with a local stdio MCP server
-- [ ] Spec, README and Setup for all of the above
+- [x] Spec, README and Setup for all of the above
 
 ## Before release, day 2b (2026-10-26) — memories
 
