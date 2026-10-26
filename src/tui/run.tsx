@@ -174,8 +174,9 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
       for (const e of r.effects) {
         if (e.kind === "pick_task") pick = e;
         else if (e.kind === "connect" && e.service === "google") {
-          if (!(await loadGoogleCredentials().catch(() => null)))
-            await actions.setup.connectGoogle();
+          // A connect is a fresh sign-in, even if a stale one is still on disk (the CLI does
+          // the same): a revoked or expired Google sign-in would otherwise never be replaced.
+          await actions.setup.connectGoogle();
           next = withSource(next, google, true);
         } else if (e.kind === "connect") {
           const site =

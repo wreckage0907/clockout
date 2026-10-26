@@ -182,4 +182,57 @@ erp_task = "TASK-TOOLS"
     expect(pms.day(DATE).length).toBeGreaterThan(5);
     expect(new Set(pms.day(DATE).map((e) => e.task))).toEqual(new Set(["TASK-API", "TASK-TOOLS"]));
   });
+
+  it("/connect google signs in again even when a stale sign-in is on disk", async () => {
+    const g = await sandbox();
+    await g.writeConfig(`${await fixtureSourcesToml(g)}
+[google]
+client_id = "test-client-id.apps.googleusercontent.com"
+client_secret = "test-secret"
+`);
+    // A revoked or expired sign-in still sits in credentials.json, the way Google's weekly
+    // "Testing" refresh-token expiry leaves it; connecting must replace it, not skip the browser.
+    await writeFile(
+      join(g.config, "credentials.json"),
+      `${JSON.stringify(
+        {
+          google: {
+            refresh_token: "stale-token",
+            client_id: "stale-client-id.apps.googleusercontent.com",
+            scope: "https://www.googleapis.com/auth/calendar.events.readonly",
+            connected_at: "2026-10-01T00:00:00.000Z",
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      { mode: 0o600 },
+    );
+    // A stand-in for the browser: `open` records what it was asked to open.
+    const openLog = join(g.home, "open.log");
+    const open = join(g.home, "bin", "open");
+    await writeFile(open, `#!/bin/sh\nprintf '%s\\n' "$@" >> "$OPEN_LOG"\n`);
+    await chmod(open, 0o755);
+
+    const r = await runInPty(
+      g,
+      ["day", DATE],
+      [
+        { wait: HOME },
+        { send: KEY.paste("/connect google") },
+        { wait: "/connect google" },
+        { send: KEY.enter },
+        { wait: "Finish signing in in your browser" },
+        { sleep: 1 },
+        // The sign-in is still waiting on the browser, so Ctrl+C wouldn't end it; a TERM does.
+        { signal: "TERM" },
+      ],
+      { env: { OPEN_LOG: openLog } },
+    );
+    expect(r.failed).toBeNull();
+    expect(r.code).toBe(143);
+    const opened = await readFile(openLog, "utf8").catch(() => "");
+    expect(opened).toContain("https://accounts.google.com/o/oauth2/v2/auth");
+    expectRestored(after(r, "Finish signing in in your browser"));
+  });
 });
