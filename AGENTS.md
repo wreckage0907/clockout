@@ -60,6 +60,9 @@ src/mcp/          MCP client (streamable HTTP) and its sign-in; calls only tools
 src/oauth.ts      loopback + PKCE, discovery and registration for browser sign-ins
 src/log.ts        local error log: full details behind the one-line messages, tokens redacted
 src/command.ts    runs a program you named: one JSON request on stdin, one JSON answer (ADR 0009 layer 4)
+src/schedule.ts   what a scheduled job does, when, for which day, and the unit text that runs it (ADR 0012)
+src/run.ts        one scheduled run: the lock, the once-a-day guard, the run log, the exit code
+src/lock.ts       one Clockout run at a time (and one credential writer)
 src/files.ts      readable reasons a file couldn't be written
 ```
 

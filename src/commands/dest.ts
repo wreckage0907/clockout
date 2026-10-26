@@ -13,6 +13,8 @@ export interface DestOptions {
   yes?: boolean;
   /** Whether there's someone to ask (a terminal); tests say so. */
   interactive?: boolean;
+  /** Which marked block a shared note gets: the sheet's (default) or the standup's. */
+  kind?: "sheet" | "standup";
 }
 
 /** The export format called `name`, or the one with a destination; says what to do when none has. */
@@ -57,7 +59,10 @@ export async function saveToDestination(
 ): Promise<void> {
   const to = format.to;
   if (!to) throw new Error(`${format.name} has no destination.`);
-  const plan = await planDestination(to, text, { date });
+  const plan = await planDestination(to, text, {
+    date,
+    ...(opts.kind ? { kind: opts.kind } : {}),
+  });
   const interactive = opts.interactive ?? (process.stdin.isTTY && process.stdout.isTTY);
   console.log(`${format.name} → ${plan.where}\n`);
   console.log(text);

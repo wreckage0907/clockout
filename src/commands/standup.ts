@@ -36,7 +36,10 @@ export async function runStandup(
   for (const w of standup.warnings) console.error(`warning: ${w}`);
   if (opts.to) {
     // The same text, written where that export's destination says (a daily note, a tool).
-    await saveToDestination(config, destinationExport(config, opts.to), standup.text, date, opts);
+    await saveToDestination(config, destinationExport(config, opts.to), standup.text, date, {
+      ...opts,
+      kind: "standup",
+    });
     return;
   }
   process.stdout.write(`${standup.text}\n`);

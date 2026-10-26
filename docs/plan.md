@@ -185,6 +185,16 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Handed to the descriptions prompt, the standup prompt and the settings prompt; part of the descriptions cache key
 - [x] Setup → AI helper lists them, each ✕ forget; chat bar says the rest
 
+## Before release, day 3 (2026-10-26) — a scheduler
+
+[ADR 0012](adr/0012-let-a-scheduler-run-it.md): a schedule is the one confirmation, made once and shown in full.
+
+- [x] `[[schedule]]` jobs (time, day, export or standup, `allow_open`), set by hand or `clockout schedule add`
+- [x] `clockout schedule` (list), `add`, `remove`, `sync`, `print`, `log`; launchd agent on macOS, systemd user timer on Linux, a crontab line elsewhere; the unit records the interpreter's path and the PATH
+- [x] `clockout run <name>`: the lock, once-a-day guard (`--again`), a marked block in a shared note so a re-run replaces its own part, one line in `runs.log`, exit 1 for a partial sheet unless `allow_open`
+- [x] `src/lock.ts`: one run at a time, and credential writes too (rotating refresh tokens)
+- [x] No settings operation can add, change or point at a job
+
 ## Day 12 — Publish (milestone)
 
 - [x] npm trusted publishing workflow on version tags (needs one-time setup on npmjs.com)

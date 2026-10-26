@@ -24,6 +24,45 @@ export interface DestinationPlan {
   date: string;
   /** A file that's there already, which is replaced unless the destination appends. */
   exists: boolean;
+  /** Which marked block a shared note gets: the sheet's, or the standup's. */
+  block?: "sheet" | "standup";
+}
+
+/**
+ * Markers around the part of a note Clockout owns, so a second run replaces its own block
+ * instead of adding another table (ADR 0012). A note keeps one per kind: a sheet and a standup
+ * can share a day's note.
+ */
+export function blockMarkers(kind: "sheet" | "standup"): { start: string; end: string } {
+  return kind === "standup"
+    ? { start: "<!-- clockout:standup:start -->", end: "<!-- clockout:standup:end -->" }
+    : { start: "<!-- clockout:start -->", end: "<!-- clockout:end -->" };
+}
+
+/**
+ * The file as it should read after writing `text`: the block replaced in place, the block added
+ * (at the end) when the note has none yet, or the whole file when Clockout owns it.
+ */
+export function withBlock(
+  before: string,
+  text: string,
+  kind: "sheet" | "standup",
+  owned = false,
+): string {
+  const body = text.trim();
+  const block = `${blockMarkers(kind).start}\n${body}\n${blockMarkers(kind).end}`;
+  if (owned) return `${block}\n`;
+  if (!before.trim()) return `${block}\n`;
+  const { start, end } = blockMarkers(kind);
+  const from = before.indexOf(start);
+  const to = before.indexOf(end);
+  if (from < 0 && to < 0) return `${ended(before)}\n${block}\n`;
+  if (from < 0 || to < from)
+    throw new Error(
+      `The note has ${from < 0 ? "the end marker" : "the start marker"} “${from < 0 ? end : start}” without ${from < 0 ? "the start" : "the end"} one. Fix the markers, or remove them to let Clockout add its own.`,
+    );
+  const after = before.slice(to + end.length).replace(/^\n?/, "");
+  return `${before.slice(0, from)}${block}\n${after}`;
 }
 
 export interface PlanOptions {
@@ -50,14 +89,22 @@ export function describeDestination(to: ExportDestination, date: string, home = 
 export async function planDestination(
   to: ExportDestination,
   text: string,
-  opts: PlanOptions,
+  opts: PlanOptions & { kind?: "sheet" | "standup" },
 ): Promise<DestinationPlan> {
   const home = opts.home ?? homedir();
   const where = describeDestination(to, opts.date, home);
   if ("file" in to) {
     const path = filePath(to.file, opts.date, home);
     const exists = await (opts.exists ?? fileExists)(path);
-    return { kind: "file", where, path, text, date: opts.date, exists };
+    return {
+      kind: "file",
+      where,
+      path,
+      text,
+      date: opts.date,
+      exists,
+      ...(opts.kind ? { block: opts.kind } : {}),
+    };
   }
   return { kind: "mcp", where, text, date: opts.date, exists: false };
 }
@@ -69,7 +116,14 @@ export async function writeDestination(
   opts: { config: Config },
 ): Promise<string> {
   if ("file" in to && plan.path) {
-    const body = to.append ? await appended(plan.path, plan.text) : ended(plan.text);
+    // Appending means the note is shared: Clockout keeps its own marked block in it.
+    const body = to.append
+      ? withBlock(
+          await readFile(plan.path, "utf8").catch(() => ""),
+          plan.text,
+          plan.block ?? "sheet",
+        )
+      : ended(plan.text);
     await mkdir(dirname(plan.path), { recursive: true }).catch((err: unknown) => {
       throw fileError(plan.path ?? "", err);
     });
@@ -116,13 +170,6 @@ export async function writeDestination(
 /** The text as it goes into a file: whole lines. */
 function ended(text: string): string {
   return text.endsWith("\n") ? text : `${text}\n`;
-}
-
-/** The text after whatever the file already says, with one blank line between. */
-async function appended(path: string, text: string): Promise<string> {
-  const before = await readFile(path, "utf8").catch(() => "");
-  if (!before) return ended(text);
-  return `${before}${before.endsWith("\n") ? "" : "\n"}\n${ended(text)}`;
 }
 
 async function fileExists(path: string): Promise<boolean> {

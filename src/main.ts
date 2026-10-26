@@ -6,6 +6,15 @@ import { runEdit, runUndo } from "./commands/edit";
 import { runExport } from "./commands/export";
 import { runInit } from "./commands/init";
 import { runPush } from "./commands/push";
+import {
+  runNow,
+  scheduleAdd,
+  scheduleList,
+  scheduleLog,
+  schedulePrint,
+  scheduleRemove,
+  scheduleSync,
+} from "./commands/schedule-cli";
 import { runStandup } from "./commands/standup";
 import { tildify } from "./config/paths";
 import { errorLogPath, isBug, logError } from "./log";
@@ -86,6 +95,53 @@ program
   .option("-n, --dry-run", "with --to: show it and where it would go")
   .option("-y, --yes", "with --to: write without asking")
   .action((date, opts) => runStandup(date, opts));
+
+const schedule = program
+  .command("schedule")
+  .description("Jobs a scheduler runs: what's set up, and the units that run them")
+  .action(() => scheduleList());
+
+schedule
+  .command("add")
+  .argument("<name>", "a short lowercase name, e.g. daily-note")
+  .description("Schedule an export (or a standup) to go to its destination every day")
+  .option("--at <HH:MM>", "local time to run at", "18:30")
+  .option("--for <day>", "today (fresh) or yesterday (finished)", "today")
+  .option("-f, --format <name>", "an export with a destination")
+  .option("--kind <kind>", "export (the default) or standup")
+  .option("--allow-open", "don't fail the run when the day still has open questions")
+  .option("--print", "show the unit or crontab line instead of installing it")
+  .action((name, opts) => scheduleAdd(name, opts));
+
+schedule
+  .command("remove")
+  .argument("<name>", "a job from [[schedule]]")
+  .description("Remove a job and uninstall its unit")
+  .action((name) => scheduleRemove(name));
+
+schedule
+  .command("sync")
+  .description("(Re)install every job's unit from the config")
+  .action(() => scheduleSync());
+
+schedule
+  .command("print")
+  .argument("[name]", "one job; all of them by default")
+  .description("Show the launchd/systemd files or the crontab line, installing nothing")
+  .action((name) => schedulePrint(name));
+
+schedule
+  .command("log")
+  .description("What the scheduled runs did, newest first")
+  .action(() => scheduleLog());
+
+program
+  .command("run")
+  .argument("<name>", "a job from [[schedule]]")
+  .description("Run one scheduled job now (what the OS unit calls)")
+  .option("-n, --dry-run", "show what would be written")
+  .option("-a, --again", "write the day again even if it was already done")
+  .action((name, opts) => runNow(name, opts));
 
 program
   .command("connect")

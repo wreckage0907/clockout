@@ -54,13 +54,13 @@ describe("clockout export --dest", () => {
     expect(text).toContain("acme-api");
   });
 
-  it("adds the next day below the last instead of starting over", async () => {
+  it("keeps its own block, so writing again is the same note and not a second table", async () => {
     const before = await note();
     const r = await sb.run(["export", DATE, "-f", "daily", "--dest", "--yes"]);
     expect(r.code).toBe(0);
     const after = await note();
-    expect(after.startsWith(before)).toBe(true);
-    expect(after.length).toBeGreaterThan(before.length);
+    expect(after).toBe(before);
+    expect(after.match(/<!-- clockout:start -->/g)).toHaveLength(1);
   });
 
   it("shows the text and where it goes on a dry run, and writes nothing", async () => {
@@ -92,14 +92,17 @@ describe("clockout export --dest", () => {
 });
 
 describe("clockout standup --to", () => {
-  it("writes the standup to the same note", async () => {
+  it("writes the standup into the same note, without touching the sheet", async () => {
     const before = await note();
     const r = await sb.run(["standup", DATE, "--to", "daily", "--yes", "--no-ai"]);
     expect(r.code).toBe(0);
     expect(r.stdout).toContain(`daily → ~/Vault/Daily/${DATE}.md (added to the end)`);
     const after = await note();
+    // The sheet's block is still there, and the standup has one of its own.
     expect(after.startsWith(before)).toBe(true);
-    expect(after.slice(before.length)).toContain("Yesterday");
+    const added = after.slice(before.length);
+    expect(added).toContain("<!-- clockout:standup:start -->");
+    expect(added).toContain("Yesterday");
   });
 
   it("names the formats that have a destination when the one asked for has none", async () => {

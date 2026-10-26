@@ -112,20 +112,31 @@ describe("writing a file destination", () => {
     expect(await readFile(path, "utf8")).toBe(`${text}\n`);
   });
 
-  it("adds to the end of a note, with a blank line between the days", async () => {
+  it("keeps its own block in a note it shares, and replaces it next time", async () => {
     const path = join(dir, "notes", "2026-10.md");
-    await writeFile(path, "# Worklog\n\nMonday").catch(async () => {
-      const { mkdir } = await import("node:fs/promises");
-      await mkdir(join(dir, "notes"), { recursive: true });
-      await writeFile(path, "# Worklog\n\nMonday");
-    });
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(dir, "notes"), { recursive: true });
+    await writeFile(path, "# Worklog\n\nMonday");
     const c = config([
       { name: "log", type: "text", line: "{project}", to: { file: path, append: true } },
     ]);
     await capture(() =>
       saveToDestination(c, destinationExport(c, "log"), "Tuesday", "2026-10-16", { yes: true }),
     );
-    expect(await readFile(path, "utf8")).toBe("# Worklog\n\nMonday\n\nTuesday\n");
+    expect(await readFile(path, "utf8")).toBe(
+      "# Worklog\n\nMonday\n\n<!-- clockout:start -->\nTuesday\n<!-- clockout:end -->\n",
+    );
+    // Monday's own writing stays, and Tuesday isn't written a second time.
+    await capture(() =>
+      saveToDestination(c, destinationExport(c, "log"), "Tuesday again", "2026-10-16", {
+        yes: true,
+      }),
+    );
+    const after = await readFile(path, "utf8");
+    expect(after.match(/clockout:start/g)).toHaveLength(1);
+    expect(after).toContain("Tuesday again");
+    expect(after).not.toMatch(/\nTuesday\n/);
+    expect(after.startsWith("# Worklog\n\nMonday\n\n")).toBe(true);
   });
 
   it("doesn't write anything on a dry run", async () => {

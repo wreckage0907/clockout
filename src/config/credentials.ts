@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { withLock } from "../lock";
 import { resolvePaths } from "./paths";
 
 const googleCredentials = z.object({
@@ -120,8 +121,15 @@ export async function removeMcpCredentials(name: string, path = credentialsPath(
   await write(path, Object.keys(others).length ? { ...rest, mcp: others } : rest);
 }
 
-/** Saves the file readable only by you, or removes it when nothing is left. */
+/**
+ * Saves the file readable only by you, or removes it when nothing is left. One writer at a time:
+ * a scheduled run and your own can both be refreshing a rotating token.
+ */
 async function write(path: string, creds: CredentialsFile): Promise<void> {
+  await withLock(`${path}.lock`, () => writeNow(path, creds));
+}
+
+async function writeNow(path: string, creds: CredentialsFile): Promise<void> {
   if (Object.keys(creds).length === 0) return rm(path, { force: true });
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   await writeFile(path, `${JSON.stringify(creds, null, 2)}\n`, { mode: 0o600 });

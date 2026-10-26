@@ -388,6 +388,27 @@ export const exportFormat = z
   });
 export type ExportFormat = z.output<typeof exportFormat>;
 
+/**
+ * A job a scheduler runs for you ([ADR 0012](../../docs/adr/0012-let-a-scheduler-run-it.md)):
+ * a standing confirmation, shown in full when it's added. Set by hand or with
+ * `clockout schedule add`; no settings operation can add or point at one.
+ */
+export const scheduleJobSchema = z.object({
+  /** How you refer to it, and the name of its OS unit: `clockout schedule remove <name>`. */
+  name: z.string().regex(/^[a-z][a-z0-9-]{0,31}$/, "use a short lowercase name, e.g. daily-note"),
+  /** Local time on your clock, "HH:MM". */
+  at: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'use a 24-hour time like "18:30"'),
+  /** The day it runs for: today (fresh, maybe unfinished) or yesterday (the finished sheet). */
+  day: z.enum(["today", "yesterday"]).default("today"),
+  /** `export` sends a named format to its destination; `standup` writes the standup there. */
+  kind: z.enum(["export", "standup"]).default("export"),
+  /** An `[[exports]]` name with a `to`; the standup uses its destination too. */
+  format: z.string().min(1),
+  /** Exit 0 even when the day still has open questions (a deliberate mid-afternoon run). */
+  allow_open: z.boolean().default(false),
+});
+export type ScheduleJob = z.output<typeof scheduleJobSchema>;
+
 export const configSchema = z.object({
   me: z.object({
     name: z.string().min(1),
@@ -478,6 +499,14 @@ export const configSchema = z.object({
     .default([]),
   /** Where `clockout push` sends the day. Connect with `clockout connect erp <url>`. */
   timesheet: timesheetTarget.optional(),
+  /** Jobs a scheduler runs, installed as OS units by `clockout schedule sync`. */
+  schedule: z
+    .array(scheduleJobSchema)
+    .refine(
+      (all) => new Set(all.map((j) => j.name)).size === all.length,
+      "each scheduled job needs its own name",
+    )
+    .default([]),
   /** Your own export formats, next to the built-in csv, tsv, md and json. */
   exports: z
     .array(exportFormat)
