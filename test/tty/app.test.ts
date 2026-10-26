@@ -208,11 +208,13 @@ client_secret = "test-secret"
       )}\n`,
       { mode: 0o600 },
     );
-    // A stand-in for the browser: `open` records what it was asked to open.
+    // A stand-in for the browser: the command Clockout runs to open it (`open` on macOS,
+    // `xdg-open` elsewhere) records what it was asked to open.
+    const browser = process.platform === "darwin" ? "open" : "xdg-open";
     const openLog = join(g.home, "open.log");
-    const open = join(g.home, "bin", "open");
-    await writeFile(open, `#!/bin/sh\nprintf '%s\\n' "$@" >> "$OPEN_LOG"\n`);
-    await chmod(open, 0o755);
+    const browserBin = join(g.home, "bin", browser);
+    await writeFile(browserBin, `#!/bin/sh\nprintf '%s\\n' "$@" >> "$OPEN_LOG"\n`);
+    await chmod(browserBin, 0o755);
 
     const r = await runInPty(
       g,
