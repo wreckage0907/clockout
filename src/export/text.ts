@@ -1,5 +1,6 @@
 import { styleText } from "node:util";
 import type { Config } from "../config/schema";
+import { cleanText } from "../core/text";
 import { formatDuration, localTime, minutesBetween } from "../core/time";
 import { dayTotals, timesheetRows } from "../core/timesheet";
 import type { Day } from "../core/types";
@@ -57,6 +58,9 @@ export function renderDay(day: Day, config: Config, color = process.stdout.isTTY
       `${b.summary}${b.task !== config.tasks.work && b.task !== b.project ? s("dim", ` · ${b.task}`) : ""}`,
     ].join("  ");
     lines.push(b.confirmed && b.billable ? line : s("dim", line));
+    // What a recorder said about a meeting: on screen, never in the sheet (ADR 0010).
+    const note = b.evidence.find((a) => a.notes)?.notes;
+    if (note) lines.push(s("dim", `        “${oneLine(note, 120)}”`));
   }
 
   const sheet = timesheetRows(day, config);
@@ -71,10 +75,21 @@ export function renderDay(day: Day, config: Config, color = process.stdout.isTTY
   if (day.questions.length) {
     lines.push("", s("yellow", "Questions"));
     for (const q of day.questions) lines.push(`  ${q.id}  ${q.text}`);
+    // Printed days are read outside the app, where nothing else says how to answer.
+    if (sheet.length)
+      lines.push(
+        s("dim", '  Answer in the app (clockout), or: clockout edit "the 12:15 gap was lunch"'),
+      );
   }
   if (day.notes.length) {
     lines.push("", s("dim", "Notes"));
     for (const n of day.notes) lines.push(s("dim", `  ${n}`));
   }
   return lines.join("\n");
+}
+
+/** A recorder's summary on one short line: it can be several sentences and hold newlines. */
+function oneLine(text: string, max: number): string {
+  const one = cleanText(text);
+  return one.length > max ? `${one.slice(0, max - 1)}…` : one;
 }

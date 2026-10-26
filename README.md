@@ -32,7 +32,8 @@
       <b>Your tools become one workday</b>
       <br><br>
       Reads Claude Code, Codex, Pi, opencode and Antigravity sessions, GitHub pull requests,
-      reviews, issues and comments, plus Google Calendar or an ICS feed.
+      reviews, issues and comments, Google Calendar or an ICS feed, and the meetings you
+      recorded with Wispr Flow.
     </samp></td>
     <td width="50%" valign="top"><samp>
       <b>Counts your time, not agent runtime</b>
@@ -141,6 +142,10 @@
 | **4** | **Take the sheet** | **Ctrl+Y** copies tab-separated rows (or your default export), or only the checked rows when any are selected; `/copy md`, `/copy csv` or `/copy <your export>` copy another format. The selection toolbar can also map or remove several cards together. Use `export` for a file, another format or a range of dates. |
 | **5** | **Say your standup** | `clockout standup` (or `/standup` in the app) writes it from the previous working day, today's meetings and your open PRs, and copies it. Blockers are only what you add: `-b "waiting on API keys"` or `/standup waiting on API keys`. |
 | **6** | **Pick another day** | Run `yesterday` or `day 2026-10-16`; in the review screen, click the date or use **PgUp / PgDn**. |
+
+Anything you'd rather say once ("remember the reader isn't technical", "remember we spell it
+frontend") is kept as a memory: Clockout hands it to the AI helper with every description and
+standup, and Setup → AI helper lists what it remembers.
 
 **One command, a finished sheet**
 
@@ -324,6 +329,39 @@ node dist/cli.js push yesterday --yes
 </details>
 
 <details>
+<summary><b>📝 Where exports go</b></summary>
+<br>
+<samp>
+
+An export can say where its text also goes — a daily note in your vault, or a tool on an MCP
+server — and Clockout shows the text and the place before writing:
+
+```toml
+[[exports]]
+name = "daily-note"
+type = "markdown"
+to = { file = "~/Vault/Daily/{date}.md", append = true }
+
+[[exports]]
+name = "notion"
+type = "markdown"
+to = { mcp = "notion", tool = "append_block", arguments = { content = "{text}" } }
+```
+
+```sh
+node dist/cli.js export -f daily-note --dest          # asks first
+node dist/cli.js export -f daily-note --dest --dry-run
+node dist/cli.js standup --to daily-note              # the standup, into the same note
+```
+
+`{text}` and `{date}` are the only things filled in. A file path is set by hand (or in Setup),
+never by the AI; replacing a note that's there is a question. Your own program can take the text
+too: `to = { command = ["my-writer"] }` gets `{ date, format, text }` as JSON on stdin.
+
+</samp>
+</details>
+
+<details>
 <summary><b>🧩 MCP servers</b></summary>
 <br>
 <samp>
@@ -337,8 +375,18 @@ node dist/cli.js connect notes      # sign in again later
 node dist/cli.js disconnect notes   # revoke and forget the sign-in
 ```
 
-The server is kept in `[[mcp]]` in the config. Meeting recordings and note destinations that
-use it are on their way ([ADR 0010](docs/adr/0010-mcp-as-source-and-destination.md)).
+The server is kept in `[[mcp]]` in the config.
+
+If you record meetings with Wispr Flow (Notetaker with MCP access), connecting it also turns on
+the source that reads them, so a meeting you recorded counts as attended for as long as it ran,
+and its calendar event stops asking whether you were there:
+
+```sh
+node dist/cli.js connect wispr
+```
+
+What a recording says (its summary) is shown next to the meeting and nowhere else: it is never
+sent to the AI helper or into an export. Note destinations for exports (a vault file, an MCP tool) are in "Where exports go" below.
 
 </samp>
 </details>

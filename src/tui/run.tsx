@@ -6,17 +6,18 @@ import { type AiChoice, BACKEND_NAMES, chooseBackend, detectBackends } from "../
 import { stopHelpers } from "../ai/cli";
 import { type Correction, localCorrection, parseCorrection } from "../ai/edits";
 import { openDay } from "../collect";
-import { signInErp, signOutErp, signOutGoogle } from "../commands/connect";
+import { signInErp, signInMcp, signOutErp, signOutGoogle } from "../commands/connect";
 import type { AppContext } from "../commands/context";
 import {
   loadErpCredentials,
   loadGoogleCredentials,
+  loadMcpCredentials,
   saveGoogleCredentials,
 } from "../config/credentials";
 import { withErpSite, withSource, withTaskMapping } from "../config/edit";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths, tildify } from "../config/paths";
-import type { Config } from "../config/schema";
+import { type Config, targetHost, targetWhere } from "../config/schema";
 import { applySettings, type SettingEffect } from "../config/setting-ops";
 import { localDate } from "../core/time";
 import { commitEdits, undoEdit } from "../corrections";
@@ -29,6 +30,7 @@ import { gitHubStatus } from "../sources/github/token";
 import { connectGoogle, googleClient } from "../sources/google-calendar/oauth";
 import { opencode } from "../sources/opencode";
 import { pi } from "../sources/pi";
+import { WISPR_SERVER, WISPR_URL } from "../sources/wispr-flow";
 import { buildStandup } from "../standup";
 import { openTarget } from "../targets";
 import type { Target } from "../targets/types";
@@ -90,7 +92,7 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
   // The ERP connection, opened on first use and again if its address changes.
   let target: { url: string; t: Promise<Target | null> } | null = null;
   const erp = (): Promise<Target> => {
-    const url = config.timesheet?.url ?? "";
+    const url = config.timesheet ? targetWhere(config.timesheet) : "";
     if (!target || target.url !== url) target = { url, t: openTarget(config) };
     const t = target.t;
     t.catch(() => {
@@ -103,7 +105,7 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
   };
   const send: SendActions = {
     get site() {
-      return config.timesheet ? new URL(config.timesheet.url).host : "";
+      return targetHost(config.timesheet) ?? "";
     },
     plan: async (s) => preparePush(s, config, await erp()),
     apply: async (s, plan) => applyPush(s, plan, await erp(), store),
@@ -176,7 +178,8 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
             await actions.setup.connectGoogle();
           next = withSource(next, google, true);
         } else if (e.kind === "connect") {
-          const site = e.url ?? next.timesheet?.url;
+          const site =
+            e.url ?? (next.timesheet?.type === "command" ? undefined : next.timesheet?.url);
           if (!site) throw new Error("Say where your ERP is: “connect my ERP at erp.example.com”.");
           next = withErpSite(next, (await signInErp(site, openQuietly)).url);
           target = null;
@@ -237,6 +240,7 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
           helpers,
           google,
           erpCreds,
+          wisprCreds,
         ] = await Promise.all([
           claudeProjects(),
           pi.detect(ctx),
@@ -247,13 +251,17 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
           detectBackends(),
           loadGoogleCredentials().catch(() => null),
           loadErpCredentials().catch(() => null),
+          loadMcpCredentials(WISPR_SERVER).catch(() => null),
         ]);
         const t = config.timesheet;
         // An http target signs in with a token from the environment; next-pms in the browser.
         const signedIn =
           t?.type === "http"
             ? !!process.env[t.token_env]
-            : !!erpCreds && !!t && new URL(erpCreds.url).origin === new URL(t.url).origin;
+            : !!t &&
+              t.type !== "command" &&
+              !!erpCreds &&
+              new URL(erpCreds.url).origin === new URL(t.url).origin;
         return {
           config,
           googleConnected: google !== null,
@@ -268,6 +276,7 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
             connected: signedIn,
             ...(signedIn && t?.type !== "http" && erpCreds?.user ? { user: erpCreds.user } : {}),
           },
+          wispr: { connected: wisprCreds !== null },
         };
       },
       async save(next) {
@@ -298,6 +307,12 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
       async disconnectErp() {
         await signOutErp();
         target = null;
+      },
+      async connectWispr() {
+        // The sign-in is kept, and the source that reads it is turned on.
+        const next = await signInMcp(WISPR_SERVER, WISPR_URL, config, openQuietly);
+        await saveConfig(configFile, next);
+        config = (await loadConfig(configFile)) ?? next;
       },
     },
   };

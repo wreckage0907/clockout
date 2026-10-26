@@ -2,6 +2,7 @@ import clipboard from "clipboardy";
 import { logError } from "../log";
 import { buildStandup } from "../standup";
 import { type AppContext, appContext, commandAi, resolveDate } from "./context";
+import { destinationExport, saveToDestination } from "./dest";
 
 export interface StandupOptions {
   /** What's in your way, as you'd say it; repeatable. Never guessed. */
@@ -10,6 +11,11 @@ export interface StandupOptions {
   ai?: boolean;
   /** commander sets this to false for --no-copy */
   copy?: boolean;
+  /** An export format with a destination: the standup goes there as well. */
+  to?: string;
+  dryRun?: boolean;
+  yes?: boolean;
+  interactive?: boolean;
 }
 
 /** `clockout standup [date]`: prints the standup, and copies it when run in a terminal. */
@@ -28,6 +34,11 @@ export async function runStandup(
     log: logError,
   });
   for (const w of standup.warnings) console.error(`warning: ${w}`);
+  if (opts.to) {
+    // The same text, written where that export's destination says (a daily note, a tool).
+    await saveToDestination(config, destinationExport(config, opts.to), standup.text, date, opts);
+    return;
+  }
   process.stdout.write(`${standup.text}\n`);
   if (opts.copy === false || !process.stdout.isTTY) return;
   try {

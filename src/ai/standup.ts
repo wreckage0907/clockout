@@ -3,6 +3,7 @@ import type { StandupStyle } from "../config/schema";
 import { hasSecret, redactSecrets } from "../core/secrets";
 import type { StandupFacts, StandupSections } from "../core/standup";
 import { cleanText } from "../core/text";
+import { remembered } from "./summarize";
 import type { LlmBackend } from "./types";
 
 const LENGTH: Record<StandupStyle["length"], { rule: string; items: number; max: number }> = {
@@ -11,7 +12,7 @@ const LENGTH: Record<StandupStyle["length"], { rule: string; items: number; max:
   long: { rule: "at most 8 items per section, each one or two sentences", items: 8, max: 300 },
 };
 
-function systemFor(style: StandupStyle): string {
+function systemFor(style: StandupStyle, memories: readonly string[] = []): string {
   const form =
     style.format === "prose"
       ? "Each section is one item: a sentence or two in the first person, without the section's name."
@@ -23,6 +24,7 @@ function systemFor(style: StandupStyle): string {
     style.examples?.length
       ? `\nStandups they wrote before. Match their style, not their content:\n${style.examples.map((e) => `---\n${e}`).join("\n")}\n---`
       : "",
+    remembered(memories),
   ].join("");
   return `You write a developer's daily standup from facts about their work. Return two sections:
 - yesterday: what they did on the previous working day, from its timesheet rows (yesterday.items). Group rows of the same work; lead with what moved forward.
@@ -55,11 +57,12 @@ export async function writeStandup(
   facts: StandupFacts,
   backend: LlmBackend,
   style: StandupStyle,
+  memories: readonly string[] = [],
 ): Promise<StandupSections> {
   const { blockers: _, ...shown } = facts;
   const prompt = redactSecrets(JSON.stringify(shown, null, 2));
   const out = await backend.complete({
-    system: systemFor(style),
+    system: systemFor(style, memories),
     prompt,
     schema: outputFor(style),
   });

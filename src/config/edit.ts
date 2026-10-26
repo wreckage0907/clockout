@@ -1,4 +1,4 @@
-import type { Config, ExportFormat, SourceConfig, TaskMapping } from "./schema";
+import type { Config, ExportFormat, McpServer, SourceConfig, TaskMapping } from "./schema";
 
 // Small pure changes to a config, for the setup screen. Each returns a new config; saving it
 // (and validating) is the caller's job.
@@ -11,6 +11,39 @@ export function withSource(config: Config, source: SourceConfig, on: boolean): C
     ...config,
     sources: on ? [...others, ...(existing.length ? existing : [source])] : others,
   };
+}
+
+/**
+ * Remembers something in the person's words; the same thing twice (however it's said) is kept
+ * once, and the list has a limit the schema enforces.
+ */
+export function withMemory(config: Config, text: string): Config {
+  const clean = text.trim();
+  if (!clean || config.memories.some((m) => same(m, clean))) return config;
+  return { ...config, memories: [...config.memories, clean] };
+}
+
+/**
+ * Forgets a memory, by its own words or a part of them: "the ticket key one" removes "Put the
+ * ticket key first". Returns the config and whether something was forgotten.
+ */
+export function withoutMemory(
+  config: Config,
+  text: string,
+): { config: Config; forgotten: string | null } {
+  const said = text.trim().toLowerCase();
+  const exact = config.memories.find((m) => m.toLowerCase() === said);
+  const partial = exact ?? config.memories.filter((m) => m.toLowerCase().includes(said));
+  const one = exact ?? (partial.length === 1 ? partial[0] : undefined);
+  if (!one) return { config, forgotten: null };
+  return {
+    config: { ...config, memories: config.memories.filter((m) => m !== one) },
+    forgotten: one,
+  };
+}
+
+function same(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
 /** Claude Code project folders to leave out. An empty list removes the key (TOML has no undefined). */
@@ -80,6 +113,11 @@ export function clockText(minutes: number): string {
   return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
 }
 
+/** Adds a remote MCP server, or points the one with its name at a new address. */
+export function withMcpServer(config: Config, server: McpServer): Config {
+  return { ...config, mcp: [...config.mcp.filter((s) => s.name !== server.name), server] };
+}
+
 /** Sends a project's rows (or only its `task` rows) to an ERP task; replaces an older choice. */
 export function withTaskMapping(config: Config, mapping: TaskMapping): Config {
   const t = config.timesheet;
@@ -99,7 +137,7 @@ export function withoutTaskMapping(config: Config, mapping: Pick<TaskMapping, "p
 /** Sends days to the ERP at `origin`; keeps the task mappings if it's the same site. */
 export function withErpSite(config: Config, origin: string): Config {
   const t = config.timesheet;
-  const same = t && new URL(t.url).origin === new URL(origin).origin;
+  const same = t && t.type !== "command" && new URL(t.url).origin === new URL(origin).origin;
   return { ...config, timesheet: same ? t : { type: "next-pms", url: origin, map: [] } };
 }
 

@@ -500,8 +500,46 @@ function agentDuring(
 /** The same event can arrive from two calendars; keep one per event and start time. */
 function dedupeMeetings(meetings: Activity[]): Activity[] {
   const seen = new Map<string, Activity>();
-  for (const m of meetings) seen.set(meetingKey(m), seen.get(meetingKey(m)) ?? m);
+  for (const m of meetWithRecordings(meetings))
+    seen.set(meetingKey(m), seen.get(meetingKey(m)) ?? m);
   return [...seen.values()];
+}
+
+/**
+ * A meeting you recorded and the same event from a calendar are one meeting: the calendar's
+ * title, the recording's times, and no question about whether you went (ADR 0010). A recording
+ * with no calendar event stays a meeting of its own.
+ */
+export function meetWithRecordings(meetings: Activity[]): Activity[] {
+  const recorded = meetings.filter((m) => m.recorded);
+  if (recorded.length === 0) return meetings;
+  const calendar = meetings.filter((m) => !m.recorded);
+  const paired = new Set<Activity>();
+  const out: Activity[] = [];
+  for (const r of recorded) {
+    const event = r.refs?.find((x) => x.startsWith("event:"));
+    const other = event
+      ? calendar.find((c) => !paired.has(c) && c.refs?.includes(event) && overlaps(c, r))
+      : undefined;
+    if (!other) {
+      out.push(r);
+      continue;
+    }
+    paired.add(other);
+    out.push({
+      ...r,
+      title: other.title ?? r.title,
+      project: other.project ?? r.project,
+      attendance: "accepted",
+      attendees: [...new Set([...(other.attendees ?? []), ...(r.attendees ?? [])])].sort(),
+      refs: [...new Set([...(other.refs ?? []), ...(r.refs ?? [])])],
+    });
+  }
+  return [...out, ...calendar.filter((c) => !paired.has(c))];
+}
+
+function overlaps(a: Activity, b: Activity): boolean {
+  return a.start.getTime() < (b.end?.getTime() ?? 0) && (a.end?.getTime() ?? 0) > b.start.getTime();
 }
 
 function meetingKey(m: Activity): string {

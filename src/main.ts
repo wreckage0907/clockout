@@ -40,6 +40,9 @@ program
   .description("Write the timesheet: date, project, task, hours, description")
   .option("-f, --format <format>", "csv, md, tsv, json, or a name from [[exports]]", "csv")
   .option("-o, --out <file>", "write to a file instead of the terminal")
+  .option("--dest", "write where the export's destination says (a file, an MCP tool)")
+  .option("-n, --dry-run", "with --dest: show the text and where it would go")
+  .option("-y, --yes", "with --dest: write without asking")
   .option("--from <date>", "first day of a range")
   .option("--to <date>", "last day of a range")
   .option("--no-ai", "use session and PR titles instead of AI summaries")
@@ -79,6 +82,9 @@ program
   )
   .option("--no-ai", "use the plain template instead of the AI helper")
   .option("--no-copy", "only print it, don't copy it to the clipboard")
+  .option("--to <format>", "write it where that export's destination says (a file, an MCP tool)")
+  .option("-n, --dry-run", "with --to: show it and where it would go")
+  .option("-y, --yes", "with --to: write without asking")
   .action((date, opts) => runStandup(date, opts));
 
 program

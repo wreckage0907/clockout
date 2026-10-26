@@ -694,6 +694,8 @@ describe("setup", () => {
     expect(frame).toContain("2 projects in ~/.pi/agent/sessions");
     expect(frame).toMatch(/Codex\s+no sessions found/);
     expect(frame).toContain("tick to sign in");
+    // A recorder is a source too: its meetings are proof you were there.
+    expect(frame).toContain("Wispr Flow");
     ui.stdin.write(ESC);
     await tick();
     expect(ui.lastFrame()).not.toContain("What Clockout reads");
@@ -883,6 +885,36 @@ describe("setup", () => {
     ui.stdin.write("\u007f"); // ⌫
     await until(() => JSON.stringify(lastSaved(calls)?.projects), "[]");
     expect(lastSaved(calls)?.projects).toEqual([]);
+  });
+
+  it("lists what Clockout remembers, and forgets one with ⌫", async () => {
+    const remembered = {
+      ...config,
+      memories: ["Ticket keys come first", "No jargon"],
+      exports: [
+        {
+          name: "daily",
+          type: "markdown" as const,
+          merge: true,
+          to: { file: "~/Vault/Daily/{date}.md", append: true },
+        },
+      ],
+    };
+    const { ui, calls } = await openSetup({ setup: { config: remembered } });
+    await down(ui, 2); // AI helper
+    await until(ui.lastFrame, "REMEMBERED");
+    expect(ui.lastFrame()).toContain("Ticket keys come first");
+    expect(ui.lastFrame()).toContain("✕ forget");
+    expect(ui.lastFrame()).toContain('say "remember …" in the chat bar');
+    // An export's destination is shown, and it's set by hand, not here.
+    expect(ui.lastFrame()).toContain("daily → ~/Vault/Daily/{date}.md (added to)");
+    expect(ui.lastFrame()).toContain("set by hand in config.toml");
+    ui.stdin.write(RIGHT); // into the rows: Helper
+    await tick();
+    await down(ui, 10); // Descriptions' four, Standup's four, then the two memories
+    ui.stdin.write("\u007f"); // ⌫ on the second one
+    await until(() => JSON.stringify(lastSaved(calls)?.memories), '["Ticket keys come first"]');
+    expect(lastSaved(calls)?.memories).toEqual(["Ticket keys come first"]);
   });
 
   it("opens Claude Code's projects with enter, filters them by typing, and esc goes back", async () => {

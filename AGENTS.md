@@ -48,7 +48,7 @@ src/core/         domain logic. No IO, no Ink, no process access.
 src/sources/      one folder per source; each only emits Activity records (GitHub's open-work.ts also answers what's still open, for standups)
 src/ai/           LlmBackend interface + backends; prompts and output schemas
 src/tui/          Ink components. Render state; never fetch.
-src/export/       formatters for clipboard, Markdown, CSV
+src/export/       formatters for clipboard, Markdown, CSV; send.ts writes where an export's `to` says
 src/config/       zod schema, TOML load/save, XDG paths
 src/store/        JSON store for days and corrections
 src/collect.ts    runs sources for a day, builds and saves it (openDay)
@@ -59,6 +59,7 @@ src/standup.ts    gathers a standup's facts (previous working day, today's calen
 src/mcp/          MCP client (streamable HTTP) and its sign-in; calls only tools named in config or code
 src/oauth.ts      loopback + PKCE, discovery and registration for browser sign-ins
 src/log.ts        local error log: full details behind the one-line messages, tokens redacted
+src/command.ts    runs a program you named: one JSON request on stdin, one JSON answer (ADR 0009 layer 4)
 src/files.ts      readable reasons a file couldn't be written
 ```
 

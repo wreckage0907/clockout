@@ -13,7 +13,7 @@ import {
   saveGoogleCredentials,
   saveMcpCredentials,
 } from "../config/credentials";
-import { withErpSite } from "../config/edit";
+import { withErpSite, withMcpServer, withSource } from "../config/edit";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths, tildify } from "../config/paths";
 import { type Config, isSafeSite, mcpServer } from "../config/schema";
@@ -22,6 +22,7 @@ import { dayRange, localDate } from "../core/time";
 import { clientFor, connectMcp, revokeMcp } from "../mcp";
 import { googleCalendar } from "../sources/google-calendar";
 import { connectGoogle, googleClient, revoke } from "../sources/google-calendar/oauth";
+import { WISPR_SERVER, WISPR_URL } from "../sources/wispr-flow";
 import { connectErp, revokeErp, siteOrigin } from "../targets/next-pms/oauth";
 
 /** Opens a URL in the default browser; the URL is printed too, in case that fails. */
@@ -36,6 +37,14 @@ const openInBrowser = (what: string) => async (url: string) => {
         ? ["cmd", ["/c", "start", "", url]]
         : ["xdg-open", [url]];
   await execa(cmd, args as string[]).catch(() => undefined);
+};
+
+/**
+ * MCP servers Clockout knows by name: their address, so nobody has to paste it, and the source
+ * that reads from them once they're connected.
+ */
+const KNOWN_SERVERS: Record<string, { url: string; source?: "wispr-flow" }> = {
+  wispr: { url: WISPR_URL, source: "wispr-flow" },
 };
 
 function check(service: string): "google" | "erp" | "mcp" {
@@ -110,7 +119,7 @@ async function showToday(config: Config) {
 async function connectErpSite(url: string | undefined) {
   const { configFile } = resolvePaths();
   const config = await loadConfig(configFile);
-  const site = url ?? config?.timesheet?.url;
+  const site = url ?? (config?.timesheet?.type === "command" ? undefined : config?.timesheet?.url);
   if (!site)
     throw new Error("Give your ERP's address: clockout connect erp https://erp.example.com");
   const origin = erpOrigin(site);
@@ -177,7 +186,7 @@ async function connectMcpServer(name: string, url: string | undefined) {
   const config = await loadConfig(configFile);
   if (!config) throw new Error(`Run \`clockout init\` first, then \`clockout connect ${name}\`.`);
   const known = config.mcp.find((s) => s.name === name);
-  const address = url?.trim() ?? known?.url;
+  const address = url?.trim() ?? known?.url ?? KNOWN_SERVERS[name]?.url;
   if (!address)
     throw new Error(
       `There's no MCP server called "${name}" in your config. Give its address: clockout connect ${name} https://example.com/mcp`,
@@ -202,20 +211,46 @@ async function connectMcpServer(name: string, url: string | undefined) {
   const tools = await client.listTools();
 
   if (creds) await saveMcpCredentials(name, creds);
-  if (!known || known.url !== server.url) {
-    const others = config.mcp.filter((s) => s.name !== name);
-    await saveConfig(configFile, { ...config, mcp: [...others, server] });
-  }
+  const reads = KNOWN_SERVERS[name]?.source;
+  const next = {
+    ...config,
+    mcp: [...config.mcp.filter((s) => s.name !== name), server],
+    sources:
+      reads && !config.sources.some((s) => s.type === reads)
+        ? [...config.sources, { type: reads, server: name }]
+        : config.sources,
+  };
+  if (!known || known.url !== server.url || next.sources !== config.sources)
+    await saveConfig(configFile, next);
   const names = tools.map((t) => cleanText(t.name)).filter(Boolean);
   const shown = names.length > 8 ? `${names.slice(0, 8).join(", ")}, …` : names.join(", ");
   console.log(
     `Connected to ${name} (${info.name}). It offers ${names.length} tool${names.length === 1 ? "" : "s"}${shown ? `: ${shown}` : ""}.`,
   );
+  if (reads && next.sources !== config.sources)
+    console.log("Clockout reads your recorded meetings from it too, and asks nothing about them.");
   console.log(
     signedIn
       ? `The sign-in is kept in ${tildify(credentialsPath(), homedir())} (only you can read it).`
       : "It didn't ask for a sign-in.",
   );
+}
+
+/** Signs in to the MCP server called `name` (see `src/mcp/`), adding it to the config. */
+export async function signInMcp(
+  name: string,
+  url: string,
+  config: Config,
+  open: (url: string) => Promise<void>,
+): Promise<Config> {
+  const creds = await connectMcp(name, url, open);
+  if (creds) await saveMcpCredentials(name, creds);
+  const server = mcpServer.parse({ name, url });
+  const withServer = withMcpServer(config, server);
+  // Only the recorder's own server brings a source with it; any other server is just a tool.
+  if (name !== WISPR_SERVER) return withServer;
+  const known = config.sources.some((s) => s.type === "wispr-flow" && s.server === name);
+  return known ? withServer : withSource(withServer, { type: "wispr-flow", server: name }, true);
 }
 
 /** Revokes an MCP server's sign-in and forgets it; the server stays in `[[mcp]]`. */

@@ -130,7 +130,13 @@ export async function openDay(
   const warnings = [...fresh.warnings];
   if (opts.ai) {
     try {
-      const summaries = await summarizeDay(draft, opts.ai, summaryCache, config.descriptions);
+      const summaries = await summarizeDay(
+        draft,
+        opts.ai,
+        summaryCache,
+        config.descriptions,
+        config.memories,
+      );
       for (const b of draft.blocks) b.summary = summaries.get(b.id) ?? b.summary;
     } catch (err) {
       warnings.push(`${(err as Error).message} Using session and PR titles instead.`);

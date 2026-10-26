@@ -268,9 +268,9 @@ export async function startMockMcp(opts: MockMcpOptions = {}) {
         case "list_meetings": {
           const from = Date.parse(String(args.from));
           const to = Date.parse(String(args.to));
-          const found = meetings
-            .filter((m) => Date.parse(m.start) < to && Date.parse(m.end) > from)
-            .map(({ summary: _, ...m }) => m);
+          const found = meetings.filter(
+            (m) => Date.parse(m.start) < to && Date.parse(m.end) > from,
+          );
           result = {
             ...text(JSON.stringify({ meetings: found })),
             structuredContent: { meetings: found },

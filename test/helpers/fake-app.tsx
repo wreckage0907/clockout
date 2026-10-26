@@ -187,6 +187,7 @@ export function fakeActions(
         github: { found: true },
         helpers: [{ id: "claude-code", name: "Claude Code" }],
         erp: { connected: false },
+        wispr: { connected: false },
         ...opts.setup,
       }),
       save: async (next) => {
@@ -195,6 +196,9 @@ export function fakeActions(
         return next;
       },
       connectGoogle: async () => {},
+      connectWispr: async () => {
+        calls.signedIn.push("wispr");
+      },
       connectErp: async (site) => {
         calls.signedIn.push(site);
         erpConfig = withErpSite(erpConfig, `https://${site}`);

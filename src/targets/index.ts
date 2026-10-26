@@ -1,5 +1,6 @@
 import { type ErpCredentials, loadErpCredentials, saveErpCredentials } from "../config/credentials";
 import type { Config } from "../config/schema";
+import { commandTarget } from "./command";
 import { httpTarget } from "./http";
 import { nextPms } from "./next-pms";
 import { erpAuth, type Fetch, siteOrigin } from "./next-pms/oauth";
@@ -27,6 +28,7 @@ export async function openTarget(config: Config, deps: TargetDeps = {}): Promise
       );
     return httpTarget(t.url, token, t.token_env, deps.fetch);
   }
+  if (t.type === "command") return commandTarget(t.run);
   const creds = await (deps.credentials ?? loadErpCredentials)();
   if (!creds || creds.url !== siteOrigin(t.url)) {
     throw new Error(

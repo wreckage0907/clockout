@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { configSchema } from "../../src/config/schema";
 import { buildDay } from "../../src/core/blocks";
+import { atLocalTime } from "../../src/core/time";
+import type { Activity } from "../../src/core/types";
 import { renderDay } from "../../src/export/text";
 import { FIXTURE_DATE, fixtureActivities, fixtureConfig } from "../helpers/fixture-day";
 
@@ -28,8 +31,41 @@ describe("renderDay", async () => {
     expect(hours.reduce((a, b) => a + b, 0)).toBe(6);
   });
 
-  it("ends with questions and notes", () => {
+  it("ends with questions, how to answer them, and notes", () => {
     expect(out).toContain('Questions\n  q1  Did you attend "Design sync"');
+    expect(out).toContain(
+      'Answer in the app (clockout), or: clockout edit "the 12:15 gap was lunch"',
+    );
     expect(out).toMatch(/Notes\n {2}Left out 1 declined meeting: Vendor demo$/);
+  });
+});
+
+describe("a recorded meeting on the printed day", () => {
+  const config = configSchema.parse({
+    me: { name: "Dev", emails: ["dev@example.com"], timezone: "Asia/Kolkata" },
+  });
+  const at = (hhmm: string) => atLocalTime("2026-10-16", hhmm, "Asia/Kolkata");
+  const meeting: Activity = {
+    source: "wispr-flow",
+    kind: "meeting",
+    actor: "human",
+    start: at("10:00"),
+    end: at("10:47"),
+    title: "Design review",
+    attendance: "accepted",
+    recorded: true,
+    refs: ["recording:rec-1"],
+    notes: "Agreed on the new card layout.\nSecond line.",
+  };
+  const out = renderDay(buildDay("2026-10-16", [meeting], config), config, false);
+
+  it("says what the recording was about, on one line", () => {
+    expect(out).toContain("        “Agreed on the new card layout. Second line.”");
+  });
+
+  it("keeps it out of the timesheet it prints", () => {
+    const sheet = out.slice(out.indexOf("Timesheet"));
+    expect(sheet).toContain("Design review");
+    expect(sheet).not.toContain("Agreed on the new card layout");
   });
 });

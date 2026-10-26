@@ -61,6 +61,28 @@ const githubSource = z.object({
   type: z.literal("github"),
 });
 
+/**
+ * Meetings you recorded (Wispr Flow's Notetaker, through its MCP server): read-only, named after
+ * the `[[mcp]]` server it reads from ([ADR 0010](../../docs/adr/0010-mcp-as-source-and-destination.md)).
+ */
+const wisprFlowSource = z.object({
+  type: z.literal("wispr-flow"),
+  /** The `[[mcp]]` server to read; `clockout connect wispr` adds it. */
+  server: z
+    .string()
+    .regex(/^[a-z][a-z0-9-]{0,31}$/, "an MCP server's name, e.g. wispr")
+    .default("wispr"),
+  /** The server's tool names, when they aren't the ones Clockout looks for. */
+  tools: z
+    .object({
+      /** Lists meetings over a range. */
+      list: z.string().min(1).optional(),
+      /** Reads one meeting in full, when the list leaves out its summary. */
+      meeting: z.string().min(1).optional(),
+    })
+    .optional(),
+});
+
 const calendarSource = z.object({
   type: z.literal("calendar"),
   method: z.literal("ics"),
@@ -86,6 +108,7 @@ export const sourceConfig = z.discriminatedUnion("type", [
   githubSource,
   calendarSource,
   googleCalendarSource,
+  wisprFlowSource,
 ]);
 
 /**
@@ -161,6 +184,23 @@ const httpTarget = z.object({
   map: z.array(taskMapping).default([]),
 });
 
+/**
+ * The escape hatch ([ADR 0009](../../docs/adr/0009-change-clockout-through-config.md), layer 4):
+ * a program you name, given one JSON request on stdin and one JSON answer on stdout. Only ever
+ * set by hand: no settings operation can add, change or point at one.
+ */
+const commandLine = z
+  .array(z.string().min(1).max(1000))
+  .min(1, 'give the program to run, e.g. ["my-pms", "--timesheet"]')
+  .max(32);
+
+const commandTarget = z.object({
+  type: z.literal("command"),
+  /** No shell: the first item is the program, the rest are its arguments, exactly as written. */
+  run: commandLine,
+  map: z.array(taskMapping).default([]),
+});
+
 /** Names `clockout connect` already uses for something else. */
 export const RESERVED_SERVER_NAMES = ["google", "erp"];
 
@@ -178,7 +218,21 @@ export const mcpServer = z.object({
 });
 export type McpServer = z.output<typeof mcpServer>;
 
-export const timesheetTarget = z.discriminatedUnion("type", [nextPmsTarget, httpTarget]);
+export const timesheetTarget = z.discriminatedUnion("type", [
+  nextPmsTarget,
+  httpTarget,
+  commandTarget,
+]);
+
+/** Where a target sends days, for display: the site's address, or the program it runs. */
+export function targetWhere(t: TimesheetTarget): string {
+  return t.type === "command" ? `\`${t.run.join(" ")}\`` : t.url;
+}
+
+/** A site target's host, for display; null for a command (nothing to sign in to). */
+export function targetHost(t: TimesheetTarget | undefined): string | null {
+  return t && t.type !== "command" ? new URL(t.url).host : null;
+}
 
 /** Names the built-in export formats use; an `[[exports]]` name can't take them. */
 export const BUILT_IN_FORMATS = ["csv", "tsv", "md", "markdown", "json"] as const;
@@ -244,6 +298,52 @@ const exportColumn = z
 const LINE_FIELD = /\{([^{}]*)\}/g;
 
 /**
+ * Where an export goes besides the clipboard or the screen ([ADR 0010](../../docs/adr/0010-mcp-as-source-and-destination.md)):
+ * a file (an Obsidian daily note) or one tool on a connected MCP server.
+ */
+const fileDestination = z.object({
+  /** A path, `~` allowed. `{date}` is the day (or the range's last day). */
+  file: z.string().min(1).max(400),
+  /** Adds to the end of the file instead of replacing it. */
+  append: z.boolean().optional(),
+});
+const mcpDestination = z.object({
+  /** A server in `[[mcp]]`. */
+  mcp: z
+    .string()
+    .regex(/^[a-z][a-z0-9-]{0,31}$/, "an MCP server's name, e.g. notion")
+    .refine(
+      (n) => !RESERVED_SERVER_NAMES.includes(n),
+      "google and erp aren't MCP servers; choose another",
+    ),
+  /** The tool to call; it comes from the server's own `tools/list`. */
+  tool: z.string().min(1).max(120),
+  /** Templates: `{text}` is the export, `{date}` the day. Nothing else. */
+  arguments: z.record(z.string().max(60), z.string().max(4000)).optional(),
+});
+/** `{text}` and `{date}` are the only things filled in; nothing is evaluated. */
+const DESTINATION_FIELD = /\{([^{}]*)\}/g;
+
+const commandDestination = z.object({
+  /** A program that takes `{ date, format, text }` and answers JSON. No shell. */
+  command: commandLine,
+});
+
+const exportDestination = z
+  .union([fileDestination, mcpDestination, commandDestination])
+  .superRefine((d, ctx) => {
+    const arg =
+      "file" in d ? d.file : "command" in d ? "" : Object.values(d.arguments ?? {}).join(" ");
+    for (const [, f] of arg.matchAll(DESTINATION_FIELD))
+      if (f !== "text" && f !== "date")
+        ctx.addIssue({
+          code: "custom",
+          message: `{${f}} isn't filled in; use {text} and {date}`,
+        });
+  });
+export type ExportDestination = z.output<typeof exportDestination>;
+
+/**
  * Your own export format ([ADR 0009](../../docs/adr/0009-change-clockout-through-config.md)):
  * named columns, or for text a line per row with `{field}`s filled in. Nothing is evaluated.
  */
@@ -266,6 +366,8 @@ export const exportFormat = z
     line: z.string().min(1).max(500).optional(),
     /** What Ctrl+Y, Copy sheet and a bare /copy use. */
     default: z.boolean().optional(),
+    /** Where it's written as well, when you ask for it (`clockout export -f <name> --dest`). */
+    to: exportDestination.optional(),
   })
   .superRefine((e, ctx) => {
     if (e.type === "text" && !e.line)
@@ -356,6 +458,14 @@ export const configSchema = z.object({
       examples: z.array(z.string().min(1).max(1000)).max(3).optional(),
     })
     .prefault({}),
+  /**
+   * Things you told Clockout to remember, in your own words: what the AI writes descriptions and
+   * standups with, and what no setting covers ([ADR 0011](../../docs/adr/0011-remember-what-people-say.md)).
+   */
+  memories: z
+    .array(z.string().min(1).max(200))
+    .max(20, "Clockout remembers 20 things at most; forget one first")
+    .default([]),
   sources: z.array(sourceConfig).default([]),
   projects: z.array(projectRule).default([]),
   /** MCP servers Clockout can sign in to and call ([ADR 0010](../../docs/adr/0010-mcp-as-source-and-destination.md)). */

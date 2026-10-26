@@ -1,4 +1,5 @@
 import { BREAK_PROJECT } from "../core/edits";
+import { cleanText } from "../core/text";
 import type { Block, Day, EditOp, Question } from "../core/types";
 
 /** A one-key answer to a question, and the edits it stands for. */
@@ -85,7 +86,15 @@ export function evidenceLine(b: Block): string {
       declined: "you declined",
       unknown: "on your calendar",
     };
-    parts.push(rsvp[meeting.attendance ?? "unknown"] ?? "on your calendar");
+    if (meeting.recorded) {
+      // A recording settles attendance: say how long it ran instead of your RSVP.
+      const minutes = meeting.end
+        ? Math.round((meeting.end.getTime() - meeting.start.getTime()) / 60000)
+        : 0;
+      parts.push(minutes > 0 ? `recorded ${howLong(minutes)}` : "recorded");
+    } else parts.push(rsvp[meeting.attendance ?? "unknown"] ?? "on your calendar");
+    // A recorder's summary is private (ADR 0010): on screen, and nowhere else.
+    if (meeting.notes) parts.push(`“${clip(meeting.notes, 100)}”`);
   }
   if (b.project === BREAK_PROJECT) parts.push("not counted");
   return parts.length ? parts.join(" · ") : "added by you";
@@ -103,4 +112,16 @@ function ref(a: { refs?: string[] }): string {
 
 function plural(n: number, word: string): string {
   return n ? `${n} ${word}${n === 1 ? "" : "s"}` : "";
+}
+
+function clip(text: string, max: number): string {
+  const one = cleanText(text);
+  return one.length > max ? `${one.slice(0, max - 1)}…` : one;
+}
+
+/** "47m", "1h", "1h30m" */
+function howLong(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h ? `${h}h` : ""}${m ? `${m}m` : ""}` || "0m";
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Config } from "../config/schema";
+import { type Config, targetHost } from "../config/schema";
 import { aiSettingOpSchema, type ClaudeProjectRef, type SettingOp } from "../config/setting-ops";
 import { editOpSchema } from "../core/edit-schema";
 import { applyEdits } from "../core/edits";
@@ -33,6 +33,7 @@ Settings (what Clockout reads and how it counts), from "settings" in the input:
 - How descriptions are written ("write them in past tense", "make descriptions longer", "always put the ticket key first", "write them like: …"): descriptions, with only what they asked to change. Their own instructions go in their words; examples are descriptions they give as a model.
 - How their standup is written ("make my standup bullet points", "keep the standup short", "leave meetings out of my standup", "write it like: …"): standup, with only what they asked to change.
 - Export formats ("add a Harvest export with hours as h:mm", "a Slack export, one line per row", "make harvest what ctrl+y copies"): export_format with the whole format (an existing one from exports, with only what they asked to change), remove_export, copy_default. Built-in csv, tsv, md and json can't be changed or named. Columns are only the listed fields; text lines only fill in {field}s.
+- Something they want kept in mind that no setting covers ("remember that I write for a non-technical audience", "remember my ticket keys come first"): remember, in their words, shortened to one line. A style, a rule, a task name or a limit is a setting, so use that instead. "forget …" or "stop remembering …": forget, with the memory's words from memories.
 - Durations are like "7h30m", "45m"; working hours "HH:MM-HH:MM".
 - Google Calendar and the ERP need a sign-in in the browser: use connect (with the ERP's address when they give one) and disconnect. Never ask for passwords, tokens or private calendar links.
 - "Send <project> to <task>" or "log <project> against <task>": erp_task with the words they used to name the task as search.
@@ -97,7 +98,9 @@ export function settingsContext(config: Config, facts: SettingsFacts) {
     ai_helper: config.ai.backend,
     descriptions: config.descriptions,
     standup: config.standup,
-    exports: config.exports,
+    memories: config.memories,
+    // A file a destination writes to is set by hand and stays out of what the AI sees.
+    exports: config.exports.map((e) => (e.to && "file" in e.to ? { ...e, to: undefined } : e)),
     project_rules: config.projects.map((p) => ({
       name: p.name,
       ...(p.task ? { task: p.task } : {}),
@@ -106,7 +109,7 @@ export function settingsContext(config: Config, facts: SettingsFacts) {
     })),
     erp: config.timesheet
       ? {
-          site: new URL(config.timesheet.url).host,
+          site: targetHost(config.timesheet) ?? "a program on this machine",
           signed_in: facts.erpConnected,
           sends: config.timesheet.map.map((m) => ({
             project: m.project,

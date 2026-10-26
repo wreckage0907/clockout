@@ -8,14 +8,16 @@ import {
   withClaudeExclude,
   withDay,
   withDescriptions,
+  withoutMemory,
   withoutProject,
   withoutTaskMapping,
   withProject,
   withSource,
   withStandup,
 } from "../config/edit";
-import { type Config, durationMinutes } from "../config/schema";
+import { type Config, durationMinutes, targetHost } from "../config/schema";
 import { FORMAT_WORDS, HELPER_NAMES } from "../config/setting-ops";
+
 import type { ClaudeProject } from "../sources/claude-code/paths";
 import { Clickable } from "./clickable";
 import { Button, Dialog, Spinner, Typed, useDraft } from "./kit";
@@ -38,6 +40,8 @@ export interface SetupState {
   helpers: { id: Exclude<Config["ai"]["backend"], "auto" | "none">; name: string }[];
   /** Signed in to the ERP in `config.timesheet`, and as whom. */
   erp: { connected: boolean; user?: string };
+  /** Signed in to Wispr Flow's MCP server, so recorded meetings are read. */
+  wispr: { connected: boolean };
 }
 
 export interface SetupActions {
@@ -50,6 +54,8 @@ export interface SetupActions {
   connectErp(site: string): Promise<{ config: Config; user?: string }>;
   /** Signs out of the ERP; the site and task mappings stay in the config. */
   disconnectErp(): Promise<void>;
+  /** Signs in to Wispr Flow's MCP server in the browser and keeps the sign-in. */
+  connectWispr(): Promise<void>;
 }
 
 type SectionId = SetupSection;
@@ -575,6 +581,23 @@ export function Setup({
           : "PRs, reviews, issues and comments",
         press: () => void save(withSource(c, { type: "github" }, !has("github"))),
       },
+      {
+        id: "wispr",
+        group: "Meetings you recorded",
+        label: "Wispr Flow",
+        on: has("wispr-flow"),
+        busy: busy === "wispr",
+        note:
+          busy === "wispr"
+            ? "finish in your browser…"
+            : has("wispr-flow")
+              ? "recordings prove you were there"
+              : "tick to sign in",
+        press: () =>
+          has("wispr-flow")
+            ? void save(withSource(c, { type: "wispr-flow", server: "wispr" }, false))
+            : void connectWispr(),
+      },
     ];
   }
 
@@ -762,6 +785,38 @@ export function Setup({
         value: c.standup.examples?.length ? `${c.standup.examples.length} to match` : "none",
         note: 'say "write my standup like: …"',
       },
+      // What they asked Clockout to remember: in every description and standup, until forgotten.
+      ...c.memories.map(
+        (memory, i): Row => ({
+          id: `memory-${i}`,
+          group: "Remembered",
+          label: clip(memory, 52),
+          wide: true,
+          trail: "✕ forget",
+          remove: () => void save(withoutMemory(c, memory).config),
+        }),
+      ),
+      // Where the exports you set up also write, when you ask them to.
+      ...c.exports
+        .filter((e) => e.to)
+        .map(
+          (e, i): Row => ({
+            id: `dest-${i}`,
+            group: "Where exports go",
+            label: `${e.name} → ${whereText(e.to)}`,
+            wide: true,
+            dead: true,
+            note: "set by hand in config.toml",
+          }),
+        ),
+      {
+        id: "memory-add",
+        group: "Remembered",
+        label: "Remember",
+        note: c.memories.length
+          ? 'say "remember …" in the chat bar'
+          : 'nothing yet · say "remember …" in the chat bar',
+      },
     ];
   }
 
@@ -897,6 +952,22 @@ export function Setup({
     }
   }
 
+  async function connectWispr() {
+    if (!config) return;
+    setBusy("wispr");
+    setError(null);
+    try {
+      await actions.connectWispr();
+      const next = await actions.state();
+      setState(next);
+      onConfig(next.config);
+    } catch (err) {
+      setError(`Wispr Flow sign-in didn't finish: ${(err as Error).message}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function connectErp() {
     if (!config) return;
     const address = site.value.trim() || erpHost(config);
@@ -942,8 +1013,16 @@ function claudeSource(config: Config) {
   return s?.type === "claude-code" ? s : undefined;
 }
 
+/** Where an export goes, as the config writes it: the template, not a filled-in one. */
+function whereText(to: Config["exports"][number]["to"]): string {
+  if (!to) return "";
+  if ("file" in to) return `${to.file}${to.append ? " (added to)" : ""}`;
+  if ("mcp" in to) return `${to.mcp} · ${to.tool}`;
+  return `the program ${to.command.join(" ")}`;
+}
+
 function erpHost(config: Config): string | null {
-  return config.timesheet ? new URL(config.timesheet.url).host : null;
+  return targetHost(config.timesheet);
 }
 
 // ── Pieces ───────────────────────────────────────────────────────────────────

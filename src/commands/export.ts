@@ -6,6 +6,7 @@ import { exportNames, findExport, render, rowsFor } from "../export/named";
 import { fileError } from "../files";
 import { logError } from "../log";
 import { type AppContext, appContext, commandAi, resolveDate } from "./context";
+import { destinationExport, saveToDestination } from "./dest";
 
 export interface ExportOptions {
   format?: string;
@@ -13,6 +14,12 @@ export interface ExportOptions {
   from?: string;
   to?: string;
   ai?: boolean;
+  /** Write it where the format's `to` says, instead of to the terminal. */
+  dest?: boolean;
+  dryRun?: boolean;
+  yes?: boolean;
+  /** Whether there's someone to ask; tests say so. */
+  interactive?: boolean;
 }
 
 const MAX_DAYS = 62;
@@ -27,9 +34,14 @@ export async function runExport(
   app?: AppContext,
 ) {
   const { config, store } = app ?? (await appContext());
-  const format = findExport(opts.format ?? "csv", config);
-  if (!format)
+  if (opts.dest && opts.out)
+    throw new Error(
+      "Give --out or --dest, not both: --out writes a file you name, --dest writes where the export says.",
+    );
+  const choice = findExport(opts.format ?? "csv", config);
+  if (!choice)
     throw new Error(`Unknown format "${opts.format}". Use ${exportNames(config).join(", ")}.`);
+  const format = choice;
 
   const tz = config.me.timezone;
   if (dateInput && (opts.from || opts.to))
@@ -48,6 +60,7 @@ export async function runExport(
       throw new Error(`That's more than ${MAX_DAYS} days; export a shorter range.`);
   }
 
+  const target = opts.dest ? destinationExport(config, opts.format) : null;
   const ai = await commandAi(config, opts.ai);
   const rows: TimesheetRow[] = [];
   let open = 0;
@@ -60,7 +73,10 @@ export async function runExport(
 
   const text = render(format, rows, config);
 
-  if (opts.out) {
+  if (target) {
+    // `{date}` is the last day of the range: a daily note gets that day's rows.
+    await saveToDestination(config, target, text, to, opts);
+  } else if (opts.out) {
     await writeFile(opts.out, text).catch((err: unknown) => {
       throw fileError(opts.out ?? "", err);
     });

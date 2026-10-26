@@ -96,6 +96,49 @@ describe("connecting an MCP server", () => {
   });
 });
 
+describe("a server Clockout knows by name", () => {
+  let mock: MockMcp;
+  let sb: Sandbox;
+  beforeAll(async () => {
+    mock = await startMockMcp();
+    sb = await sandbox();
+    await sb.writeConfig(CONFIG);
+  });
+  afterAll(() => mock.stop());
+
+  it("turns on the source that reads it, so recorded meetings arrive without another step", async () => {
+    const { run } = await signIn(sb, ["connect", "wispr", mock.url]);
+    const r = await run.done;
+    expect(r.stderr).toBe("");
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("Clockout reads your recorded meetings from it too");
+    const config = await readFile(join(sb.config, "config.toml"), "utf8");
+    expect(config).toContain(`[[mcp]]\nname = "wispr"\nurl = "${mock.url}"`);
+    expect(config).toContain('[[sources]]\ntype = "wispr-flow"\nserver = "wispr"');
+  });
+
+  it("drafts the day from what was recorded, and asks nothing about attending", async () => {
+    const r = await sb.run(["day", "2026-10-16", "--plain", "--no-ai"]);
+    expect(r.stderr).toBe("");
+    expect(r.code).toBe(0);
+    // The mock's recordings on 2026-10-16, in the sandbox's UTC day.
+    expect(r.stdout).toContain("Daily standup");
+    expect(r.stdout).toContain("Design review");
+    expect(r.stdout).not.toContain("Did you attend");
+    // What the recorder said is on screen, and never in the timesheet rows.
+    expect(r.stdout).toContain("Went through yesterday's deploy.");
+  });
+
+  it("connects again by name, and doesn't add a second source", async () => {
+    const { run } = await signIn(sb, ["connect", "wispr"]);
+    const r = await run.done;
+    expect(r.code).toBe(0);
+    expect(r.stdout).not.toContain("recorded meetings from it too");
+    const config = await readFile(join(sb.config, "config.toml"), "utf8");
+    expect(config.match(/type = "wispr-flow"/g)).toHaveLength(1);
+  });
+});
+
 describe("connecting an MCP server, when it can't", () => {
   it("says access wasn't allowed when you turn it down, and saves nothing", async () => {
     const mock = await startMockMcp({ deny: true });
@@ -127,11 +170,11 @@ describe("connecting an MCP server, when it can't", () => {
   it("asks for an address for a name it doesn't know", async () => {
     const sb = await sandbox();
     await sb.writeConfig(CONFIG);
-    const r = await sb.run(["connect", "wispr"]);
+    const r = await sb.run(["connect", "notion"]);
     expect(r.stdout).toBe("");
     expect(r.code).toBe(1);
     expect(r.stderr).toBe(
-      'clockout: There\'s no MCP server called "wispr" in your config. Give its address: clockout connect wispr https://example.com/mcp\n',
+      'clockout: There\'s no MCP server called "notion" in your config. Give its address: clockout connect notion https://example.com/mcp\n',
     );
   });
 

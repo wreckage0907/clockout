@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { hasSecret } from "../core/secrets";
 import {
   withAi,
   withClaudeExclude,
@@ -6,12 +7,17 @@ import {
   withDay,
   withDescriptions,
   withExport,
+  withMemory,
   withoutExport,
+  withoutMemory,
   withSource,
   withStandup,
   withTaskMapping,
 } from "./edit";
 import { type Config, configSchema, EXPORT_FIELDS, HOURS_FORMATS } from "./schema";
+
+/** How many things Clockout remembers at once (the config schema's limit). */
+const MEMORY_LIMIT = 20;
 
 // Settings changes said in the chat bar. The AI returns these operations; it never writes the
 // config. They're applied here (pure), then the whole config is validated like config.toml is.
@@ -185,6 +191,17 @@ const exportFormat = z
       .optional()
       .describe('Text only: one line per row, e.g. "{project}: {description} ({hours})"'),
     default: z.boolean().optional().describe("What Ctrl+Y and a bare /copy use"),
+    to: z
+      .object({
+        mcp: z.string().min(1).describe("A server from [[mcp]]"),
+        tool: z.string().min(1).describe("A tool from that server's tools"),
+        arguments: z
+          .record(z.string(), z.string())
+          .optional()
+          .describe("Templates: {text} is the export, {date} the day"),
+      })
+      .optional()
+      .describe("Also send it to a connected MCP server; files are set by hand"),
   })
   .describe(
     "Add an export format, or replace the one with this name (send it whole, with what they asked to change)",
@@ -198,6 +215,17 @@ const copyDefault = z
     name: z.string().describe('One of their exports, or "" for rows to paste'),
   })
   .describe("What Ctrl+Y and a bare /copy copy as");
+const remember = z
+  .object({
+    op: z.literal("remember"),
+    text: z.string().min(1).max(200).describe("It in their words, one line: what to keep in mind"),
+  })
+  .describe(
+    "Keep something in mind for every description, standup and settings change. Only when no setting covers it (a rule, a style or a task name is a setting)",
+  );
+const forget = z
+  .object({ op: z.literal("forget"), text: z.string().min(1) })
+  .describe("Stop remembering something, by its words or part of them");
 const connect = z
   .object({
     op: z.literal("connect"),
@@ -224,6 +252,8 @@ export const aiSettingOpSchema = z.discriminatedUnion("op", [
   exportFormat,
   removeExport,
   copyDefault,
+  remember,
+  forget,
   connect,
   disconnect,
   erpTask,
@@ -243,6 +273,8 @@ export const settingOpSchema = z.discriminatedUnion("op", [
   exportFormat,
   removeExport,
   copyDefault,
+  remember,
+  forget,
   connect,
   disconnect,
   erpTask.extend({
@@ -359,9 +391,18 @@ export function applySettings(
         break;
       }
       case "export_format": {
+        // A program is code the person trusts; it's set by hand, never proposed (ADR 0009).
+        if (op.to && "command" in (op.to as Record<string, unknown>)) {
+          errors.push("A program as a destination is set by hand in config.toml, never from here.");
+          break;
+        }
         const { op: _, name, type, columns, ...rest } = op;
+        // A file path is only ever set by hand, so an update keeps the one it already had.
+        const had = next.exports.find((e) => e.name === name.trim().toLowerCase());
+        const keep = !op.to && had?.to && "file" in had.to ? had.to : undefined;
         next = withExport(next, {
           ...defined(rest),
+          ...(keep ? { to: keep } : {}),
           name: name.trim().toLowerCase(),
           type,
           // TOML has no undefined: leave out what wasn't said.
@@ -396,6 +437,35 @@ export function applySettings(
           ],
         };
         break;
+      case "remember": {
+        const text = op.text.trim();
+        // A memory is words, not a secret: a token-looking one is refused, not kept quietly.
+        if (hasSecret(text)) {
+          errors.push("That looks like a password or a token, so Clockout didn't remember it.");
+          break;
+        }
+        if (next.memories.length >= MEMORY_LIMIT && !next.memories.some((m) => same(m, text))) {
+          errors.push(
+            `Clockout remembers ${MEMORY_LIMIT} things at most, and all ${MEMORY_LIMIT} are taken. Forget one first: ${next.memories.join(" · ")}`,
+          );
+          break;
+        }
+        next = withMemory(next, text);
+        break;
+      }
+      case "forget": {
+        const { config: after, forgotten } = withoutMemory(next, op.text);
+        if (!forgotten) {
+          errors.push(
+            next.memories.length
+              ? `There's no memory like “${op.text}”. Clockout remembers: ${next.memories.join(" · ")}`
+              : "Clockout isn't remembering anything yet.",
+          );
+          break;
+        }
+        next = after;
+        break;
+      }
       case "connect":
         effects.push({ kind: "connect", service: op.service, ...(op.url ? { url: op.url } : {}) });
         break;
@@ -536,6 +606,10 @@ function describeSetting(op: SettingOp): string {
         : "Ctrl+Y copies rows to paste";
     case "calendar_feed":
       return "Read your calendar from its private link (kept on this machine)";
+    case "remember":
+      return `Remember: “${op.text.trim()}”`;
+    case "forget":
+      return `Forget “${op.text.trim()}”`;
     case "connect":
       return op.service === "google"
         ? "Sign in to Google Calendar in your browser"

@@ -171,10 +171,19 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 - [x] Standups: `clockout standup [date]` and `/standup`. Yesterday from the previous working day's saved day (Friday on a Monday); today from today's calendar and unfinished work (open PRs, review requests, branches without a merged PR); blockers only from what you say, never guessed. Copied to the clipboard; sending it to an export destination comes with export destinations below
 - [x] `[standup]` style (format, length, instructions, examples) like `[descriptions]`: Setup's AI helper section and the chat bar. One AI call with titles and summaries only; a plain template without an AI helper
-- [ ] Wispr Flow source (ADR 0010): `clockout connect wispr`, recorded meetings for the range, a recording counts as attended for its recorded length, merged with its calendar event in core, summaries on screen only (never to the AI or an export); tests against the mock MCP server
-- [ ] Export destinations (ADR 0010): `to = { file, append }` (an Obsidian daily note, written directly) and `to = { mcp, tool, arguments }`; preview, then confirm; file paths never from the AI
-- [ ] `type = "command"` target and export: JSON over stdin/stdout, no shell, timeout, own process group; set by hand or on the command line only, refused from the chat bar; how to use it with a local stdio MCP server
+- [x] Wispr Flow source (ADR 0010): `clockout connect wispr`, recorded meetings for the range, a recording counts as attended for its recorded length, merged with its calendar event in core, summaries on screen only (never to the AI or an export); tests against the mock MCP server
+- [x] Export destinations (ADR 0010): `to = { file, append }` (an Obsidian daily note, written directly) and `to = { mcp, tool, arguments }`; preview, then confirm; file paths never from the AI
+- [x] `type = "command"` target and export: JSON over stdin/stdout, no shell, timeout, own process group; set by hand or on the command line only, refused from the chat bar; how to use it with a local stdio MCP server
 - [ ] Spec, README and Setup for all of the above
+
+## Before release, day 2b (2026-10-26) — memories
+
+[ADR 0011](adr/0011-remember-what-people-say.md): what has no setting of its own is one line of text the AI is handed, never a second config system.
+
+- [x] `memories` in the config (max 20, 200 characters each), in your own words
+- [x] `remember` / `forget` settings operations, shown in the proposal; tokens and keys refused; the cap says so
+- [x] Handed to the descriptions prompt, the standup prompt and the settings prompt; part of the descriptions cache key
+- [x] Setup → AI helper lists them, each ✕ forget; chat bar says the rest
 
 ## Day 12 — Publish (milestone)
 

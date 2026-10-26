@@ -3,7 +3,7 @@ import { openDay } from "../collect";
 import { withTaskMapping } from "../config/edit";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths } from "../config/paths";
-import type { Config } from "../config/schema";
+import { type Config, targetWhere } from "../config/schema";
 import { changes, describeItem, type PushPlan, type PushRow } from "../core/push";
 import { logError } from "../log";
 import { applyPush, type PushResult, preparePush } from "../push";
@@ -66,7 +66,8 @@ export async function runPush(
     plan = await preparePush(stored, config, target);
   }
 
-  console.log(`${date} → ${config.timesheet?.url}\n${planText(plan) || "  (nothing to send)"}`);
+  const where = config.timesheet ? targetWhere(config.timesheet) : "";
+  console.log(`${date} → ${where}\n${planText(plan) || "  (nothing to send)"}`);
   if (plan.items.some((i) => i.action === "unmapped")) {
     console.error(
       "\nRows marked ? need an ERP task: pick them in the review screen (ctrl+s) or run `clockout push` in a terminal.",

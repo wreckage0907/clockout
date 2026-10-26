@@ -23,6 +23,7 @@ const SOURCE_NAMES: Record<string, string> = {
   github: "GitHub",
   calendar: "Calendar",
   "google-calendar": "Google Calendar",
+  "wispr-flow": "Wispr Flow",
 };
 
 /** One card in the day view: a timesheet row, or a meeting waiting for a yes or no. */

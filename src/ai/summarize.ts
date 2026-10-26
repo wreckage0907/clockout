@@ -18,8 +18,16 @@ const LENGTH: Record<DescriptionStyle["length"], { rule: string; max: number }> 
 };
 const DEFAULT_STYLE: DescriptionStyle = { format: "imperative", length: "short" };
 
+/** What they asked Clockout to remember, as prompt lines; nothing when there's nothing to say. */
+export function remembered(memories: readonly string[] | undefined): string {
+  const said = (memories ?? []).map((m) => `- ${m}`).join("\n");
+  return said
+    ? `\nThings they asked you to remember, followed unless they break the rules above:\n${said}`
+    : "";
+}
+
 /** The instructions for a style: the fixed rules, then the person's own words and examples. */
-function systemFor(style: DescriptionStyle): string {
+function systemFor(style: DescriptionStyle, memories: readonly string[] = []): string {
   const own = [
     style.instructions
       ? `\nTheir own prompt for how descriptions should read, followed unless it breaks the rules above:\n${style.instructions}`
@@ -27,6 +35,7 @@ function systemFor(style: DescriptionStyle): string {
     style.examples?.length
       ? `\nDescriptions they wrote before. Match their style, not their content:\n${style.examples.map((e) => `- ${e}`).join("\n")}`
       : "",
+    remembered(memories),
   ].join("");
   return `You write timesheet descriptions. For each block of work you get the evidence: coding-session titles, pull requests, branches, reviewed PRs, issues opened or commented on.
 Write one description per block id:
@@ -48,14 +57,21 @@ function outputFor(style: DescriptionStyle) {
  * Evidence that identifies a block's content, and the style when it isn't the default; equal
  * signatures can reuse a cached summary, so changing the style writes them again.
  */
-export function blockSignature(b: Block, style: DescriptionStyle = DEFAULT_STYLE): string {
+export function blockSignature(
+  b: Block,
+  style: DescriptionStyle = DEFAULT_STYLE,
+  memories: readonly string[] = [],
+): string {
   const evidence = evidenceOf(b);
   const custom =
     style.format !== DEFAULT_STYLE.format ||
     style.length !== DEFAULT_STYLE.length ||
     !!style.instructions ||
-    !!style.examples?.length;
-  return JSON.stringify(custom ? { evidence, style } : evidence);
+    !!style.examples?.length ||
+    memories.length > 0;
+  return JSON.stringify(
+    custom ? { evidence, style, ...(memories.length ? { memories } : {}) } : evidence,
+  );
 }
 
 function evidenceOf(b: Block) {
@@ -94,6 +110,7 @@ export async function summarizeDay(
   backend: LlmBackend,
   cache: Record<string, string>,
   style: DescriptionStyle = DEFAULT_STYLE,
+  memories: readonly string[] = [],
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   // Blocks with the same evidence are one question, so they get one description and stay one
@@ -101,7 +118,7 @@ export async function summarizeDay(
   const todo = new Map<string, Block[]>();
   for (const b of day.blocks) {
     if (b.kind === "meeting" || b.evidence.length === 0) continue;
-    const signature = blockSignature(b, style);
+    const signature = blockSignature(b, style, memories);
     const hit = cache[signature];
     if (hit) result.set(b.id, hit);
     else todo.set(signature, [...(todo.get(signature) ?? []), b]);
@@ -118,7 +135,7 @@ export async function summarizeDay(
     ),
   );
   const { summaries } = await backend.complete({
-    system: systemFor(style),
+    system: systemFor(style, memories),
     prompt,
     schema: outputFor(style),
   });

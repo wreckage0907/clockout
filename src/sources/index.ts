@@ -7,6 +7,7 @@ import { googleCalendar } from "./google-calendar";
 import { opencode } from "./opencode";
 import { pi } from "./pi";
 import type { Source } from "./types";
+import { wisprFlow } from "./wispr-flow";
 
 // Each source registers here once its collector exists.
 export const sources: readonly Source[] = [
@@ -18,6 +19,7 @@ export const sources: readonly Source[] = [
   github as Source,
   calendar as Source,
   googleCalendar as Source,
+  wisprFlow as Source,
 ];
 
 export function getSource(id: string): Source | undefined {

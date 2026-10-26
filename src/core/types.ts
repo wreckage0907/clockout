@@ -42,6 +42,16 @@ export interface Activity {
   attendance?: Attendance;
   /** Other attendees' emails, for meetings. */
   attendees?: string[];
+  /**
+   * A meeting someone recorded (a notetaker): it proves you were there, for as long as it ran,
+   * and core keeps one meeting with the calendar's title and these times (ADR 0010).
+   */
+  recorded?: boolean;
+  /**
+   * What a recorder said about the meeting. Private: shown on screen, never sent to an AI helper
+   * or an export (ADR 0010).
+   */
+  notes?: string;
 }
 
 /** A stretch of time on one thing, shown as one timesheet row. */

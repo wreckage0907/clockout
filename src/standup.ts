@@ -89,7 +89,7 @@ export async function buildStandup(
   let sections: StandupSections | null = null;
   if (opts.ai) {
     try {
-      sections = await writeStandup(facts, opts.ai, config.standup);
+      sections = await writeStandup(facts, opts.ai, config.standup, config.memories);
     } catch (err) {
       warnings.push(`${(err as Error).message} Using the plain standup instead.`);
       opts.log?.(`AI helper ${opts.ai.label}`, err);
