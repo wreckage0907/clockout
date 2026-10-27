@@ -867,6 +867,10 @@ describe("setup", () => {
     expect(frame).toContain("PROJECTS");
     expect(frame).toContain("Add project");
     expect(frame).toContain("say it in the chat bar");
+    const lines = frame.split("\n").map((line) => line.trim());
+    const coding = lines.findIndex((line) => line.includes("Coding"));
+    const reviews = lines.findIndex((line) => line.includes("Reviews"));
+    expect(reviews - coding).toBeGreaterThan(1);
   });
 
   it("adds a project by typing its name, and removes one with ⌫", async () => {

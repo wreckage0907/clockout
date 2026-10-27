@@ -408,12 +408,13 @@ export function Setup({
                 <Fragment key={r.id}>
                   {r.group && r.group !== rows[i - 1]?.group ? (
                     <Box marginTop={i > 0 ? 1 : 0} paddingX={1}>
-                      <Text color={T.faint}>{r.group.toUpperCase()}</Text>
+                      <Text color={T.muted}>{r.group.toUpperCase()}</Text>
                     </Box>
                   ) : null}
                   <RowView
                     row={r}
                     width={paneWidth}
+                    spaced={section === "projects" && r.group === rows[i + 1]?.group}
                     selected={focus === "rows" && i === cur}
                     onSelect={() => {
                       setFocus("rows");
@@ -1059,11 +1060,13 @@ function NavItem({
 function RowView({
   row: r,
   width,
+  spaced,
   selected,
   onSelect,
 }: {
   row: Row;
   width: number;
+  spaced: boolean;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -1082,6 +1085,7 @@ function RowView({
         <Box
           width={width}
           paddingX={1}
+          marginBottom={spaced ? 1 : 0}
           gap={1}
           backgroundColor={selected || (hover && canChange(r)) ? T.element : undefined}
         >
@@ -1122,8 +1126,13 @@ function RowView({
               <Button label="+" onClick={() => r.step?.(1)} />
             </>
           ) : r.value !== undefined ? (
-            <Box flexShrink={0} paddingLeft={1}>
-              <Text color={T.text} wrap="truncate-end">
+            <Box
+              flexShrink={0}
+              paddingLeft={1}
+              paddingRight={r.group === "Default tasks" ? 1 : 0}
+              backgroundColor={r.group === "Default tasks" ? T.elementHi : undefined}
+            >
+              <Text color={T.text} bold={r.group === "Default tasks"} wrap="truncate-end">
                 {r.value}
               </Text>
             </Box>
@@ -1146,13 +1155,13 @@ function RowView({
             )
           ) : null}
           <Box flexGrow={1} flexShrink={1}>
-            <Text color={T.faint} wrap="truncate-end">
+            <Text color={T.muted} wrap="truncate-end">
               {r.note ?? ""}
             </Text>
           </Box>
           {r.trail ? (
             <Clickable onClick={r.remove ?? r.press} flexShrink={0}>
-              {(h) => <Text color={h ? T.danger : selected ? T.muted : T.faint}>{r.trail}</Text>}
+              {(h) => <Text color={h ? T.danger : selected ? T.text : T.muted}>{r.trail}</Text>}
             </Clickable>
           ) : null}
           {openable(r) ? <Text color={selected || hover ? T.text : T.muted}>›</Text> : null}

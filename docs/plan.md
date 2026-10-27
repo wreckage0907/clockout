@@ -116,7 +116,7 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] Codex source: `~/.codex/sessions` rollouts (`user_message` prompts, model output, git info; subagents skipped)
 - [x] opencode source: `opencode.db` (opencode 2 `session_v2` / `session_message`; subagents skipped) via `node:sqlite` ([ADR 0008](adr/0008-read-agent-sqlite-with-node-sqlite.md))
 - [x] Antigravity source: the CLI's `brain/<id>` transcripts, titles and folders from `conversation_summaries.db`; the IDE's protobuf conversations aren't read
-- [x] Setup palette: sections on the left (Sources, Day, AI, ERP), the chosen one's settings on the right; keyboard and mouse; nothing hidden under "More"
+- [x] Setup palette: sections on the left (Sources, Day, AI, Projects, ERP), the chosen one's settings on the right; keyboard and mouse; readable project rows with clearer task values, more row spacing and brighter hints; nothing hidden under "More"
 
 ## Ready for other people
 
