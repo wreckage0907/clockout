@@ -194,6 +194,7 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] `clockout run <name>`: the lock, once-a-day guard (`--again`), a marked block in a shared note so a re-run replaces its own part, one line in `runs.log`, exit 1 for a partial sheet unless `allow_open`
 - [x] `src/lock.ts`: one run at a time, and credential writes too (rotating refresh tokens)
 - [x] No settings operation can add, change or point at a job
+- [x] A unit carries paths and settings from your environment (PATH, HOME, XDG_*, …), never a token; `schedule print` shows only those
 
 ## Day 12 — Publish (milestone)
 

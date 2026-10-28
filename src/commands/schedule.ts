@@ -42,13 +42,20 @@ export function hostPlatform(p: string = process.platform): Platform {
   return "other";
 }
 
+/**
+ * The variables a unit may carry from your environment: where things are, never a token. The unit
+ * is a file on disk and `schedule print` shows it, so nothing private goes in (ADR 0012).
+ */
+const UNIT_ENV =
+  /^(XDG_[A-Z_]+|LANG|LC_[A-Z_]+|TMPDIR|CLOCKOUT_CONFIG|CLAUDE_CONFIG_DIR|CODEX_HOME|PI_CODING_AGENT_DIR|GITHUB_GRAPHQL_URL|CLOCKOUT_GOOGLE_CLIENT_ID)$/;
+
 /** The environment a scheduled run gets: the PATH it was set up with, and Clockout's own paths. */
 function jobEnv(base: Record<string, string>, home: string): Record<string, string> {
   const env: Record<string, string> = {
     PATH: base.PATH ?? "/usr/local/bin:/usr/bin:/bin",
     HOME: home,
   };
-  for (const [k, v] of Object.entries(base)) if (v) env[k] = v;
+  for (const [k, v] of Object.entries(base)) if (v && UNIT_ENV.test(k)) env[k] = v;
   return env;
 }
 
