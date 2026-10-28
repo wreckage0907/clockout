@@ -1,9 +1,11 @@
-import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tildify } from "../config/paths";
 import type { PushedEntry } from "../core/push";
 import type { Activity, Day, EditOp } from "../core/types";
 import { fileError } from "../files";
+import { withLock } from "../lock";
 
 export interface EditRecord {
   at: string;
@@ -93,13 +95,38 @@ export class DayStore {
       },
     );
     const trimmed = { ...stored, history: stored.history.slice(-HISTORY_LIMIT) };
-    const tmp = `${file}.${process.pid}.tmp`;
+    const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
     try {
       await writeFile(tmp, `${JSON.stringify(trimmed, null, 2)}\n`, { mode: 0o600 });
       await rename(tmp, file);
     } catch (err) {
+      await rm(tmp, { force: true });
       throw fileError(file, err, `the day to ${tildify(file)}`);
     }
+  }
+
+  /**
+   * Saves a day that was rebuilt from `seen` (what was read at the start), unless someone else
+   * changed it meanwhile (a correction made in the review screen while a scheduled run was
+   * collecting): then nothing is written and the newer day is returned to be used instead.
+   * The check and the write happen under one lock per day.
+   */
+  async saveIfUnchanged(stored: StoredDay, seen: StoredDay | null): Promise<StoredDay | null> {
+    const lock = join(this.dataDir, "locks", `day-${stored.date}.lock`);
+    return await withLock(
+      lock,
+      async () => {
+        const now = await this.load(stored.date);
+        if (
+          (now?.edits.length ?? 0) !== (seen?.edits.length ?? 0) ||
+          now?.pushedAt !== seen?.pushedAt
+        )
+          return now;
+        await this.save(stored);
+        return null;
+      },
+      { what: `the day ${stored.date}`, waitMs: 5000 },
+    );
   }
 }
 

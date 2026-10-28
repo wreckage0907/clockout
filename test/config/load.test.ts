@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -29,6 +29,14 @@ describe("config files", () => {
 
   it("is readable only by the user, since it holds a private calendar URL", async () => {
     const file = join(dir, "config.toml");
+    await saveConfig(file, config);
+    expect((await stat(file)).mode & 0o777).toBe(0o600);
+  });
+
+  it("tightens a config that was already there with wider permissions", async () => {
+    const file = join(dir, "config.toml");
+    await writeFile(file, "old", { mode: 0o644 });
+    await chmod(file, 0o644);
     await saveConfig(file, config);
     expect((await stat(file)).mode & 0o777).toBe(0o600);
   });

@@ -22,8 +22,15 @@ const me = { name: "Dev", emails: ["dev@example.com"], timezone: "Asia/Kolkata" 
 const config = (exports: ConfigInput["exports"]) => configSchema.parse({ me, exports });
 
 let dir: string;
+const dataHome = process.env.XDG_DATA_HOME;
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "clockout-dest-"));
+  // The note's lock file goes in the data folder: a temporary one, not yours.
+  process.env.XDG_DATA_HOME = join(dir, "data");
+});
+afterEach(() => {
+  if (dataHome === undefined) delete process.env.XDG_DATA_HOME;
+  else process.env.XDG_DATA_HOME = dataHome;
 });
 
 const capture = async (run: () => Promise<void>) => {
@@ -163,6 +170,113 @@ describe("writing a file destination", () => {
     });
     expect(said).toContain("(replaced)");
     expect(await readFile(path, "utf8")).toBe("old");
+  });
+});
+
+describe("writing a shared note safely", () => {
+  const sharedConfig = (path: string) =>
+    config([{ name: "log", type: "text", line: "{project}", to: { file: path, append: true } }]);
+  const plan = (path: string, text: string, block?: "sheet" | "standup") =>
+    planDestination({ file: path, append: true }, text, {
+      date: "2026-10-16",
+      ...(block ? { kind: block } : {}),
+    });
+
+  it("keeps a note's mode and writes through a symlink instead of replacing it", async () => {
+    const { chmod, lstat, mkdir, readdir, symlink } = await import("node:fs/promises");
+    await mkdir(join(dir, "vault"), { recursive: true });
+    const real = join(dir, "vault", "note.md");
+    const link = join(dir, "link.md");
+    await writeFile(real, "# Mine\n");
+    await chmod(real, 0o640);
+    await symlink(real, link);
+    const to = { file: link, append: true };
+    await writeDestination(to, await plan(link, "- row"), { config: sharedConfig(link) });
+    expect((await lstat(link)).isSymbolicLink()).toBe(true);
+    expect(await readFile(real, "utf8")).toBe(
+      "# Mine\n\n<!-- clockout:start -->\n- row\n<!-- clockout:end -->\n",
+    );
+    expect((await lstat(real)).mode & 0o777).toBe(0o640);
+    // No temporary file is left next to it.
+    expect(await readdir(join(dir, "vault"))).toEqual(["note.md"]);
+  });
+
+  it("creates a new note readable only by you", async () => {
+    const { stat } = await import("node:fs/promises");
+    const path = join(dir, "fresh.md");
+    await writeDestination({ file: path, append: true }, await plan(path, "- row"), {
+      config: sharedConfig(path),
+    });
+    expect((await stat(path)).mode & 0o777).toBe(0o600);
+  });
+
+  it("leaves the note whole when the write fails part-way", async () => {
+    const { chmod, readdir } = await import("node:fs/promises");
+    if (process.getuid?.() === 0) return; // root ignores folder permissions
+    const folder = join(dir, "locked");
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(folder);
+    const path = join(folder, "note.md");
+    await writeFile(path, "precious\n");
+    await chmod(folder, 0o500); // no new files in here, so the temporary file can't be made
+    try {
+      await expect(
+        writeDestination({ file: path, append: true }, await plan(path, "- row"), {
+          config: sharedConfig(path),
+        }),
+      ).rejects.toThrow("Can't write");
+    } finally {
+      await chmod(folder, 0o700);
+    }
+    expect(await readFile(path, "utf8")).toBe("precious\n");
+    expect(await readdir(folder)).toEqual(["note.md"]);
+  });
+
+  it("keeps both blocks when a sheet and a standup are written at the same time", async () => {
+    const path = join(dir, "both.md");
+    await writeFile(path, "# Day\n");
+    const to = { file: path, append: true };
+    for (let round = 0; round < 5; round++)
+      await Promise.all([
+        writeDestination(to, await plan(path, `sheet ${round}`, "sheet"), {
+          config: sharedConfig(path),
+        }),
+        writeDestination(to, await plan(path, `standup ${round}`, "standup"), {
+          config: sharedConfig(path),
+        }),
+      ]);
+    const note = await readFile(path, "utf8");
+    expect(note).toContain("<!-- clockout:start -->\nsheet 4\n<!-- clockout:end -->");
+    expect(note).toContain(
+      "<!-- clockout:standup:start -->\nstandup 4\n<!-- clockout:standup:end -->",
+    );
+    expect(note.startsWith("# Day\n")).toBe(true);
+    expect(note.match(/clockout:start/g)).toHaveLength(1);
+    expect(note.match(/clockout:standup:start/g)).toHaveLength(1);
+  });
+
+  it("keeps your paragraph when a meeting title looks like a marker", async () => {
+    const path = join(dir, "inject.md");
+    const to = { file: path, append: true };
+    const cfg = sharedConfig(path);
+    await writeDestination(to, await plan(path, "- 09:00 Standup", "standup"), { config: cfg });
+    // The user writes between the two blocks.
+    const withNote = (await readFile(path, "utf8")).replace(
+      "<!-- clockout:standup:start -->",
+      "My own paragraph.\n\n<!-- clockout:standup:start -->",
+    );
+    await writeFile(path, withNote);
+    await writeDestination(
+      to,
+      await plan(path, "| Sync <!-- clockout:standup:start --> call |", "sheet"),
+      { config: cfg },
+    );
+    await writeDestination(to, await plan(path, "- 10:00 Review", "standup"), { config: cfg });
+    const note = await readFile(path, "utf8");
+    expect(note).toContain("My own paragraph.");
+    expect(note).toContain("Sync <!-- clockout :standup:start --> call");
+    expect(note).toContain("- 10:00 Review");
+    expect(note).not.toContain("- 09:00 Standup");
   });
 });
 

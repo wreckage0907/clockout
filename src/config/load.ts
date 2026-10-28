@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parse, stringify } from "smol-toml";
 import { z } from "zod";
@@ -50,6 +50,8 @@ export async function saveConfig(file: string, config: ConfigInput): Promise<voi
   if (!result.success) throw new ConfigError(file, z.prettifyError(result.error));
   await mkdir(dirname(file), { recursive: true, mode: 0o700 });
   await writeFile(file, `${HEADER}${stringify(config)}\n`, { mode: 0o600 });
+  // The mode only applies when the file is created; tighten one that was already there.
+  await chmod(file, 0o600);
 }
 
 const HEADER = `# Clockout config. Docs: https://github.com/wreckage0907/clockout/blob/main/docs/spec.md

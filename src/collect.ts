@@ -169,7 +169,9 @@ export async function openDay(
     ...(existing?.pushed ? { pushed: existing.pushed } : {}),
     ...(existing?.pushedAt ? { pushedAt: existing.pushedAt } : {}),
   };
-  await store.save(stored);
+  // Not over a correction (or a send) that landed while this was collecting: that one wins.
+  const newer = await store.saveIfUnchanged(stored, existing);
+  if (newer) return { stored: newer, warnings, kept: true };
   return { stored, warnings, kept: !!corrected };
 }
 

@@ -77,7 +77,7 @@ export async function runExport(
     // `{date}` is the last day of the range: a daily note gets that day's rows.
     await saveToDestination(config, target, text, to, opts);
   } else if (opts.out) {
-    await writeFile(opts.out, text).catch((err: unknown) => {
+    await writeFile(opts.out, text, { mode: 0o600 }).catch((err: unknown) => {
       throw fileError(opts.out ?? "", err);
     });
     console.error(`Wrote ${rows.length} row${rows.length === 1 ? "" : "s"} to ${opts.out}.`);

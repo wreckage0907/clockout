@@ -72,12 +72,23 @@ function minutes(ms: number): string {
 const helpers = new Set<number>();
 const folders = new Set<string>();
 
-function killGroup(pid: number): void {
+/** Kills a process group started with `detached: true` (its leader's pid is the group's id). */
+export function killGroup(pid: number): void {
   try {
     process.kill(-pid, "SIGKILL");
   } catch {
     // Already gone.
   }
+}
+
+/**
+ * Registers a detached helper's process group so it's killed when Clockout quits (Ctrl+C, a
+ * closed terminal); the returned function takes it off the list once it has finished.
+ */
+export function trackHelper(pid: number): () => void {
+  helpers.add(pid);
+  watchExit();
+  return () => void helpers.delete(pid);
 }
 
 /** Stops every helper still running and removes their folders; for when Clockout quits. */

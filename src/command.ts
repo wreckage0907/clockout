@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import { execa } from "execa";
 import { z } from "zod";
+import { killGroup, trackHelper } from "./ai/cli";
 import { redactSecrets } from "./core/secrets";
 
 // The escape hatch ([ADR 0009](../../docs/adr/0009-change-clockout-through-config.md), layer 4):
@@ -38,12 +39,13 @@ export async function runCommand(
   if (!program) throw new Error("A command needs a program to run.");
   // Just the program's name: the whole path is noise in a message about what went wrong.
   const name = opts.name ?? basename(program);
+  const timeoutMs = opts.timeoutMs ?? 60_000;
   const run = execa(program, args, {
     reject: false,
-    timeout: opts.timeoutMs ?? 60_000,
-    // Its own process group: a timeout or a quit stops what it started too.
+    // Its own process group, killed as a whole below: execa's own timeout and cleanup reach only
+    // the program itself (and `cleanup` is ignored for a detached one).
     detached: true,
-    cleanup: true,
+    cleanup: false,
     extendEnv: true,
     ...(opts.cwd ? { cwd: opts.cwd } : {}),
     ...(opts.env ? { env: opts.env } : {}),
@@ -51,11 +53,27 @@ export async function runCommand(
     preferLocal: false,
     shell: false,
   });
-  const result = await run;
+  const pid = run.pid;
+  // On a quit (Ctrl+C, a closed terminal) the whole group goes too.
+  const untrack = pid ? trackHelper(pid) : () => undefined;
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    if (pid) killGroup(pid);
+    // Where there are no process groups (Windows), at least the program itself.
+    run.kill("SIGKILL");
+  }, timeoutMs);
+  let result: Awaited<typeof run>;
+  try {
+    result = await run;
+  } finally {
+    clearTimeout(timer);
+    untrack();
+  }
   const stderr = redactSecrets(result.stderr ?? "").trim();
-  if (result.timedOut)
+  if (timedOut)
     throw new Error(
-      `${name} didn't answer within ${Math.round((opts.timeoutMs ?? 60_000) / 1000)} seconds, so Clockout stopped it.`,
+      `${name} didn't answer within ${Math.round(timeoutMs / 1000)} seconds, so Clockout stopped it.`,
     );
   if (result.exitCode !== 0) {
     const why = stderr.split("\n").filter(Boolean).at(-1) ?? "";

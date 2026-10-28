@@ -1,9 +1,12 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { runCommand } from "../command";
+import { resolvePaths } from "../config/paths";
 import type { Config, ExportDestination, ExportFormat } from "../config/schema";
-import { fileError } from "../files";
+import { fileError, realTarget, writeFileAtomic } from "../files";
+import { withLock } from "../lock";
 import { clientFor, type McpClient, McpToolError } from "../mcp";
 
 // Where an export goes besides the clipboard ([ADR 0010](../../docs/adr/0010-mcp-as-source-and-destination.md)):
@@ -49,20 +52,41 @@ export function withBlock(
   kind: "sheet" | "standup",
   owned = false,
 ): string {
-  const body = text.trim();
-  const block = `${blockMarkers(kind).start}\n${body}\n${blockMarkers(kind).end}`;
+  const { start, end } = blockMarkers(kind);
+  const block = `${start}\n${neutraliseMarkers(text.trim())}\n${end}`;
   if (owned) return `${block}\n`;
   if (!before.trim()) return `${block}\n`;
-  const { start, end } = blockMarkers(kind);
-  const from = before.indexOf(start);
-  const to = before.indexOf(end);
-  if (from < 0 && to < 0) return `${ended(before)}\n${block}\n`;
-  if (from < 0 || to < from)
+  // A marker counts only as a line of its own, and the end is looked for after the start: one
+  // inside a sentence (a meeting title, say) or out of order never moves the block's edges.
+  const first = markerLine(start).exec(before);
+  const last = first ? markerLine(end, first.index + first[0].length).exec(before) : null;
+  if (!first) {
+    if (!markerLine(end).test(before)) return `${ended(before)}\n${block}\n`;
     throw new Error(
-      `The note has ${from < 0 ? "the end marker" : "the start marker"} “${from < 0 ? end : start}” without ${from < 0 ? "the start" : "the end"} one. Fix the markers, or remove them to let Clockout add its own.`,
+      `The note has the end marker “${end}” without the start one. Fix the markers, or remove them to let Clockout add its own.`,
     );
-  const after = before.slice(to + end.length).replace(/^\n?/, "");
-  return `${before.slice(0, from)}${block}\n${after}`;
+  }
+  if (!last)
+    throw new Error(
+      `The note has the start marker “${start}” without the end one. Fix the markers, or remove them to let Clockout add its own.`,
+    );
+  return `${before.slice(0, first.index)}${block}\n${before.slice(last.index + last[0].length)}`;
+}
+
+/** A marker on a line of its own (blanks around it allowed), with the line break after it. */
+function markerLine(marker: string, from = 0): RegExp {
+  const literal = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^[ \\t]*${literal}[ \\t]*\\r?(?:\\n|$)`, "gm");
+  re.lastIndex = from;
+  return re;
+}
+
+/**
+ * Text from a meeting title or a commit subject can't carry a Clockout marker into the block:
+ * `<!-- clockout:` becomes `<!-- clockout :`, which reads the same and matches nothing.
+ */
+export function neutraliseMarkers(text: string): string {
+  return text.replace(/<!--(\s*)clockout:/gi, "<!--$1clockout :");
 }
 
 export interface PlanOptions {
@@ -113,23 +137,43 @@ export async function planDestination(
 export async function writeDestination(
   to: ExportDestination,
   plan: DestinationPlan,
-  opts: { config: Config },
+  opts: {
+    config: Config /** Where lock files live; Clockout's data folder by default. */;
+    dataDir?: string;
+  },
 ): Promise<string> {
   if ("file" in to && plan.path) {
-    // Appending means the note is shared: Clockout keeps its own marked block in it.
-    const body = to.append
-      ? withBlock(
-          await readFile(plan.path, "utf8").catch(() => ""),
-          plan.text,
-          plan.block ?? "sheet",
-        )
-      : ended(plan.text);
-    await mkdir(dirname(plan.path), { recursive: true }).catch((err: unknown) => {
-      throw fileError(plan.path ?? "", err);
+    const path = plan.path;
+    await mkdir(dirname(path), { recursive: true }).catch((err: unknown) => {
+      throw fileError(path, err);
     });
-    await writeFile(plan.path, body, { mode: 0o600 }).catch((err: unknown) => {
-      throw fileError(plan.path ?? "", err);
+    const real = await realTarget(path).catch((err: unknown) => {
+      throw fileError(path, err);
     });
+    // One writer per note, whichever job or command it is: two blocks written at once would
+    // each read the old note and the later write would drop the earlier block.
+    const lock = join(
+      opts.dataDir ?? resolvePaths().dataDir,
+      "locks",
+      `note-${createHash("sha256").update(real).digest("hex").slice(0, 16)}.lock`,
+    );
+    await withLock(
+      lock,
+      async () => {
+        // Appending means the note is shared: Clockout keeps its own marked block in it.
+        const body = to.append
+          ? withBlock(
+              await readFile(real, "utf8").catch(() => ""),
+              plan.text,
+              plan.block ?? "sheet",
+            )
+          : ended(plan.text);
+        await writeFileAtomic(real, body).catch((err: unknown) => {
+          throw fileError(path, err);
+        });
+      },
+      { what: "the note being written", waitMs: 10_000 },
+    );
     const lines = plan.text.split("\n").filter(Boolean).length;
     return `Wrote ${lines} line${lines === 1 ? "" : "s"} to ${plan.where}`;
   }

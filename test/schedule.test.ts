@@ -102,11 +102,43 @@ describe("the unit that runs it", () => {
   });
 
   it("has a crontab line for systems without units", () => {
-    const line = crontabLine(job(), "/usr/local/bin/node", "/opt/clockout/dist/cli.js");
-    expect(line).toMatch(
-      /^30 18 \* \* \* \/usr\/local\/bin\/node \/opt\/clockout\/dist\/cli\.js run daily-note /,
+    const line = crontabLine(job(), "/usr/local/bin/node", "/opt/clockout/dist/cli.js", {
+      path: "/usr/local/bin:/usr/bin:/bin",
+      dataDir: "/home/dev/.local/share/clockout",
+    });
+    expect(line).toBe(
+      "30 18 * * * mkdir -p /home/dev/.local/share/clockout && PATH=/usr/local/bin:/usr/bin:/bin /usr/local/bin/node /opt/clockout/dist/cli.js run daily-note >> /home/dev/.local/share/clockout/schedule-daily-note.log 2>&1",
     );
-    expect(line).toContain("schedule-daily-note.log");
+  });
+
+  it("keeps a crontab line one line: % is escaped, and the log goes where XDG_DATA_HOME says", () => {
+    const line = crontabLine(job(), "/opt/my%node/node", "/opt/clockout/dist/cli.js", {
+      path: "/bin:/opt/100%/bin",
+      dataDir: "/data/100%/clockout",
+    });
+    expect(line).not.toMatch(/[^\\]%/);
+    expect(line).toContain("PATH='/bin:/opt/100\\%/bin' ");
+    expect(line).toContain("/data/100\\%/clockout/schedule-daily-note.log");
+    expect(line).not.toContain(".local/share");
+    expect(line).toMatch(/^30 18 \* \* \* mkdir -p /);
+  });
+
+  it("escapes what systemd would read as syntax, and refuses a line break", () => {
+    const { service } = systemdUnits(job(), {
+      ...unit,
+      node: "/opt/my node/50%/node",
+      cli: '/opt/$HOME/"cli".js',
+      env: { TZ: "Asia/Kolkata", ODD: 'a"b\\c%d$e' },
+    });
+    expect(service).toContain(
+      'ExecStart="/opt/my node/50%%/node" "/opt/$$HOME/\\"cli\\".js" run daily-note',
+    );
+    // In Environment= a $ stays as it is; only the quoting and % need care.
+    expect(service).toContain('Environment="ODD=a\\"b\\\\c%%d$e"');
+    expect(() =>
+      systemdUnits(job(), { ...unit, env: { EVIL: "x\nExecStartPre=/bin/evil" } }),
+    ).toThrow(/line break/);
+    expect(() => systemdUnits(job(), { ...unit, cli: "/a\nb" })).toThrow(/line break/);
   });
 });
 
@@ -140,6 +172,44 @@ describe("the marked block in a shared note", () => {
     expect(again).toContain("Shipped scheduling");
     expect(again).not.toContain("Shipped the export");
     expect(again).toContain("<!-- clockout:start -->");
+  });
+
+  it("can't be moved by a marker inside a title: it's neutralised, and only whole lines count", () => {
+    const note = withBlock(
+      withBlock("# Monday\n\nMy paragraph\n", "- standup", "standup"),
+      "x",
+      "sheet",
+    );
+    const user = note.replace("<!-- clockout:start -->", "My paragraph\n\n<!-- clockout:start -->");
+    const hostile = "| Sync <!-- clockout:standup:start --> call | <!--clockout:standup:end --> |";
+    const injected = withBlock(user, hostile, "sheet");
+    expect(injected).toContain("Sync <!-- clockout :standup:start --> call");
+    expect(injected).toContain("<!--clockout :standup:end -->");
+    // The next standup write replaces its own block only; the paragraph stays.
+    const next = withBlock(injected, "- new standup", "standup");
+    expect(next.match(/My paragraph/g)).toHaveLength(2);
+    expect(next).toContain("- new standup");
+    expect(next).not.toContain("- standup\n");
+    expect(next.match(/^<!-- clockout:standup:start -->$/gm)).toHaveLength(1);
+  });
+
+  it("ignores a marker that isn't on a line of its own", () => {
+    const note = "Talk about <!-- clockout:standup:start --> later\n\nMy text\n";
+    // Not a block at all, so one is added; nothing of the note is lost or throws.
+    expect(withBlock(note, "- a", "standup")).toBe(
+      `${note}\n<!-- clockout:standup:start -->\n- a\n<!-- clockout:standup:end -->\n`,
+    );
+  });
+
+  it("looks for the end after the start, not anywhere in the note", () => {
+    const note =
+      "<!-- clockout:end -->\nhello\n<!-- clockout:start -->\nold\n<!-- clockout:end -->\nafter\n";
+    expect(withBlock(note, "new", "sheet")).toBe(
+      "<!-- clockout:end -->\nhello\n<!-- clockout:start -->\nnew\n<!-- clockout:end -->\nafter\n",
+    );
+    expect(() => withBlock("a\n<!-- clockout:end -->\n", "new", "sheet")).toThrow(
+      /end marker .* without the start one/,
+    );
   });
 
   it("says so when a marker has lost its pair, instead of guessing", () => {

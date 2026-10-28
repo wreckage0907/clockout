@@ -54,10 +54,23 @@ export function runnerArgv(job: ScheduleJob): string[] {
   return ["run", job.name];
 }
 
-/** A crontab line that runs the job (for cron, or when the OS units aren't used). */
-export function crontabLine(job: ScheduleJob, node: string, cli: string): string {
+/**
+ * A crontab line that runs the job (for cron, or when the OS units aren't used). Cron has no login
+ * PATH, so the one the job was set up with goes in front; `%` is a newline to cron unless escaped;
+ * and the log's folder is made first, or the redirect fails and the job never starts.
+ */
+export function crontabLine(
+  job: ScheduleJob,
+  node: string,
+  cli: string,
+  where: { path?: string; dataDir?: string } = {},
+): string {
   const [h, m] = job.at.split(":").map(Number);
-  return `${m ?? 0} ${h ?? 0} * * * ${shellQuote(node)} ${shellQuote(cli)} run ${job.name} >> ${shellQuote(`${homedir()}/.local/share/clockout/schedule-${job.name}.log`)} 2>&1`;
+  const dataDir = where.dataDir ?? join(homedir(), ".local", "share", "clockout");
+  const log = shellQuote(join(dataDir, `schedule-${job.name}.log`));
+  const path = where.path ? `PATH=${shellQuote(where.path)} ` : "";
+  const command = `mkdir -p ${shellQuote(dataDir)} && ${path}${shellQuote(node)} ${shellQuote(cli)} run ${job.name} >> ${log} 2>&1`;
+  return `${m ?? 0} ${h ?? 0} * * * ${command.replace(/%/g, "\\%")}`;
 }
 
 /** The job as one line, for `clockout schedule`: "daily-note · 18:30 · today · daily". */
@@ -74,6 +87,8 @@ export interface UnitEnv {
   env?: Record<string, string>;
   home?: string;
   logsDir?: string;
+  /** Clockout's data folder, where a crontab job's log goes. */
+  dataDir?: string;
 }
 
 /** The launchd user agent that runs the job (macOS). */
@@ -127,14 +142,23 @@ export function systemdUnits(job: ScheduleJob, unit: UnitEnv): { service: string
   const pad = (n: number) => String(n).padStart(2, "0");
   const env = { PATH: unit.path, ...(unit.env ?? {}) };
   const envLines = Object.entries(env)
-    .map(([k, v]) => `Environment="${k}=${v}"`)
+    .map(([k, v]) => {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))
+        throw new Error(`"${k}" isn't a name an environment variable can have.`);
+      return `Environment="${systemdText(`${k}=${v}`, `the value of ${k}`)}"`;
+    })
     .join("\n");
+  // The paths are quoted; "run" and the job's name (lowercase letters, digits, dashes) are not.
+  const quoted = [unit.node, unit.cli].map((a) => `"${systemdText(a, "the command", true)}"`);
+  const exec = [...quoted, ...runnerArgv(job).map((a) => systemdText(a, "the command", true))].join(
+    " ",
+  );
   const service = `[Unit]
 Description=Clockout ${job.name}
 
 [Service]
 Type=oneshot
-ExecStart="${unit.node}" "${unit.cli}" ${runnerArgv(job).join(" ")}
+ExecStart=${exec}
 ${envLines}
 `;
   const timer = `[Unit]
@@ -164,7 +188,20 @@ export function unitPaths(job: ScheduleJob, platform: Platform, home = homedir()
 
 /** What to tell someone on a platform with no units: the crontab line, and where it goes. */
 export function cronFallback(job: ScheduleJob, unit: UnitEnv): string {
-  return `${crontabLine(job, unit.node, unit.cli)}\n\nAdd it with \`crontab -e\`, or use your system's own scheduler.`;
+  const where = { path: unit.path, ...(unit.dataDir ? { dataDir: unit.dataDir } : {}) };
+  return `${crontabLine(job, unit.node, unit.cli, where)}\n\nAdd it with \`crontab -e\`, or use your system's own scheduler.`;
+}
+
+/**
+ * Text inside a systemd unit's double quotes: `\` and `"` are escaped, `%` is a specifier (so it
+ * doubles), and in a command `$` expands a variable (so it doubles too). A line break would start
+ * a new directive, so a value with one is refused instead of written.
+ */
+function systemdText(text: string, what: string, command = false): string {
+  if (/[\r\n\0]/.test(text))
+    throw new Error(`Can't put ${what} in a systemd unit: it has a line break in it.`);
+  const escaped = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/%/g, "%%");
+  return command ? escaped.replace(/\$/g, "$$$$") : escaped;
 }
 
 function xml(text: string): string {
