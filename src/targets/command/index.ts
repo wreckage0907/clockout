@@ -31,7 +31,10 @@ const tasks = z.object({
   ),
 });
 
-const created = z.object({ id: z.union([z.string(), z.number()]).transform(String) }).optional();
+// An id is welcome but not needed: Clockout reads the day again to learn the new entries' ids.
+const created = z
+  .object({ id: z.union([z.string(), z.number()]).transform(String).optional() })
+  .optional();
 
 export function commandTarget(run: readonly string[]): Target {
   const name = run[0] ?? "your program";

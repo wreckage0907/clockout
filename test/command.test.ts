@@ -184,6 +184,13 @@ if (request.op === "day") {
     expect((await target.day("2026-10-16")).entries).toEqual([]);
   });
 
+  it("accepts a create that answers without an id", async () => {
+    const prog = await program(`console.log("{}");`);
+    await expect(
+      commandTarget([prog]).create("2026-10-16", { task: "TASK-1", hours: 1, description: "x" }),
+    ).resolves.toBeUndefined();
+  });
+
   it("reads a refusal as the program writes it", async () => {
     const prog = await program(
       `console.log(JSON.stringify({ error: "There's no task TASK-9." }));`,
