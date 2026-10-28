@@ -685,7 +685,7 @@ export function Setup({
       : backend === "auto"
         ? helpers[0]
           ? `using ${helpers[0].name}`
-          : "none installed: Claude Code, Codex, opencode or Pi"
+          : "none installed: Claude Code, opencode or Pi"
         : chosen
           ? ""
           : `${HELPER_NAMES[backend]} isn't installed`;

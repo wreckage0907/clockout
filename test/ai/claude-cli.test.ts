@@ -1,3 +1,4 @@
+import { readFile, stat } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { claudeCliBackend } from "../../src/ai/claude-cli";
@@ -24,8 +25,26 @@ describe("claude CLI backend", () => {
     expect(args[args.indexOf("--tools") + 1]).toBe("");
     expect(args[args.indexOf("--setting-sources") + 1]).toBe("");
     expect(args[args.indexOf("--model") + 1]).toBe("haiku");
-    expect(args[args.indexOf("--system-prompt") + 1]).toBe("sys");
+    expect(args).not.toContain("--system-prompt");
+    expect(args).not.toContain("sys");
     expect(JSON.parse(args[args.indexOf("--json-schema") + 1] ?? "")).not.toHaveProperty("$schema");
+  });
+
+  it("puts the system prompt in a private file, not on the command line", async () => {
+    let file = "";
+    let content = "";
+    let mode = 0;
+    const run: Runner = async (_cmd, args) => {
+      file = args[args.indexOf("--system-prompt-file") + 1] ?? "";
+      content = await readFile(file, "utf8");
+      mode = (await stat(file)).mode & 0o777;
+      return { stdout: ok({ summary: "x" }), stderr: "", exitCode: 0 };
+    };
+    await claudeCliBackend("haiku", run).complete({ ...req, system: "Notes: ship Friday" });
+    expect(file).toMatch(/clockout-ai-.*system-prompt\.txt$/);
+    expect(content).toBe("Notes: ship Friday");
+    expect(mode).toBe(0o600);
+    await expect(stat(file)).rejects.toThrow(); // gone with the temp folder
   });
 
   it("retries once when the output doesn't match", async () => {

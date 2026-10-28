@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { z } from "zod";
 import {
   answerWith,
@@ -32,7 +33,11 @@ export function opencodeCliBackend(model?: string, run: Runner = runCli): LlmBac
     id: "opencode",
     label: model ? `${name} (${model})` : name,
     complete<T>(req: CompleteRequest<T>): Promise<T> {
-      const env = {
+      const env = (dir: string) => ({
+        // opencode merges its config on top of the user's global one, which may start MCP
+        // servers and plugins. An empty config folder leaves them out; sign-ins live in the data
+        // folder (XDG_DATA_HOME), which stays where it was.
+        XDG_CONFIG_HOME: join(dir, "config"),
         OPENCODE_CONFIG_CONTENT: JSON.stringify({
           agent: {
             clockout: {
@@ -44,11 +49,11 @@ export function opencodeCliBackend(model?: string, run: Runner = runCli): LlmBac
             },
           },
         }),
-      };
+      });
       const args = ["run", "--standalone", "--format", "json", "--agent", "clockout"];
-      return inTempDir((_, cwd) =>
+      return inTempDir((dir, cwd) =>
         validated(name, req.schema, async () => {
-          const r = await run("opencode", args, { input: req.prompt, cwd, env }).catch(
+          const r = await run("opencode", args, { input: req.prompt, cwd, env: env(dir) }).catch(
             (err: Error) => {
               throw new Error(`${name} ${err.message}.`);
             },
@@ -62,7 +67,7 @@ export function opencodeCliBackend(model?: string, run: Runner = runCli): LlmBac
             await run("opencode", ["session", "delete", session, "--standalone"], {
               input: "",
               cwd,
-              env,
+              env: env(dir),
             }).catch(() => undefined);
           const error = events.find((e) => e.type === "error")?.error?.message;
           if (error) throw failure(error);
