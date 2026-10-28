@@ -201,6 +201,14 @@ function withTokens(t: z.infer<typeof tokenResponse>, now = Date.now()) {
 }
 
 /**
+ * Runs a refresh holding the credentials lock: `fn` gets the sign-in as saved right now and a
+ * `save` that doesn't take the lock again (see `withMcpCredentials`).
+ */
+export type RefreshLock = <T>(
+  fn: (stored: McpCredentials | null, save: (next: McpCredentials) => Promise<void>) => Promise<T>,
+) => Promise<T>;
+
+/**
  * Access tokens for a connected server: the saved one while it lasts, then a refresh. A new
  * refresh token from the server replaces the old one, and `save` keeps it for the next run.
  */
@@ -209,12 +217,36 @@ export function mcpAuth(
   creds: McpCredentials,
   save: (next: McpCredentials) => Promise<void>,
   doFetch: Fetch = fetch,
+  exclusive?: RefreshLock,
 ): (force?: boolean) => Promise<string> {
   let current = creds;
   let pending: Promise<string> | null = null;
   const fresh = () => !current.expires_at || Date.parse(current.expires_at) > Date.now();
 
-  const refresh = async (): Promise<string> => {
+  // With a `RefreshLock`, a refresh starts from the sign-in as saved now, under the lock that
+  // guards the file: a scheduled run may have rotated the refresh token since this one started,
+  // and the old one is spent. Without one (the tests, `connect`), `save` is all there is.
+  const refresh = (force: boolean): Promise<string> =>
+    (exclusive ?? ((fn) => fn(null, save)))(async (stored, saveLocked) => {
+      if (exclusive) {
+        if (!stored)
+          throw new Error(`The sign-in to ${name} was removed. ${retry(name)}`, {
+            cause: new Error("no saved sign-in for this server"),
+          });
+        if (
+          stored.refresh_token !== current.refresh_token ||
+          stored.access_token !== current.access_token
+        ) {
+          const refused = current.access_token;
+          current = stored;
+          // Someone else already refreshed: use that, unless it's the very token just refused.
+          if ((!force || stored.access_token !== refused) && fresh()) return current.access_token;
+        }
+      }
+      return refreshNow(saveLocked);
+    });
+
+  const refreshNow = async (saveNext: (next: McpCredentials) => Promise<void>): Promise<string> => {
     if (!current.refresh_token)
       throw new Error(`The sign-in to ${name} has expired. ${retry(name)}`);
     const res = await tokenRequest(
@@ -243,14 +275,14 @@ export function mcpAuth(
     // Keeps the refresh token when the server doesn't send a new one.
     const { expires_at: _, ...rest } = current;
     current = { ...rest, ...withTokens(tokens.data) };
-    await save(current);
+    await saveNext(current);
     return current.access_token;
   };
 
   return (force = false) => {
     if (!force && fresh()) return Promise.resolve(current.access_token);
     // One refresh at a time: a rotated refresh token can only be used once.
-    pending ??= refresh().finally(() => {
+    pending ??= refresh(force).finally(() => {
       pending = null;
     });
     return pending;

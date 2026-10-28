@@ -56,9 +56,14 @@ stdout and stderr go to one log file per job.
 The unit runs the job through Clockout, not through a hand-built command line, so the rules
 below can't be forgotten:
 
-- **A lock.** `src/lock.ts` (an `O_EXCL` lock file with a pid, taken over when it's 10 minutes
-  old) is held for the whole run; a second run exits 0 with "another run has it". Credential
-  writes take a lock too, so two runs can't interleave a rotating refresh token.
+- **A lock.** `src/lock.ts` (an `O_EXCL` lock file holding a pid and a random owner token) is
+  held for the whole run and touched every minute while held; a second run exits 0 with "another
+  run has it". A lock untouched for 10 minutes was left by a dead run and is taken over: waiters
+  race on a `rename` to a unique name, so only one wins, and release only removes a lock that
+  still carries its own token. A quit by signal lets go of held locks (`releaseHeldLocks`).
+  Credential writes take the lock around the whole read-change-write and are written to a temp
+  file and renamed in; a refresh of a rotating token re-reads the saved sign-in under the same
+  lock first, so a run never uses a token another run has already spent.
 - **Once a day per job.** Each job remembers the last day it wrote (`schedule/<name>.json` in the
   data dir). Running again on the same day exits 0 and says so; `--again` writes it again, which
   is what you use after editing the day.

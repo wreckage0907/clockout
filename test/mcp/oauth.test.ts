@@ -1,5 +1,14 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { McpCredentials } from "../../src/config/credentials";
+import {
+  loadMcpCredentials,
+  type McpCredentials,
+  removeMcpCredentials,
+  saveMcpCredentials,
+  withMcpCredentials,
+} from "../../src/config/credentials";
 import { mcpClient } from "../../src/mcp/client";
 import { connectMcp, discoverMcpAuth, mcpAuth, revokeMcp } from "../../src/mcp/oauth";
 import { type MockMcp, type MockMcpOptions, startMockMcp } from "../mock-mcp/server";
@@ -183,5 +192,74 @@ describe("signed-in calls", () => {
       async () => undefined,
     );
     await expect(token()).rejects.toThrow("The sign-in to wispr has expired.");
+  });
+});
+
+describe("refreshing alongside another process", () => {
+  async function twoProcesses() {
+    const m = await start();
+    const creds = (await connectMcp("wispr", m.url, browser)) as McpCredentials;
+    const dir = await mkdtemp(join(tmpdir(), "clockout-refresh-"));
+    const file = join(dir, "credentials.json");
+    await saveMcpCredentials("wispr", creds, file);
+    // The same stored sign-in, loaded twice: the TUI's copy and a scheduled run's.
+    const auth = () =>
+      mcpAuth(
+        "wispr",
+        creds,
+        async () => undefined,
+        fetch,
+        (fn) => withMcpCredentials("wispr", fn, file),
+      );
+    const tokenRequests = () => m.requests.filter((r) => r.path === "/auth/token").length;
+    return { m, creds, file, dir, tui: auth(), scheduled: auth(), tokenRequests };
+  }
+
+  it("uses the token another process rotated instead of the spent one", async () => {
+    const { m, creds, file, dir, tui, scheduled, tokenRequests } = await twoProcesses();
+    try {
+      m.expireTokens();
+      const rotatedAccess = await scheduled(true);
+      const asked = tokenRequests();
+      // The open TUI still holds the spent refresh token; it must not send it.
+      expect(await tui(true)).toBe(rotatedAccess);
+      expect(tokenRequests()).toBe(asked);
+      const saved = await loadMcpCredentials("wispr", file);
+      expect(saved?.refresh_token).not.toBe(creds.refresh_token);
+      expect(saved?.access_token).toBe(rotatedAccess);
+      // And it carries on from the new token the next time it needs one.
+      m.expireTokens();
+      expect(await tui(true)).not.toBe(rotatedAccess);
+      expect((await loadMcpCredentials("wispr", file))?.refresh_token).not.toBe(
+        saved?.refresh_token,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("two refreshes at once refresh once, and the rotated token survives", async () => {
+    const { m, file, dir, tui, scheduled, tokenRequests } = await twoProcesses();
+    try {
+      m.expireTokens();
+      const before = tokenRequests();
+      const [a, b] = await Promise.all([tui(true), scheduled(true)]);
+      expect(a).toBe(b);
+      expect(tokenRequests() - before).toBe(1);
+      expect((await loadMcpCredentials("wispr", file))?.access_token).toBe(a);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("asks you to connect again when the sign-in was removed from disk", async () => {
+    const { m, file, dir, tui } = await twoProcesses();
+    try {
+      await removeMcpCredentials("wispr", file);
+      m.expireTokens();
+      await expect(tui(true)).rejects.toThrow("The sign-in to wispr was removed.");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
