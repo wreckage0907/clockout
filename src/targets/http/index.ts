@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { plainText, type RemoteDay, roundHours } from "../../core/push";
-import type { Fetch } from "../next-pms/oauth";
+import type { Fetch } from "../../oauth";
 import type { EntryInput, RemoteTask, Target } from "../types";
 
 // Any timesheet or PMS system that speaks a small JSON API (docs/timesheet-api.md), with a
@@ -35,7 +35,7 @@ const failure = z.object({ error: z.string() });
 export function httpTarget(
   url: string,
   token: string,
-  tokenEnv: string,
+  tokenSource: string,
   doFetch: Fetch = fetch,
 ): Target {
   const base = url.replace(/\/+$/, "");
@@ -60,7 +60,7 @@ export function httpTarget(
     const said = failure.safeParse(json);
     if (res.status === 401 || res.status === 403)
       throw new Error(
-        `${host} refused the token in ${tokenEnv}${said.success ? ` (${said.data.error})` : ""}. Check it, or get a new one.`,
+        `${host} refused the token in ${tokenSource}${said.success ? ` (${said.data.error})` : ""}. Check it, or get a new one.`,
       );
     if (res.status >= 500)
       throw new Error(

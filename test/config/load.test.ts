@@ -62,4 +62,78 @@ describe("config files", () => {
     await expect(saveConfig(file, bad)).rejects.toThrow(ConfigError);
     await expect(readFile(file)).rejects.toThrow();
   });
+
+  it("tells someone with a next-pms target what to change instead of a schema error", async () => {
+    const file = join(dir, "config.toml");
+    await writeFile(
+      file,
+      `[me]
+name = "Dev"
+emails = ["dev@example.com"]
+timezone = "UTC"
+
+[timesheet]
+type = "next-pms"
+url = "https://erp.example.com"
+
+[[timesheet.map]]
+project = "acme/api"
+erp_task = "TASK-1"
+`,
+    );
+    const err = await loadConfig(file).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(ConfigError);
+    const message = (err as Error).message;
+    expect(message).toContain('type = "next-pms" isn\'t supported any more');
+    expect(message).toContain('type = "http"');
+    expect(message).toContain("docs/timesheet-api.md");
+    expect(message).toContain('type = "command"');
+    expect(message).not.toContain("Invalid input");
+  });
+
+  it("keeps a timesheet token through a save, in a file only you can read", async () => {
+    const file = join(dir, "config.toml");
+    // A file made before the token was there, readable by others.
+    await writeFile(file, "x = 1\n", { mode: 0o644 });
+    await saveConfig(file, {
+      ...config,
+      timesheet: {
+        type: "http",
+        url: "https://pms.example.com/api",
+        token: "abc123def456",
+        map: [],
+      },
+    });
+    expect((await stat(file)).mode & 0o777).toBe(0o600);
+    const loaded = await loadConfig(file);
+    expect(loaded?.timesheet).toMatchObject({ type: "http", token: "abc123def456" });
+  });
+
+  it("doesn't quote a token back in a TOML syntax error", async () => {
+    const file = join(dir, "config.toml");
+    await writeFile(file, '[timesheet]\ntype = "http"\ntoken = hunter2-secret-value\n');
+    const err = await loadConfig(file).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(ConfigError);
+    expect((err as Error).message).not.toContain("hunter2-secret-value");
+  });
+
+  it("doesn't quote a token back when it isn't valid", async () => {
+    const file = join(dir, "config.toml");
+    await writeFile(
+      file,
+      `[me]
+name = "Dev"
+emails = ["dev@example.com"]
+timezone = "UTC"
+
+[timesheet]
+type = "http"
+url = "https://pms.example.com/api"
+token = "two words secret-value"
+`,
+    );
+    const err = await loadConfig(file).catch((e: Error) => e);
+    expect((err as Error).message).toContain("timesheet.token");
+    expect((err as Error).message).not.toContain("secret-value");
+  });
 });

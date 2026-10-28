@@ -439,17 +439,16 @@ describe("setup from the chat bar", () => {
     expect(calls.loads).toHaveLength(2);
   });
 
-  it("connects the ERP from a plain sentence, even without the AI", async () => {
+  it("connects Google Calendar from a plain sentence, even without the AI", async () => {
     const { ui, calls } = await openDay();
-    ui.stdin.write(PASTE("connect erp erp.example.com"));
+    ui.stdin.write(PASTE("connect google calendar"));
     await tick();
     ui.stdin.write("\r");
     await until(ui.lastFrame, "Apply");
-    expect(ui.lastFrame()).toContain("Sign in to your ERP at erp.example.com in your browser");
+    expect(ui.lastFrame()).toContain("Sign in to Google Calendar in your browser");
     ui.stdin.write("\r");
-    await until(ui.lastFrame, "✓ Connect your ERP");
-    expect(calls.configured).toEqual([[{ op: "connect", service: "erp", url: "erp.example.com" }]]);
-    expect(calls.loads).toHaveLength(1); // the ERP doesn't change the draft
+    await until(ui.lastFrame, "✓ Connect Google Calendar");
+    expect(calls.configured).toEqual([[{ op: "connect", service: "google" }]]);
   });
 
   it("passes the last turns along, so a follow-up answers the AI's question", async () => {
@@ -576,12 +575,11 @@ describe("slash commands", () => {
     ui.stdin.write(TAB);
     await tick();
     expect(ui.lastFrame()).toContain("/connect ");
-    ui.stdin.write("erp erp.example.com");
+    ui.stdin.write("google");
     await tick();
     ui.stdin.write("\r");
-    await until(ui.lastFrame, "✓ Signed in to your ERP");
-    expect(ui.lastFrame()).toContain("✓ Signed in to your ERP");
-    expect(calls.configured).toEqual([[{ op: "connect", service: "erp", url: "erp.example.com" }]]);
+    await until(ui.lastFrame, "✓ Signed in to Google Calendar");
+    expect(calls.configured).toEqual([[{ op: "connect", service: "google" }]]);
   });
 
   it("never sends a slash to the AI: an unknown command stays in the bar", async () => {
@@ -638,13 +636,22 @@ describe("slash commands", () => {
     expect(ui.lastFrame()).toContain("How the day is counted");
   });
 
-  it("/send without an ERP says how to sign in", async () => {
+  it("/send without a timesheet system says where to set one up", async () => {
     const { ui } = await openDay();
     ui.stdin.write(PASTE("/send"));
     await tick();
     ui.stdin.write("\r");
-    await until(ui.lastFrame, "/connect erp <address>");
-    expect(ui.lastFrame()).toContain("/connect erp <address>");
+    await until(ui.lastFrame, "No timesheet system is set up");
+    expect(ui.lastFrame()).toContain("[timesheet]");
+  });
+
+  it("/connect erp points at config.toml instead of signing in", async () => {
+    const { ui, calls } = await openDay();
+    ui.stdin.write(PASTE("/connect erp https://erp.example.com"));
+    await tick();
+    ui.stdin.write("\r");
+    await until(ui.lastFrame, "config.toml");
+    expect(calls.configured).toEqual([]);
   });
 
   it("/disconnect asks first, like saying it", async () => {
@@ -946,13 +953,13 @@ describe("setup", () => {
     const withErp = {
       ...config,
       timesheet: {
-        type: "next-pms" as const,
+        type: "http" as const,
         url: "https://erp.example.com",
         map: [{ project: "acme/api", erp_task: "TASK-1", label: "Acme API build" }],
       },
     };
     const { ui, calls } = await openSetup({
-      setup: { config: withErp, erp: { connected: true, user: "dev@example.com" } },
+      setup: { config: withErp, erp: { connected: true } },
     });
     for (let i = 0; i < 4; i++) {
       ui.stdin.write("\u001b[B");
@@ -971,19 +978,50 @@ describe("setup", () => {
     expect(lastSaved(calls)?.timesheet?.map).toEqual([]);
   });
 
-  it("signs in to the ERP from the keyboard", async () => {
-    const { ui, calls } = await openSetup();
+  it("shows where days go and never offers an address or a token to type", async () => {
+    const withHttp = {
+      ...config,
+      timesheet: { type: "http" as const, url: "https://pms.example.com/api", map: [] },
+    };
+    const { ui } = await openSetup({ setup: { config: withHttp, erp: { connected: true } } });
     for (let i = 0; i < 4; i++) {
       ui.stdin.write("\u001b[B");
       await tick();
     }
-    await until(ui.lastFrame, "ERP address");
-    ui.stdin.write("\r"); // into the rows: the address
-    await tick();
-    ui.stdin.write("erp.example.com");
-    await until(ui.lastFrame, "erp.example.com");
+    await until(ui.lastFrame, "Days go to pms.example.com");
+    expect(ui.lastFrame()).not.toContain("address");
+    expect(ui.lastFrame()).not.toContain("Sign in");
+  });
+
+  it("says which variable to set when the token is missing, and shows nothing secret", async () => {
+    const withHttp = {
+      ...config,
+      timesheet: {
+        type: "http" as const,
+        url: "https://pms.example.com/api",
+        token: "s3cr3t-token-value",
+        map: [],
+      },
+    };
+    const { ui } = await openSetup({ setup: { config: withHttp, erp: { connected: false } } });
+    for (let i = 0; i < 4; i++) {
+      ui.stdin.write("\u001b[B");
+      await tick();
+    }
+    await until(ui.lastFrame, "needs its token");
     ui.stdin.write("\r");
-    await until(ui.lastFrame, "Days go to erp.example.com");
-    expect(calls.signedIn).toEqual(["erp.example.com"]);
+    await tick();
+    expect(ui.lastFrame()).toContain("CLOCKOUT_TIMESHEET_TOKEN");
+    expect(ui.lastFrame()).not.toContain("s3cr3t-token-value");
+  });
+
+  it("points at config.toml when no timesheet system is set up", async () => {
+    const { ui } = await openSetup();
+    for (let i = 0; i < 4; i++) {
+      ui.stdin.write("\u001b[B");
+      await tick();
+    }
+    await until(ui.lastFrame, "No timesheet system set up");
+    expect(ui.lastFrame()).toContain("config.toml");
   });
 });

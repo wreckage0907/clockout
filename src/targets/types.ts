@@ -23,7 +23,7 @@ export interface EntryInput {
 export interface Target {
   /** Matches `type` in `[timesheet]` config. */
   id: string;
-  /** For messages, e.g. "the ERP". */
+  /** For messages, e.g. "the ERP" or the host. */
   name: string;
   /** Your entries on a local date ("YYYY-MM-DD"). */
   day(date: string): Promise<RemoteDay>;

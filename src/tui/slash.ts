@@ -1,12 +1,12 @@
 import { addDays, isDate } from "../core/time";
 
 export type SetupSection = "sources" | "day" | "ai" | "projects" | "erp";
-type Service = "erp" | "google";
+type Service = "google";
 
 /** A command typed after a `/` in the chat bar. These never go to the AI. */
 export type Slash =
   | { name: "refresh" }
-  | { name: "connect"; service: Service; url?: string }
+  | { name: "connect"; service: Service }
   | { name: "disconnect"; service: Service }
   | { name: "send" }
   /** A built-in format or one of yours from `[[exports]]`; none for the default. */
@@ -23,7 +23,7 @@ export type Slash =
 
 export interface SlashCommand {
   name: string;
-  /** What goes after the name, for the menu, e.g. "erp <address> | google". */
+  /** What goes after the name, for the menu, e.g. "google". */
   args?: string;
   /** Whether it needs an argument, so picking it from the menu fills it in rather than runs it. */
   needsArgs?: boolean;
@@ -36,9 +36,9 @@ export interface SlashCommand {
 
 export const COMMANDS: SlashCommand[] = [
   { name: "refresh", about: "Draft the day again from new activity" },
-  { name: "connect", args: "erp <address> | google", needsArgs: true, about: "Sign in" },
-  { name: "disconnect", args: "erp | google", needsArgs: true, about: "Sign out" },
-  { name: "send", about: "Send the day to your ERP", key: "ctrl+s" },
+  { name: "connect", args: "google", needsArgs: true, about: "Sign in" },
+  { name: "disconnect", args: "google", needsArgs: true, about: "Sign out" },
+  { name: "send", about: "Send the day to your timesheet system", key: "ctrl+s" },
   { name: "copy", args: "[md | csv | your export]", about: "Copy the timesheet", key: "ctrl+y" },
   { name: "undo", about: "Undo the last change", key: "ctrl+z" },
   {
@@ -66,7 +66,7 @@ const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "frida
 
 /**
  * The chat bar's text as a slash command, if it is one. Dictation writes "slash refresh" or
- * "Slash connect ERP." rather than "/refresh", so a spoken "slash" counts too, and case and a
+ * "Slash connect Google." rather than "/refresh", so a spoken "slash" counts too, and case and a
  * closing full stop don't matter.
  */
 export function slashText(text: string): string | null {
@@ -146,13 +146,12 @@ export function parseSlash(
     }
     case "connect":
     case "disconnect": {
-      const service =
-        arg === "erp" ? "erp" : arg === "google" || arg === "calendar" ? "google" : null;
-      if (!service) return { error: `/${name} erp or /${name} google?` };
-      if (name === "disconnect") return { ok: { name, service } };
-      const url =
-        service === "erp" ? args.slice(1).find((a) => a.toLowerCase() !== "at") : undefined;
-      return { ok: { name, service, ...(url ? { url } : {}) } };
+      if (arg === "erp")
+        return {
+          error: `Your timesheet system is set in config.toml ([timesheet]), not signed in to: /${name} google is the one that's left.`,
+        };
+      if (arg !== "google" && arg !== "calendar") return { error: `/${name} google?` };
+      return { ok: { name, service: "google" } };
     }
     case "date": {
       const date = arg ? dateFrom(arg, today) : null;

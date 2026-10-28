@@ -15,7 +15,7 @@ import {
   withSource,
   withStandup,
 } from "../config/edit";
-import { type Config, durationMinutes, targetHost } from "../config/schema";
+import { type Config, DEFAULT_TOKEN_ENV, durationMinutes, targetHost } from "../config/schema";
 import { FORMAT_WORDS, HELPER_NAMES } from "../config/setting-ops";
 
 import type { ClaudeProject } from "../sources/claude-code/paths";
@@ -38,8 +38,8 @@ export interface SetupState {
   github: { found: boolean; fix?: string };
   /** Agent CLIs installed here that can be the AI helper, in the order "auto" tries them. */
   helpers: { id: Exclude<Config["ai"]["backend"], "auto" | "none">; name: string }[];
-  /** Signed in to the ERP in `config.timesheet`, and as whom. */
-  erp: { connected: boolean; user?: string };
+  /** `config.timesheet` can send days: it has its token (or needs none). */
+  erp: { connected: boolean };
   /** Signed in to Wispr Flow's MCP server, so recorded meetings are read. */
   wispr: { connected: boolean };
 }
@@ -50,10 +50,6 @@ export interface SetupActions {
   save(config: Config): Promise<Config>;
   /** Signs in to Google in the browser and keeps the sign-in. */
   connectGoogle(): Promise<void>;
-  /** Signs in to the ERP at an address in the browser; returns the saved config and who you are. */
-  connectErp(site: string): Promise<{ config: Config; user?: string }>;
-  /** Signs out of the ERP; the site and task mappings stay in the config. */
-  disconnectErp(): Promise<void>;
   /** Signs in to Wispr Flow's MCP server in the browser and keeps the sign-in. */
   connectWispr(): Promise<void>;
 }
@@ -94,7 +90,7 @@ interface Row {
   step?: (d: -1 | 1) => void;
   /** Choices, picked by ← → or a click. */
   options?: Option[];
-  /** Text typed into the row (the ERP address). */
+  /** Text typed into the row (a new project's name). */
   input?: { value: string; placeholder: string };
   /** The row is a button. */
   button?: "primary" | "neutral";
@@ -155,9 +151,6 @@ export function Setup({
   const [pick, setPick] = useState(0);
   const search = useDraft(page === "claude");
   const prompt = useDraft(page === "prompt");
-  const typingSite =
-    section === "erp" && focus === "rows" && !state?.erp.connected && busy !== "erp";
-  const site = useDraft(typingSite);
   const newProject = useDraft(section === "projects" && focus === "rows");
 
   useEffect(() => {
@@ -196,12 +189,11 @@ export function Setup({
   );
   const rows = state && config ? sectionRows(section) : [];
   const changeable = rows.flatMap((r, i) => (canChange(r) ? [i] : []));
-  // Rows come and go (signing in swaps the ERP's), so the selection snaps to one that's there.
+  // Rows come and go (a token appearing swaps the ERP's), so the selection snaps to one that's there.
   const cur = changeable.includes(sel) ? sel : (changeable[0] ?? -1);
   const row = rows[cur];
 
   useInput((ch, key) => {
-    if (busy === "erp") return; // signing in: the browser has it
     if (key.ctrl && ch === "p") return onClose();
     if (page === "claude") return projectKeys(ch, key);
     if (page === "prompt") {
@@ -233,7 +225,7 @@ export function Setup({
     if (!row) return;
     if (row.remove && (key.backspace || key.delete)) return row.remove();
     if (row.input) {
-      const typing = section === "erp" ? site : newProject;
+      const typing = newProject;
       if (key.return) return row.press?.();
       if (key.leftArrow && !typing.value) return setFocus("nav");
       typing.edit(ch, key);
@@ -460,16 +452,16 @@ export function Setup({
         return 'Projects you log time to, and rules that name your work. Add one below or say it in the chat bar: "add a project called Internal", "anything in acme/api is Acme Website", "leave out my dotfiles".';
       case "erp": {
         const host = erpHost(config);
-        if (state.erp.connected && host)
-          return (
-            <>
-              Days go to <Text bold>{host}</Text>
-              {state.erp.user ? ` as ${state.erp.user}` : ""}
-            </>
-          );
-        return host
-          ? `Signed out · ${host}. Sign in again to send days.`
-          : "Sign in to your next-pms site to send each day to your timesheet.";
+        if (!config.timesheet)
+          return "Where days are sent is set in config.toml, under [timesheet]: a server that speaks Clockout's timesheet API (docs/timesheet-api.md) or a program you name.";
+        if (!state.erp.connected && host) return `${host} needs its token before days can be sent.`;
+        return host ? (
+          <>
+            Days go to <Text bold>{host}</Text>
+          </>
+        ) : (
+          "Days go to the program named in config.toml, under [timesheet]."
+        );
       }
     }
   }
@@ -870,31 +862,23 @@ export function Setup({
     const c = config;
     const host = erpHost(c);
     const http = c.timesheet?.type === "http" ? c.timesheet : null;
+    if (!c.timesheet)
+      return [
+        {
+          id: "none",
+          label: "No timesheet system set up",
+          wide: true,
+          note: "add [timesheet] to config.toml · docs/timesheet-api.md",
+        },
+      ];
+    // The address and the token are only ever set by hand in config.toml, never from here.
     if (http && !state.erp.connected)
       return [
         {
           id: "token",
-          label: `Set ${http.token_env}`,
+          label: `Set ${http.token_env ?? DEFAULT_TOKEN_ENV}`,
           wide: true,
-          note: `to your token for ${host}, then open Clockout again`,
-        },
-      ];
-    if (!state.erp.connected || !c.timesheet)
-      return [
-        {
-          id: "address",
-          label: "ERP address",
-          input: { value: site.value, placeholder: host ?? "erp.example.com" },
-          busy: busy === "erp",
-          ...(busy === "erp" ? { note: "finish signing in in your browser…" } : {}),
-          press: () => void connectErp(),
-        },
-        {
-          id: "sign-in",
-          label: "Sign in ↵",
-          button: "primary",
-          note: "opens your browser · only your own timesheet entries",
-          press: () => void connectErp(),
+          note: `to your token for ${host}, then open Clockout again (or put token = "…" under [timesheet] in config.toml)`,
         },
       ];
     const map = c.timesheet.map;
@@ -917,18 +901,6 @@ export function Setup({
               label: "No tasks picked yet",
               wide: true,
               note: "you pick them the first time you send a day (ctrl+s)",
-            },
-          ]),
-      // An http target's token lives in your environment; there's nothing to sign out of here.
-      ...(http
-        ? []
-        : [
-            {
-              id: "sign-out",
-              group: "Sign-in",
-              label: "Sign out",
-              button: "neutral" as const,
-              press: () => void disconnectErp(),
             },
           ]),
     ];
@@ -964,45 +936,6 @@ export function Setup({
       onConfig(next.config);
     } catch (err) {
       setError(`Wispr Flow sign-in didn't finish: ${(err as Error).message}`);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function connectErp() {
-    if (!config) return;
-    const address = site.value.trim() || erpHost(config);
-    if (!address) return setError("Type your ERP's address, e.g. erp.example.com");
-    setBusy("erp");
-    setError(null);
-    try {
-      const r = await actions.connectErp(address);
-      setState((s) =>
-        s
-          ? {
-              ...s,
-              config: r.config,
-              erp: { connected: true, ...(r.user ? { user: r.user } : {}) },
-            }
-          : s,
-      );
-      onConfig(r.config);
-      site.setValue("");
-    } catch (err) {
-      setError(`ERP sign-in didn't finish: ${(err as Error).message}`);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function disconnectErp() {
-    setBusy("erp");
-    setError(null);
-    try {
-      await actions.disconnectErp();
-      setState((s) => (s ? { ...s, erp: { connected: false } } : s));
-    } catch (err) {
-      setError(`Couldn't sign out of the ERP: ${(err as Error).message}`);
     } finally {
       setBusy(null);
     }

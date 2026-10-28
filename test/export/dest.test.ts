@@ -315,7 +315,6 @@ describe("settings the chat bar can change", () => {
   it("isn't in what the AI is told", () => {
     const seen = settingsContext(base, {
       googleConnected: false,
-      erpConnected: false,
       claudeProjects: [],
     });
     expect(JSON.stringify(seen.exports)).not.toContain("Vault");

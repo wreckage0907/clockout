@@ -11,7 +11,7 @@ const config = configSchema.parse({
     { name: "dotfiles", ignore: true },
   ],
   timesheet: {
-    type: "next-pms",
+    type: "http",
     url: "https://erp.example.com",
     map: [{ project: "acme/api", erp_task: "TASK-1" }],
   },

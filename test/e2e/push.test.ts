@@ -106,7 +106,7 @@ describe("sending a day to a PMS", () => {
     );
     const missing = await push(["--yes"], "");
     expect(missing.stderr).toContain(
-      `clockout: Set CLOCKOUT_TIMESHEET_TOKEN to your timesheet API's token (from ${host}), then try again.\n`,
+      `clockout: Set CLOCKOUT_TIMESHEET_TOKEN to your timesheet API's token (from ${host}) or put token = "…" under [timesheet] in config.toml, then try again.\n`,
     );
   });
 
@@ -140,5 +140,66 @@ describe("what the PMS refuses", () => {
     expect(r.code).toBe(1);
     expect(r.stdout).toContain("This week is already approved.");
     expect(pms.writes()).toEqual([]);
+  });
+});
+
+describe("a token kept in config.toml", () => {
+  async function withInlineToken(token: string) {
+    const pms = await startMockPms();
+    const sb = await sandbox();
+    const map = Object.entries(MAP)
+      .map(([project, task]) => `[[timesheet.map]]\nproject = "${project}"\nerp_task = "${task}"`)
+      .join("\n\n");
+    await sb.writeConfig(
+      await fixtureSourcesToml(
+        sb,
+        `\n[timesheet]\ntype = "http"\nurl = "${pms.url}"\ntoken = "${token}"\n\n${map}\n`,
+      ),
+    );
+    // No CLOCKOUT_TIMESHEET_TOKEN: the sandbox's environment has none.
+    const push = (args: string[]) => sb.run(["push", DATE, "--no-ai", ...args]);
+    return { pms, push };
+  }
+
+  it("sends with it, and never prints it, on a dry run or after", async () => {
+    const { pms, push } = await withInlineToken("mock-token");
+    const dry = await push(["--dry-run"]);
+    const sent = await push(["--yes"]);
+    await pms.stop();
+    expect(dry.code).toBe(0);
+    expect(sent.code).toBe(0);
+    expect(sent.stdout).toContain("Sent 8 changes.");
+    expect(new Set(pms.requests.map((x) => x.auth))).toEqual(new Set(["Bearer mock-token"]));
+    for (const out of [dry, sent]) {
+      expect(out.stdout).not.toContain("mock-token");
+      expect(out.stderr).not.toContain("mock-token");
+    }
+  });
+
+  it("says config.toml when the system refuses it, without printing it", async () => {
+    const { pms, push } = await withInlineToken("a-wrong-inline-token");
+    const r = await push(["--yes"]);
+    await pms.stop();
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("refused the token in config.toml (Invalid token)");
+    expect(r.stdout + r.stderr).not.toContain("a-wrong-inline-token");
+  });
+});
+
+describe("a config from before the next-pms target was removed", () => {
+  it("says what to change, and exits 1 with nothing on stdout", async () => {
+    const sb = await sandbox();
+    await sb.writeConfig(
+      await fixtureSourcesToml(
+        sb,
+        `\n[timesheet]\ntype = "next-pms"\nurl = "https://erp.example.com"\n`,
+      ),
+    );
+    const r = await sb.run(["push", DATE, "--no-ai", "--dry-run"]);
+    expect(r.code).toBe(1);
+    expect(r.stdout).toBe("");
+    expect(r.stderr).toContain('type = "next-pms" isn\'t supported any more');
+    expect(r.stderr).toContain('type = "http"');
+    expect(r.stderr).toContain("docs/timesheet-api.md");
   });
 });

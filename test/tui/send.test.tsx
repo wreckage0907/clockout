@@ -116,7 +116,7 @@ describe("which ERP task a card goes to", () => {
   ];
   const withErp = {
     ...config,
-    timesheet: { type: "next-pms" as const, url: "https://erp.example.com", map },
+    timesheet: { type: "http" as const, url: "https://erp.example.com", map },
   };
 
   async function openWithErp() {

@@ -410,7 +410,7 @@ export function App({
   /** Checks the ERP and shows what sending would change; asks for a task first where needed. */
   const erp = actions.send;
   const startSend = async (current = stored) => {
-    if (!erp) return showToast("Sign in to your ERP first: Setup (ctrl+p) → ERP");
+    if (!erp) return showToast(NO_TIMESHEET);
     if (!current) return;
     setView("day");
     if (asks) return showToast(`Answer the ${asks} meeting${asks === 1 ? "" : "s"} first`);
@@ -459,7 +459,7 @@ export function App({
   /** Which ERP task a card goes to. Its project's first pick becomes the project's task. */
   const pickFor = (c: Card) => {
     if (c.kind !== "row") return;
-    if (!erp) return showToast("Sign in to your ERP first: Setup (ctrl+p) → ERP");
+    if (!erp) return showToast(NO_TIMESHEET);
     setUnmapped({
       project: c.project,
       label: c.task,
@@ -471,7 +471,7 @@ export function App({
   };
   const pickChecked = () => {
     if (checkedCards.length === 0) return;
-    if (!erp) return showToast("Sign in to your ERP first: Setup (ctrl+p) → ERP");
+    if (!erp) return showToast(NO_TIMESHEET);
     const n = checkedCards.length;
     setUnmapped({
       project: `${n} selected card${n === 1 ? "" : "s"}`,
@@ -620,11 +620,8 @@ export function App({
     if (s.name === "setup") return openSetup(s.section);
     if (s.name === "problems") return setOverlay("problems");
     if (s.name === "connect") {
-      const op: SettingOp = { op: "connect", service: s.service, ...(s.url ? { url: s.url } : {}) };
-      return void configure(
-        [op],
-        s.service === "erp" ? "Signed in to your ERP" : "Signed in to Google Calendar",
-      );
+      const op: SettingOp = { op: "connect", service: s.service };
+      return void configure([op], "Signed in to Google Calendar");
     }
     setView("day");
     if (s.name === "refresh") return askRebuild();
@@ -633,7 +630,7 @@ export function App({
     if (s.name === "standup") return void standup(s.blockers);
     if (s.name === "add") return day ? setOverlay("add") : undefined;
     if (s.name === "send") {
-      if (!erp) return showToast("Sign in to your ERP first: /connect erp <address>");
+      if (!erp) return showToast(NO_TIMESHEET);
       return void startSend();
     }
     const settings: SettingOp[] = [{ op: "disconnect", service: s.service }];
@@ -642,7 +639,7 @@ export function App({
       ops: [],
       settings,
       lines: describeSettings(settings),
-      reply: s.service === "erp" ? "Sign out of your ERP" : "Sign out of Google Calendar",
+      reply: "Sign out of Google Calendar",
     });
   };
   /** Picking a command from the menu: runs it, or fills it in when it needs more words. */
@@ -653,7 +650,7 @@ export function App({
 
   /**
    * Typed or dictated words: a slash command, a length for the selected card, or for the AI a
-   * correction to the day or a change to settings ("connect my ERP", "leave out my personal
+   * correction to the day or a change to settings ("connect google", "leave out my personal
    * projects").
    */
   const send = async (text: string) => {
@@ -1173,11 +1170,13 @@ export function App({
   );
 }
 
-/** Whether a settings change can change how the day is drafted (the ERP's can't). */
+/** Whether a settings change can change how the day is drafted (a task mapping can't). */
 function draftsDay(op: SettingOp): boolean {
-  if (op.op === "erp_task") return false;
-  return !((op.op === "connect" || op.op === "disconnect") && op.service === "erp");
+  return op.op !== "erp_task";
 }
+
+const NO_TIMESHEET =
+  "No timesheet system is set up: add a [timesheet] section to config.toml (see docs/timesheet-api.md)";
 
 function picking(row: PushRow): Picking {
   return { project: row.project, label: row.task, description: row.description, send: true };

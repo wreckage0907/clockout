@@ -212,7 +212,7 @@ describe("your own formats", () => {
       ],
       {
         timesheet: {
-          type: "next-pms",
+          type: "http",
           url: "https://erp.example.com",
           map: [{ project: "acme/api", erp_task: "TASK-1", label: "API work" }],
         },

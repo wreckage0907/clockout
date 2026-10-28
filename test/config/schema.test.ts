@@ -52,9 +52,9 @@ describe("configSchema", () => {
     expect(
       issues({ ...minimal, mcp: [{ name: "My Notes", url: "https://n.example.com" }] }),
     ).toEqual(["mcp.0.name"]);
-    expect(issues({ ...minimal, mcp: [{ name: "erp", url: "https://n.example.com" }] })).toEqual([
-      "mcp.0.name",
-    ]);
+    expect(issues({ ...minimal, mcp: [{ name: "google", url: "https://n.example.com" }] })).toEqual(
+      ["mcp.0.name"],
+    );
     const twice = { name: "notes", url: "https://n.example.com/mcp" };
     expect(issues({ ...minimal, mcp: [twice, twice] })).toEqual(["mcp"]);
   });

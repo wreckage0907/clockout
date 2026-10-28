@@ -1,5 +1,5 @@
 import { type Correction, localCorrection, type Turn } from "../../src/ai/edits";
-import { withErpSite, withTaskMapping } from "../../src/config/edit";
+import { withTaskMapping } from "../../src/config/edit";
 import type { Config, TaskMapping } from "../../src/config/schema";
 import { applySettings, type SettingOp } from "../../src/config/setting-ops";
 import { buildDay } from "../../src/core/blocks";
@@ -62,13 +62,12 @@ export function fakeActions(
     mapped: [] as TaskMapping[],
     configured: [] as SettingOp[][],
     signedIn: [] as string[],
-    signedOut: 0,
   };
   let erpConfig: Config = opts.erp
     ? {
         ...config,
         timesheet: {
-          type: "next-pms" as const,
+          type: "http" as const,
           url: "https://erp.example.com",
           map: opts.erp.map ?? [],
         },
@@ -198,14 +197,6 @@ export function fakeActions(
       connectGoogle: async () => {},
       connectWispr: async () => {
         calls.signedIn.push("wispr");
-      },
-      connectErp: async (site) => {
-        calls.signedIn.push(site);
-        erpConfig = withErpSite(erpConfig, `https://${site}`);
-        return { config: erpConfig, user: "dev@example.com" };
-      },
-      disconnectErp: async () => {
-        calls.signedOut++;
       },
     },
   };

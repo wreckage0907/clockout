@@ -53,7 +53,7 @@ src/config/       zod schema, TOML load/save, XDG paths
 src/store/        JSON store for days and corrections
 src/collect.ts    runs sources for a day, builds and saves it (openDay)
 src/corrections.ts applies edits to a stored day with undo
-src/targets/      timesheet systems the day is sent to (next-pms, http); read and write entries only
+src/targets/      timesheet systems the day is sent to (http, command); read and write entries only
 src/push.ts       plans and applies sending a day to a target, keeps the record of what was sent
 src/standup.ts    gathers a standup's facts (previous working day, today's calendar, open GitHub work) and writes it
 src/mcp/          MCP client (streamable HTTP) and its sign-in; calls only tools named in config or code

@@ -1,24 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { erpOrigin, signInMcp } from "../../src/commands/connect";
+import { signInMcp } from "../../src/commands/connect";
 import { configSchema } from "../../src/config/schema";
 import { startMockMcp } from "../mock-mcp/server";
 
 const me = { name: "Dev", emails: ["dev@example.com"], timezone: "Asia/Kolkata" };
 const nothingOpened = async () => {};
-
-describe("erpOrigin", () => {
-  it("takes a bare host or a full address, path and all", () => {
-    expect(erpOrigin("erp.example.com")).toBe("https://erp.example.com");
-    expect(erpOrigin("https://erp.example.com/app/timesheet.")).toBe("https://erp.example.com");
-  });
-
-  it("allows plain http only on this machine", () => {
-    expect(erpOrigin("http://erp.localhost")).toBe("http://erp.localhost");
-    expect(erpOrigin("http://127.0.0.1:8000")).toBe("http://127.0.0.1:8000");
-    expect(() => erpOrigin("http://erp.example.com")).toThrow(/https:\/\//);
-    expect(() => erpOrigin("ftp://erp.example.com")).toThrow(/https:\/\//);
-  });
-});
 
 describe("signing in to an MCP server from the app", () => {
   it("adds the server, and the source that reads your recorded meetings", async () => {

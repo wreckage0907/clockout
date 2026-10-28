@@ -165,24 +165,35 @@ const siteUrl = z
   .url({ protocol: /^https?$/, error: "use the site's address, e.g. https://erp.example.com" })
   .refine(isSafeSite, "use https:// (plain http only works for a site on this machine)");
 
-const nextPmsTarget = z.object({
-  type: z.literal("next-pms"),
-  url: siteUrl,
-  map: z.array(taskMapping).default([]),
-});
-
 /** Any timesheet or PMS system speaking Clockout's small JSON API (docs/timesheet-api.md). */
-const httpTarget = z.object({
-  type: z.literal("http"),
-  /** The API's base address, e.g. "https://pms.example.com/api/clockout". */
-  url: siteUrl,
-  /** The environment variable holding the API token; the token itself never goes in this file. */
-  token_env: z
-    .string()
-    .regex(/^[A-Z_][A-Z0-9_]*$/, "an environment variable name, e.g. CLOCKOUT_TIMESHEET_TOKEN")
-    .default("CLOCKOUT_TIMESHEET_TOKEN"),
-  map: z.array(taskMapping).default([]),
-});
+const httpTarget = z
+  .object({
+    type: z.literal("http"),
+    /** The API's base address, e.g. "https://pms.example.com/api/clockout". */
+    url: siteUrl,
+    /**
+     * The environment variable holding the API token (CLOCKOUT_TIMESHEET_TOKEN when neither this
+     * nor `token` is given). Keeps the token out of this file.
+     */
+    token_env: z
+      .string()
+      .regex(/^[A-Z_][A-Z0-9_]*$/, "an environment variable name, e.g. CLOCKOUT_TIMESHEET_TOKEN")
+      .optional(),
+    /**
+     * The API token itself, for people who'd rather not manage an environment variable. Set by
+     * hand only ([ADR 0013](../../docs/adr/0013-timesheet-systems-speak-one-api.md)): no settings
+     * operation can set, change or read it, and it never goes to the AI.
+     */
+    token: z.string().min(1).regex(/^\S+$/, "a token has no spaces or line breaks").optional(),
+    map: z.array(taskMapping).default([]),
+  })
+  .refine((t) => !(t.token && t.token_env), {
+    path: ["token"],
+    error: "use either token or token_env, not both",
+  });
+
+/** The environment variable an `http` target reads its token from unless told otherwise. */
+export const DEFAULT_TOKEN_ENV = "CLOCKOUT_TIMESHEET_TOKEN";
 
 /**
  * The escape hatch ([ADR 0009](../../docs/adr/0009-change-clockout-through-config.md), layer 4):
@@ -202,7 +213,7 @@ const commandTarget = z.object({
 });
 
 /** Names `clockout connect` already uses for something else. */
-export const RESERVED_SERVER_NAMES = ["google", "erp"];
+export const RESERVED_SERVER_NAMES = ["google"];
 
 /** A remote MCP server (streamable HTTP), connected with `clockout connect <name>`. */
 export const mcpServer = z.object({
@@ -210,7 +221,7 @@ export const mcpServer = z.object({
   name: z
     .string()
     .regex(/^[a-z][a-z0-9-]{0,31}$/, "use a short lowercase name, e.g. wispr or notion")
-    .refine((n) => !RESERVED_SERVER_NAMES.includes(n), "google and erp are taken; choose another"),
+    .refine((n) => !RESERVED_SERVER_NAMES.includes(n), "google is taken; choose another"),
   /** The server's MCP endpoint, e.g. "https://api.example.com/mcp". */
   url: z
     .url({ protocol: /^https?$/, error: "use the server's address, e.g. https://example.com/mcp" })
@@ -218,11 +229,7 @@ export const mcpServer = z.object({
 });
 export type McpServer = z.output<typeof mcpServer>;
 
-export const timesheetTarget = z.discriminatedUnion("type", [
-  nextPmsTarget,
-  httpTarget,
-  commandTarget,
-]);
+export const timesheetTarget = z.discriminatedUnion("type", [httpTarget, commandTarget]);
 
 /** Where a target sends days, for display: the site's address, or the program it runs. */
 export function targetWhere(t: TimesheetTarget): string {
@@ -314,7 +321,7 @@ const mcpDestination = z.object({
     .regex(/^[a-z][a-z0-9-]{0,31}$/, "an MCP server's name, e.g. notion")
     .refine(
       (n) => !RESERVED_SERVER_NAMES.includes(n),
-      "google and erp aren't MCP servers; choose another",
+      "google isn't an MCP server; choose another",
     ),
   /** The tool to call; it comes from the server's own `tools/list`. */
   tool: z.string().min(1).max(120),
@@ -497,7 +504,7 @@ export const configSchema = z.object({
       "each MCP server needs its own name",
     )
     .default([]),
-  /** Where `clockout push` sends the day. Connect with `clockout connect erp <url>`. */
+  /** Where `clockout push` sends the day: set by hand in config.toml (docs/timesheet-api.md). */
   timesheet: timesheetTarget.optional(),
   /** Jobs a scheduler runs, installed as OS units by `clockout schedule sync`. */
   schedule: z

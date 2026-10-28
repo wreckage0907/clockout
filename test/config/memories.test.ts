@@ -148,7 +148,7 @@ describe("what the AI is told", () => {
   });
 
   it("sees them when changing settings, so it can forget one", () => {
-    const facts = { googleConnected: false, erpConnected: false, claudeProjects: [] };
+    const facts = { googleConnected: false, claudeProjects: [] };
     expect(settingsContext(config(["Ticket keys come first"]), facts).memories).toEqual([
       "Ticket keys come first",
     ]);

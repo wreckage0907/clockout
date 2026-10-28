@@ -1,6 +1,6 @@
 # 0006. Send the day to the timesheet system, over its own API
 
-Status: accepted (2026-10-21)
+Status: accepted (2026-10-21). Superseded in part by [0013](0013-timesheet-systems-speak-one-api.md): the `next-pms` target and its OAuth sign-in were removed; the plan-then-apply design and the target interface stand.
 
 ## Context
 

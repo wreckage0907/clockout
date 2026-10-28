@@ -19,8 +19,48 @@ const projects = [
 ];
 const withErp = {
   ...config,
-  timesheet: { type: "next-pms" as const, url: "https://erp.example.com", map: [] },
+  timesheet: { type: "http" as const, url: "https://erp.example.com", map: [] },
 };
+
+describe("the timesheet system's address and token", () => {
+  const withToken = {
+    ...config,
+    timesheet: {
+      type: "http" as const,
+      url: "https://pms.example.com/api",
+      token: "tok-0123456789abcdef",
+      map: [],
+    },
+  };
+
+  it("have no setting operation: an AI can't ask to set, change or read them", () => {
+    for (const op of [
+      { op: "timesheet", url: "https://evil.example.com" },
+      { op: "timesheet_token", token: "x" },
+      { op: "connect", service: "erp", url: "https://evil.example.com" },
+      { op: "connect", service: "timesheet", token: "x" },
+    ])
+      expect(aiSettingOpSchema.safeParse(op).success).toBe(false);
+  });
+
+  it("stay as they are through any settings change, including a task mapping", () => {
+    const r = applySettings(withToken, [
+      { op: "day", target: "7h" },
+      { op: "erp_task", project: "acme/api", search: "x", erp_task: "T-1", label: "API" },
+    ]);
+    expect(r.errors).toEqual([]);
+    expect(r.config.timesheet).toMatchObject({
+      url: "https://pms.example.com/api",
+      token: "tok-0123456789abcdef",
+      map: [{ project: "acme/api", erp_task: "T-1" }],
+    });
+    expect(
+      describeSettings([{ op: "erp_task", project: "acme/api", search: "x", erp_task: "T-1" }])
+        .join(" ")
+        .includes("tok-"),
+    ).toBe(false);
+  });
+});
 
 describe("applySettings", () => {
   it("turns sources off and on", () => {
@@ -179,19 +219,19 @@ describe("applySettings", () => {
 
   it("leaves sign-ins and unsettled ERP tasks to the caller", () => {
     const r = applySettings(withErp, [
-      { op: "connect", service: "erp", url: "erp.example.com" },
+      { op: "connect", service: "google" },
       { op: "disconnect", service: "google" },
       { op: "erp_task", project: "acme/api", search: "hackathon" },
     ]);
     expect(r.config).toEqual(withErp);
     expect(r.effects).toEqual([
-      { kind: "connect", service: "erp", url: "erp.example.com" },
+      { kind: "connect", service: "google" },
       { kind: "disconnect", service: "google" },
       { kind: "pick_task", project: "acme/api", search: "hackathon" },
     ]);
   });
 
-  it("maps an ERP task once it's been found, and needs an ERP for it", () => {
+  it("maps an ERP task once it's been found, and needs a timesheet system for it", () => {
     const op: SettingOp = {
       op: "erp_task",
       project: "acme/api",
@@ -202,7 +242,7 @@ describe("applySettings", () => {
     expect(applySettings(withErp, [op]).config.timesheet?.map).toEqual([
       { project: "acme/api", erp_task: "TASK-1", label: "Hackathon" },
     ]);
-    expect(applySettings(config, [op]).errors[0]).toMatch(/Connect your ERP first/);
+    expect(applySettings(config, [op]).errors[0]).toMatch(/Set up your timesheet system first/);
   });
 });
 
@@ -368,13 +408,13 @@ describe("describeSettings", () => {
       describeSettings([
         { op: "day", target: "7h30m", round_to: "15m" },
         { op: "claude_projects", names: ["personal"], on: false },
-        { op: "connect", service: "erp", url: "erp.example.com" },
+        { op: "connect", service: "google" },
         { op: "erp_task", project: "acme/api", search: "hackathon" },
       ]),
     ).toEqual([
       "daily target → 7h30m, round to 15m",
       "Leave out Claude Code project personal",
-      "Sign in to your ERP at erp.example.com in your browser",
+      "Sign in to Google Calendar in your browser",
       "Pick the ERP task for acme/api (searching “hackathon”)",
     ]);
   });

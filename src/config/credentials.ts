@@ -14,18 +14,6 @@ const googleCredentials = z.object({
 });
 export type GoogleCredentials = z.infer<typeof googleCredentials>;
 
-const erpCredentials = z.object({
-  /** The site's origin, e.g. "https://erp.example.com". */
-  url: z.string().min(1),
-  /** The public OAuth client Clockout registered on that site. */
-  client_id: z.string().min(1),
-  refresh_token: z.string().min(1),
-  /** The ERP user that connected, for display. */
-  user: z.string().optional(),
-  connected_at: z.string(),
-});
-export type ErpCredentials = z.infer<typeof erpCredentials>;
-
 const mcpCredentials = z.object({
   /** The MCP server's address this sign-in is for; a changed address needs a new sign-in. */
   url: z.string().min(1),
@@ -43,9 +31,9 @@ const mcpCredentials = z.object({
 });
 export type McpCredentials = z.infer<typeof mcpCredentials>;
 
+// An `erp` key from before the next-pms target was removed is ignored (and dropped on the next write).
 const file = z.object({
   google: googleCredentials.optional(),
-  erp: erpCredentials.optional(),
   /** By the name in `[[mcp]]`. */
   mcp: z.record(z.string(), mcpCredentials).optional(),
 });
@@ -80,22 +68,6 @@ export async function saveGoogleCredentials(
 
 export async function removeGoogleCredentials(path = credentialsPath()): Promise<void> {
   const { google: _, ...rest } = await read(path);
-  await write(path, rest);
-}
-
-export async function loadErpCredentials(path = credentialsPath()): Promise<ErpCredentials | null> {
-  return (await read(path)).erp ?? null;
-}
-
-export async function saveErpCredentials(
-  creds: ErpCredentials,
-  path = credentialsPath(),
-): Promise<void> {
-  await write(path, { ...(await read(path)), erp: creds });
-}
-
-export async function removeErpCredentials(path = credentialsPath()): Promise<void> {
-  const { erp: _, ...rest } = await read(path);
   await write(path, rest);
 }
 

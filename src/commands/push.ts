@@ -42,7 +42,9 @@ export async function runPush(
   const ctx = app ?? (await appContext());
   let config = ctx.config;
   if (!config.timesheet) {
-    throw new Error("No ERP is set up. Run `clockout connect erp https://your-erp.example.com`.");
+    throw new Error(
+      'No timesheet system is set up. Add a [timesheet] section to config.toml: type = "http" (see docs/timesheet-api.md) or type = "command".',
+    );
   }
   const target = deps.target ?? (await openTarget(config));
   if (!target) return;

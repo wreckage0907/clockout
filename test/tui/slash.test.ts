@@ -6,7 +6,7 @@ const TODAY = "2026-10-16"; // a Friday
 describe("slashText", () => {
   it("reads a typed / or a dictated “slash”, without the closing full stop", () => {
     expect(slashText("/refresh")).toBe("/refresh");
-    expect(slashText("  Slash connect ERP.")).toBe("/connect ERP");
+    expect(slashText("  Slash connect Google.")).toBe("/connect Google");
     expect(slashText("refresh")).toBeNull();
     expect(slashText("the slash in acme/api")).toBeNull();
   });
@@ -16,7 +16,7 @@ describe("matching", () => {
   it("lists every command for a bare / and narrows by the first word", () => {
     expect(matching("/").length).toBeGreaterThan(10);
     expect(matching("/co").map((c) => c.name)).toEqual(["connect", "copy"]);
-    expect(matching("/connect erp x").map((c) => c.name)).toEqual(["connect"]);
+    expect(matching("/connect google x").map((c) => c.name)).toEqual(["connect"]);
     expect(matching("/ex").map((c) => c.name)).toEqual(["quit"]);
     expect(matching("/zzz")).toEqual([]);
     expect(matching("hello")).toEqual([]);
@@ -51,22 +51,12 @@ describe("parseSlash", () => {
     expect(ok("Slash exit.")).toEqual({ name: "quit" });
   });
 
-  it("signs in and out of the ERP and Google", () => {
-    expect(ok("/connect erp erp.example.com")).toEqual({
-      name: "connect",
-      service: "erp",
-      url: "erp.example.com",
-    });
-    expect(ok("/connect ERP at https://erp.example.com")).toEqual({
-      name: "connect",
-      service: "erp",
-      url: "https://erp.example.com",
-    });
-    expect(ok("/connect erp")).toEqual({ name: "connect", service: "erp" });
+  it("signs in and out of Google, and sends the ERP to config.toml", () => {
     expect(ok("/connect calendar")).toEqual({ name: "connect", service: "google" });
     expect(ok("/disconnect google")).toEqual({ name: "disconnect", service: "google" });
-    expect(error("/connect")).toBe("/connect erp or /connect google?");
-    expect(error("/disconnect github")).toBe("/disconnect erp or /disconnect google?");
+    expect(error("/connect")).toBe("/connect google?");
+    expect(error("/disconnect github")).toBe("/disconnect google?");
+    expect(error("/connect erp https://erp.example.com")).toContain("config.toml");
   });
 
   it("copies as the default, Markdown or CSV", () => {

@@ -23,7 +23,7 @@ const MEMORY_LIMIT = 20;
 // config. They're applied here (pure), then the whole config is validated like config.toml is.
 // Signing in and out are side effects, so they come back as effects for the caller to run.
 
-const service = z.enum(["google", "erp"]).describe('"google" is the calendar, "erp" the timesheet');
+const service = z.enum(["google"]).describe('"google" is the calendar');
 
 const erpTask = z
   .object({
@@ -230,9 +230,8 @@ const connect = z
   .object({
     op: z.literal("connect"),
     service,
-    url: z.string().optional().describe("The ERP's address, e.g. erp.example.com"),
   })
-  .describe("Sign in in the browser: Google Calendar, or the ERP at an address");
+  .describe("Sign in in the browser: Google Calendar");
 const disconnect = z
   .object({ op: z.literal("disconnect"), service })
   .describe("Sign out and forget the sign-in");
@@ -289,8 +288,8 @@ type SourceOp = z.infer<typeof source>;
 
 /** Sign-ins and an ERP task still to choose: the caller does these. */
 export type SettingEffect =
-  | { kind: "connect"; service: "google" | "erp"; url?: string }
-  | { kind: "disconnect"; service: "google" | "erp" }
+  | { kind: "connect"; service: "google" }
+  | { kind: "disconnect"; service: "google" }
   | { kind: "pick_task"; project: string; task?: string; search: string };
 
 export interface ClaudeProjectRef {
@@ -467,14 +466,16 @@ export function applySettings(
         break;
       }
       case "connect":
-        effects.push({ kind: "connect", service: op.service, ...(op.url ? { url: op.url } : {}) });
+        effects.push({ kind: "connect", service: op.service });
         break;
       case "disconnect":
         effects.push({ kind: "disconnect", service: op.service });
         break;
       case "erp_task":
-        if (!next.timesheet && !effects.some((e) => e.kind === "connect" && e.service === "erp")) {
-          errors.push("Connect your ERP first: say “connect my ERP at erp.example.com”.");
+        if (!next.timesheet) {
+          errors.push(
+            "Set up your timesheet system first: add a [timesheet] section to config.toml (see docs/timesheet-api.md).",
+          );
           break;
         }
         if (op.erp_task)
@@ -611,13 +612,9 @@ function describeSetting(op: SettingOp): string {
     case "forget":
       return `Forget “${op.text.trim()}”`;
     case "connect":
-      return op.service === "google"
-        ? "Sign in to Google Calendar in your browser"
-        : `Sign in to your ERP${op.url ? ` at ${op.url}` : ""} in your browser`;
+      return "Sign in to Google Calendar in your browser";
     case "disconnect":
-      return op.service === "google"
-        ? "Sign out of Google Calendar and stop reading it"
-        : "Sign out of your ERP";
+      return "Sign out of Google Calendar and stop reading it";
     case "erp_task":
       return op.erp_task
         ? `Send ${op.project}${op.task ? ` · ${op.task}` : ""} rows to ${op.label ?? op.erp_task}`

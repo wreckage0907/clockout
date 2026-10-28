@@ -66,8 +66,8 @@
     <td width="50%" valign="top"><samp>
       <b>Send only what changed</b>
       <br><br>
-      Push reviewed rows to next-pms on Frappe/ERPNext, or any system with a small JSON API. Clockout previews additions, updates
-      and removals, remembers task mappings, and leaves entries made in the ERP alone.
+      Push reviewed rows to any timesheet system with a small JSON API, or to a program of yours. Clockout previews additions, updates
+      and removals, remembers task mappings, and leaves entries made in the system alone.
     </samp></td>
   </tr>
 </table>
@@ -284,7 +284,7 @@ text.
 
 # 🔌 Connections
 
-<samp>Connect a calendar for meetings and RSVPs, or an ERP to skip copy-paste entirely.</samp>
+<samp>Connect a calendar for meetings and RSVPs, or a timesheet system to skip copy-paste entirely.</samp>
 
 <details>
 <summary><b>📅 Google Calendar or ICS</b></summary>
@@ -305,17 +305,27 @@ and unanswered meetings wait for your answer.
 </details>
 
 <details>
-<summary><b>↗️ next-pms on Frappe/ERPNext</b></summary>
+<summary><b>↗️ Send to your timesheet system</b></summary>
 <br>
 <samp>
 
-Enable dynamic client registration in the site's OAuth Settings, then sign in through the browser:
+Say where days go in `config.toml`. No ERP is built in: Clockout talks to anything that answers
+its small JSON API ([docs/timesheet-api.md](docs/timesheet-api.md)), or to a program you name.
 
-```sh
-node dist/cli.js connect erp https://erp.example.com
+```toml
+[timesheet]
+type = "http"
+url = "https://pms.example.com/api/clockout"
+token = "…"                  # or token_env = "PMS_TOKEN" to read it from the environment
 ```
 
-Press **Ctrl+S** in the review screen, pick an ERP task for each project, inspect the plan and
+The token can live in `config.toml` (written readable only by you), so **don't commit or share
+that file**. If you'd rather keep it out, use `token_env` (or just set
+`CLOCKOUT_TIMESHEET_TOKEN`) instead; use one of the two. Clockout never prints the token and
+never sends it to the AI helper, and chat or Setup can't read or change it or the address:
+they're set by hand here.
+
+Press **Ctrl+S** in the review screen, pick a task for each project, inspect the plan and
 press **Enter** to send. To reroute several cards at once, check them and choose **Map task**;
 this changes only those cards, not the saved project mappings. From scripts, preview and apply
 the same flow with:
@@ -421,21 +431,25 @@ sent to the AI helper or into an export. Note destinations for exports (a vault 
 </details>
 
 <details>
-<summary><b>↗️ Any other timesheet or PMS</b></summary>
+<summary><b>🧩 Building a timesheet connection</b></summary>
 <br>
 <samp>
 
 Anything that answers five JSON requests (list a day's entries, search tasks, create, update,
 delete) with a bearer token can take your days: see [docs/timesheet-api.md](docs/timesheet-api.md).
+`pnpm mock-pms` runs a mock one on your machine to try it. For a system that doesn't, point
+Clockout at a program instead:
 
 ```toml
 [timesheet]
-type = "http"
-url = "https://pms.example.com/api/clockout"
+type = "command"
+run = ["my-pms", "--timesheet"]
 ```
 
-Put the token in `CLOCKOUT_TIMESHEET_TOKEN` (never in the config), then send as above.
-`pnpm mock-pms` runs a mock one on your machine to try it.
+**Coming from `type = "next-pms"`?** That target was removed
+([ADR 0013](docs/adr/0013-timesheet-systems-speak-one-api.md)); Clockout stops with a message
+until you change `[timesheet]` to `http` or `command` (your `[[timesheet.map]]` entries stay as
+they are). The old ERP sign-in in `credentials.json` is no longer used.
 
 </samp>
 </details>

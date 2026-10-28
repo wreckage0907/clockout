@@ -6,18 +6,17 @@ import { type AiChoice, BACKEND_NAMES, chooseBackend, detectBackends } from "../
 import { stopHelpers } from "../ai/cli";
 import { type Correction, localCorrection, parseCorrection } from "../ai/edits";
 import { openDay } from "../collect";
-import { signInErp, signInMcp, signOutErp, signOutGoogle } from "../commands/connect";
+import { signInMcp, signOutGoogle } from "../commands/connect";
 import type { AppContext } from "../commands/context";
 import {
-  loadErpCredentials,
   loadGoogleCredentials,
   loadMcpCredentials,
   saveGoogleCredentials,
 } from "../config/credentials";
-import { withErpSite, withSource, withTaskMapping } from "../config/edit";
+import { withSource, withTaskMapping } from "../config/edit";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths, tildify } from "../config/paths";
-import { type Config, targetHost, targetWhere } from "../config/schema";
+import { type Config, DEFAULT_TOKEN_ENV, targetHost, targetWhere } from "../config/schema";
 import { applySettings, type SettingEffect } from "../config/setting-ops";
 import { localDate } from "../core/time";
 import { commitEdits, undoEdit } from "../corrections";
@@ -89,7 +88,7 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
   const { configFile } = resolvePaths();
   const ctx = { homeDir: homedir(), env: process.env };
 
-  // The ERP connection, opened on first use and again if its address changes.
+  // The timesheet system, opened on first use and again if its address changes.
   let target: { url: string; t: Promise<Target | null> } | null = null;
   const erp = (): Promise<Target> => {
     const url = config.timesheet ? targetWhere(config.timesheet) : "";
@@ -99,7 +98,7 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
       target = null;
     });
     return t.then((x) => {
-      if (!x) throw new Error("No ERP is set up.");
+      if (!x) throw new Error("No timesheet system is set up.");
       return x;
     });
   };
@@ -146,16 +145,11 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
         if (local) return local;
         throw new Error(whyNoAi());
       }
-      const [projects, google, erpCreds] = await Promise.all([
+      const [projects, google] = await Promise.all([
         claudeProjects(),
         loadGoogleCredentials().catch(() => null),
-        loadErpCredentials().catch(() => null),
       ]);
-      const facts = {
-        googleConnected: google !== null,
-        erpConnected: erpCreds !== null,
-        claudeProjects: projects,
-      };
+      const facts = { googleConnected: google !== null, claudeProjects: projects };
       const helper = ai;
       const said = await parseCorrection(text, day, config, helper, { facts, earlier }).catch(
         (err: unknown) => {
@@ -173,23 +167,14 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
       const google = { type: "google-calendar" as const, calendars: ["primary"] };
       for (const e of r.effects) {
         if (e.kind === "pick_task") pick = e;
-        else if (e.kind === "connect" && e.service === "google") {
+        else if (e.kind === "connect") {
           // A connect is a fresh sign-in, even if a stale one is still on disk (the CLI does
           // the same): a revoked or expired Google sign-in would otherwise never be replaced.
           await actions.setup.connectGoogle();
           next = withSource(next, google, true);
-        } else if (e.kind === "connect") {
-          const site =
-            e.url ?? (next.timesheet?.type === "command" ? undefined : next.timesheet?.url);
-          if (!site) throw new Error("Say where your ERP is: “connect my ERP at erp.example.com”.");
-          next = withErpSite(next, (await signInErp(site, openQuietly)).url);
-          target = null;
-        } else if (e.service === "google") {
+        } else {
           await signOutGoogle();
           next = withSource(next, google, false);
-        } else {
-          await signOutErp();
-          target = null;
         }
       }
       config = await actions.setup.save(next);
@@ -240,7 +225,6 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
           github,
           helpers,
           google,
-          erpCreds,
           wisprCreds,
         ] = await Promise.all([
           claudeProjects(),
@@ -251,18 +235,12 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
           gitHubStatus(process.env),
           detectBackends(),
           loadGoogleCredentials().catch(() => null),
-          loadErpCredentials().catch(() => null),
           loadMcpCredentials(WISPR_SERVER).catch(() => null),
         ]);
         const t = config.timesheet;
-        // An http target signs in with a token from the environment; next-pms in the browser.
+        // An http target needs its token (in config.toml or the environment); a command, nothing.
         const signedIn =
-          t?.type === "http"
-            ? !!process.env[t.token_env]
-            : !!t &&
-              t.type !== "command" &&
-              !!erpCreds &&
-              new URL(erpCreds.url).origin === new URL(t.url).origin;
+          t?.type === "http" ? !!(t.token ?? process.env[t.token_env ?? DEFAULT_TOKEN_ENV]) : !!t;
         return {
           config,
           googleConnected: google !== null,
@@ -273,10 +251,7 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
           antigravity: { found: agyFound?.summary ?? null },
           github: { found: github.found !== null, fix: github.fix },
           helpers,
-          erp: {
-            connected: signedIn,
-            ...(signedIn && t?.type !== "http" && erpCreds?.user ? { user: erpCreds.user } : {}),
-          },
+          erp: { connected: signedIn },
           wispr: { connected: wisprCreds !== null },
         };
       },
@@ -298,16 +273,6 @@ export async function runTui(date: string, app: AppContext, choice: AiChoice) {
           scope,
           connected_at: new Date().toISOString(),
         });
-      },
-      async connectErp(site) {
-        const connected = await signInErp(site, openQuietly);
-        target = null;
-        const saved = await actions.setup.save(withErpSite(config, connected.url));
-        return { config: saved, ...(connected.user ? { user: connected.user } : {}) };
-      },
-      async disconnectErp() {
-        await signOutErp();
-        target = null;
       },
       async connectWispr() {
         // The sign-in is kept, and the source that reads it is turned on.

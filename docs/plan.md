@@ -196,6 +196,16 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] No settings operation can add, change or point at a job
 - [x] A unit carries paths and settings from your environment (PATH, HOME, XDG_*, …), never a token; `schedule print` shows only those
 
+## Before release, day 4 (2026-10-28) — no ERP in the CLI
+
+[ADR 0013](adr/0013-timesheet-systems-speak-one-api.md): timesheet systems are reached through the `http` API or a `command`; the next-pms target is gone.
+
+- [x] Removed the `next-pms` target, `clockout connect erp` / `disconnect erp`, the ERP sign-in in the review screen, Setup and `/connect erp`, the `erp` service of the `connect` / `disconnect` setting operations, and the `erp` entry in `credentials.json` (an old one is ignored)
+- [x] Plan, confirm, apply, `[[timesheet.map]]`, Ctrl+S and `clockout push` work through the `http` and `command` targets; the end-to-end tests send to the mock PMS
+- [x] `token = "…"` for the `http` target in config.toml, beside `token_env` (one of them); the config file's mode is tightened on save
+- [x] The token never reaches the AI (settings summary tested), is never printed (dry run, errors, a server echoing it back, TOML syntax errors) and can't be set, changed or read by any setting operation
+- [x] A config with `type = "next-pms"` stops with a message that says what to write instead
+
 ## Day 12 — Publish (milestone)
 
 - [x] npm trusted publishing workflow on version tags (needs one-time setup on npmjs.com)

@@ -119,7 +119,6 @@ function recording(out: unknown) {
 describe("settings in the chat", () => {
   const facts = {
     googleConnected: true,
-    erpConnected: false,
     claudeProjects: [
       { folder: "-Users-dev-work-acme-api", name: "acme-api", recent: 3 },
       { folder: "-Users-dev-code-personal", name: "personal" },
@@ -136,8 +135,9 @@ describe("settings in the chat", () => {
       },
     ],
     timesheet: {
-      type: "next-pms" as const,
-      url: "https://erp.example.com",
+      type: "http" as const,
+      url: "https://erp.example.com/api/clockout",
+      token: "pms-secret-token-0123456789",
       map: [{ project: "acme/api", erp_task: "TASK-1", label: "API work" }],
     },
   };
@@ -149,14 +149,16 @@ describe("settings in the chat", () => {
       { name: "personal", on: true },
     ]);
     expect(ctx.sources).toMatchObject({ calendar_feed: true, google_signed_in: true });
-    expect(ctx.erp).toEqual({
+    expect(ctx.timesheet).toEqual({
       site: "erp.example.com",
-      signed_in: false,
       sends: [{ project: "acme/api", to: "API work" }],
     });
     expect(ctx.exports).toEqual([]);
     const text = JSON.stringify(ctx);
     expect(text).not.toContain("private-x");
+    // The timesheet API's token and its path stay on this machine.
+    expect(text).not.toContain("pms-secret-token");
+    expect(text).not.toContain("/api/clockout");
     expect(text).not.toContain("-Users-dev");
   });
 
@@ -175,6 +177,14 @@ describe("settings in the chat", () => {
     const sent = JSON.parse(seen[0] ?? "{}");
     expect(sent.earlier).toEqual(earlier);
     expect(sent.settings.day.target).toBe("8h");
+  });
+
+  it("keeps the timesheet token out of everything the AI is sent", async () => {
+    const { backend, seen } = recording({ ops: [], reply: "" });
+    await parseCorrection("what's my target?", day, withFeed, backend, { facts });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).not.toContain("pms-secret-token");
+    expect(seen[0]).toContain("erp.example.com");
   });
 
   it("keeps a pasted private calendar link away from the AI", async () => {
@@ -207,14 +217,12 @@ describe("settings in the chat", () => {
   });
 
   it("understands plain connect and disconnect without the AI", () => {
-    expect(localCorrection("connect my ERP at erp.example.com")?.settings).toEqual([
-      { op: "connect", service: "erp", url: "erp.example.com" },
-    ]);
+    expect(localCorrection("connect my ERP at erp.example.com")).toBeNull();
     expect(localCorrection("Connect Google Calendar.")?.settings).toEqual([
       { op: "connect", service: "google" },
     ]);
-    expect(localCorrection("disconnect erp")?.settings).toEqual([
-      { op: "disconnect", service: "erp" },
+    expect(localCorrection("disconnect google")?.settings).toEqual([
+      { op: "disconnect", service: "google" },
     ]);
     expect(localCorrection("connect the standup to the design sync")).toBeNull();
   });

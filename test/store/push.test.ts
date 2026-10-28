@@ -18,7 +18,7 @@ function withErp(config: Config): Config {
   return {
     ...config,
     timesheet: {
-      type: "next-pms",
+      type: "http",
       url: "https://erp.example.com",
       map: projects.map((project) => ({
         project,

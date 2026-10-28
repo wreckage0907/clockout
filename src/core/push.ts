@@ -10,7 +10,7 @@ import type { TimesheetRow } from "./types";
 export interface RemoteEntry {
   /** The entry's id there. */
   id: string;
-  /** The document it lives in (a Timesheet in next-pms). */
+  /** The system's own grouping of the entry, if it has one (empty for the http target). */
   parent: string;
   task: string;
   hours: number;

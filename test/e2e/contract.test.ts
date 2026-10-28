@@ -100,21 +100,10 @@ describe("arguments", () => {
       ["connect", "dropbox"],
       'clockout: There\'s no MCP server called "dropbox" in your config. Give its address: clockout connect dropbox https://example.com/mcp',
     ],
-    [
-      ["connect", "Drop Box"],
-      /^clockout: Connect "google" \(your calendar\), "erp" \(where your timesheet goes\) or an MCP server/,
-    ],
-    [
-      ["connect", "erp", "http://erp.example.com"],
-      "clockout: Use your ERP's https:// address (got http://erp.example.com).",
-    ],
-    [
-      ["connect", "erp", "not a url"],
-      `clockout: "not a url" isn't a web address. Use e.g. https://erp.example.com`,
-    ],
+    [["connect", "Drop Box"], /^clockout: Connect "google" \(your calendar\) or an MCP server/],
     [
       ["push", DATE],
-      "clockout: No ERP is set up. Run `clockout connect erp https://your-erp.example.com`.",
+      /^clockout: No timesheet system is set up\. Add a \[timesheet\] section to config\.toml/,
     ],
   ])("%j fails with one readable line and nothing on stdout", async (args, expected) => {
     const r = await set.run(args);
