@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -48,6 +48,14 @@ describe("config files", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it("tightens a config that was already there with wider permissions", async () => {
+    const file = join(dir, "config.toml");
+    await writeFile(file, "old", { mode: 0o644 });
+    await chmod(file, 0o644);
+    await saveConfig(file, config);
+    expect((await stat(file)).mode & 0o777).toBe(0o600);
   });
 
   it("returns null when there is no config yet", async () => {

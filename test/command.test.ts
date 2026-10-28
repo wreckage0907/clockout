@@ -2,6 +2,7 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { stopHelpers } from "../src/ai/cli";
 import { runCommand } from "../src/command";
 import { destinationExport, saveToDestination } from "../src/commands/dest";
 import { configSchema } from "../src/config/schema";
@@ -68,6 +69,65 @@ process.exit(3);`);
   it("takes an empty answer as no answer", async () => {
     const silent = await program("");
     expect(await runCommand([silent], {})).toEqual({ json: {}, stderr: "" });
+  });
+});
+
+describe("the program's process group", () => {
+  /** True while the process is alive. */
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const gone = async (pid: number) => {
+    for (let i = 0; i < 50 && alive(pid); i++) await new Promise((r) => setTimeout(r, 100));
+    return !alive(pid);
+  };
+  /** A program that starts a child of its own, records its pid, and then hangs. */
+  const withChild = async () => {
+    const pidFile = join(await mkdtemp(join(tmpdir(), "clockout-child-")), "pid");
+    const prog = await program(`import { spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
+const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+writeFileSync(${JSON.stringify(pidFile)}, String(child.pid));
+setInterval(() => {}, 1000);`);
+    return { prog, pidFile };
+  };
+
+  it("stops what the program started too when it times out", async () => {
+    if (process.platform === "win32") return; // no process groups there
+    const { prog, pidFile } = await withChild();
+    await expect(runCommand([prog], {}, { timeoutMs: 1000 })).rejects.toThrow(
+      /so Clockout stopped it/,
+    );
+    const child = Number(await readFile(pidFile, "utf8"));
+    expect(child).toBeGreaterThan(0);
+    expect(await gone(child)).toBe(true);
+  });
+
+  it("stops it when Clockout quits", async () => {
+    if (process.platform === "win32") return;
+    const { prog, pidFile } = await withChild();
+    const running = runCommand([prog], {}, { timeoutMs: 60_000 });
+    running.catch(() => undefined);
+    for (let i = 0; i < 50; i++) {
+      if (
+        await readFile(pidFile, "utf8").then(
+          () => true,
+          () => false,
+        )
+      )
+        break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    const child = Number(await readFile(pidFile, "utf8"));
+    expect(alive(child)).toBe(true);
+    stopHelpers();
+    expect(await gone(child)).toBe(true);
+    await expect(running).rejects.toThrow();
   });
 });
 

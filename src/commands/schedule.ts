@@ -216,6 +216,7 @@ function unitFor(deps: ScheduleDeps) {
       ...(process.env.TZ ? { TZ: process.env.TZ } : {}),
     },
     home,
+    dataDir: resolvePaths(deps.env ?? process.env, home).dataDir,
   };
 }
 
@@ -310,5 +311,8 @@ async function defaultExec(cmd: string, args: string[]) {
 /** Kept for the CLI's own text: what a crontab line looks like for this job. */
 export function showCrontab(job: ScheduleJob, deps: ScheduleDeps = {}): string {
   const unitEnv = unitFor(deps);
-  return crontabLine(job, unitEnv.node, unitEnv.cli);
+  return crontabLine(job, unitEnv.node, unitEnv.cli, {
+    path: unitEnv.path,
+    dataDir: unitEnv.dataDir,
+  });
 }

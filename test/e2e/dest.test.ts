@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { DATE, fixtures, type Sandbox, sandbox } from "./helpers";
@@ -82,6 +82,13 @@ describe("clockout export --dest", () => {
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("csv is built in and has no destination");
     expect(await noteExists()).toBe(true);
+  });
+
+  it("writes --out readable only by you: it's your timesheet", async () => {
+    const out = join(sb.home, "sheet.csv");
+    const r = await sb.run(["export", DATE, "-f", "plain", "-o", out]);
+    expect(r.code).toBe(0);
+    expect((await stat(out)).mode & 0o777).toBe(0o600);
   });
 
   it("refuses --out together with --dest", async () => {

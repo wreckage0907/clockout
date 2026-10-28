@@ -70,6 +70,27 @@ describe("openDay", () => {
     expect(refreshed.stored.edits).toEqual([]);
   });
 
+  it("doesn't overwrite a correction made while the day was being collected", async () => {
+    const s = await store();
+    const { stored } = await openDay(FIXTURE_DATE, config, s, { ctx: ctx(claudeDir) });
+    const corrected = {
+      ...stored,
+      edits: [{ at: new Date().toISOString(), ops: [{ op: "delete" as const, id: "b1" }] }],
+    };
+    // The review screen saves a correction in the middle of the refresh.
+    const during = {
+      ...ctx(claudeDir),
+      resolveRepo: async () => {
+        await s.save(corrected);
+        return "acme/api";
+      },
+    };
+    const result = await openDay(FIXTURE_DATE, config, s, { ctx: during, refresh: true });
+    expect(result.kept).toBe(true);
+    expect(result.stored.edits).toHaveLength(1);
+    expect((await s.load(FIXTURE_DATE))?.edits).toHaveLength(1);
+  });
+
   it("reports a failing source and builds the day from the rest", async () => {
     const s = await store();
     const broken = fixtureConfig({
