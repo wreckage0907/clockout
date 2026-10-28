@@ -16,6 +16,7 @@ import {
   GOOGLE_SCOPE,
   googleClient,
   pkcePair,
+  revoke,
 } from "../../src/sources/google-calendar/oauth";
 
 const client = { client_id: "cid.apps.googleusercontent.com", client_secret: "secret" };
@@ -63,15 +64,27 @@ describe("Google sign-in", () => {
     expect(sent.get("code_verifier")).toBeTruthy();
   });
 
-  it("rejects a callback with the wrong state, and explains a declined consent", async () => {
-    const wrongState = async (url: string) => {
-      await fetch(`${new URL(url).searchParams.get("redirect_uri")}/?code=abc&state=forged`);
+  it("ignores a callback with the wrong state, and explains a declined consent", async () => {
+    // A forged callback doesn't cancel the sign-in; the real one that follows still works.
+    const sent: string[] = [];
+    const doFetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      sent.push(String(init?.body));
+      return Response.json({ access_token: "at", expires_in: 3600, refresh_token: "rt" });
+    }) as typeof fetch;
+    const forgedThenReal = async (url: string) => {
+      const q = new URL(url).searchParams;
+      const back = q.get("redirect_uri");
+      expect((await fetch(`${back}/?code=evil&state=forged`)).status).toBe(400);
+      expect((await fetch(`${back}/?error=access_denied`)).status).toBe(400);
+      await fetch(`${back}/?code=abc&state=${q.get("state")}`);
     };
-    await expect(connectGoogle(client, wrongState, { fetch: fetch })).rejects.toThrow(
-      "Google Calendar: sign-in failed",
-    );
+    await expect(connectGoogle(client, forgedThenReal, { fetch: doFetch })).resolves.toMatchObject({
+      refreshToken: "rt",
+    });
+    expect(new URLSearchParams(sent[0]).get("code")).toBe("abc");
     const denied = async (url: string) => {
-      await fetch(`${new URL(url).searchParams.get("redirect_uri")}/?error=access_denied`);
+      const q = new URL(url).searchParams;
+      await fetch(`${q.get("redirect_uri")}/?error=access_denied&state=${q.get("state")}`);
     };
     await expect(connectGoogle(client, denied)).rejects.toThrow("access wasn't allowed");
   });
@@ -82,6 +95,45 @@ describe("Google sign-in", () => {
     await expect(accessToken(client, "rt", doFetch)).rejects.toThrow(
       "Run `clockout connect google` again",
     );
+  });
+
+  it("never follows a redirect on token, refresh and revoke requests, and times out", async () => {
+    const seen: Array<{ url: string; init: RequestInit }> = [];
+    const doFetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      seen.push({ url: String(url), init: init ?? {} });
+      return Response.json({ access_token: "at", expires_in: 3600 });
+    }) as typeof fetch;
+    await accessToken(client, "rt", doFetch);
+    await revoke("rt-secret", doFetch);
+    expect(seen).toHaveLength(2);
+    for (const { init } of seen) {
+      expect(init.redirect).toBe("error");
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+
+  it("says Google didn't answer when the request times out", async () => {
+    const doFetch = (async () => {
+      throw new DOMException("timed out", "TimeoutError");
+    }) as typeof fetch;
+    await expect(accessToken(client, "rt", doFetch)).rejects.toThrow(
+      "Google didn't answer within 30 seconds",
+    );
+  });
+
+  it("sends the refresh token to revoke in the body, not the address", async () => {
+    let url = "";
+    let init: RequestInit = {};
+    const doFetch = (async (u: string | URL | Request, i?: RequestInit) => {
+      url = String(u);
+      init = i ?? {};
+      return new Response(null, { status: 200 });
+    }) as typeof fetch;
+    await revoke("rt-secret", doFetch);
+    expect(url).toBe("https://oauth2.googleapis.com/revoke");
+    expect(url).not.toContain("rt-secret");
+    expect(new URLSearchParams(String(init.body)).get("token")).toBe("rt-secret");
+    expect(init.method).toBe("POST");
   });
 
   it("uses your own client from config or env, and explains when none is set", () => {

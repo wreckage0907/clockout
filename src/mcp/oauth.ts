@@ -3,12 +3,16 @@ import type { McpCredentials } from "../config/credentials";
 import { isSafeSite } from "../config/schema";
 import {
   type AuthServer,
+  assertLocalIfPlain,
   authServerMetadata,
   type Fetch,
   loopback,
+  OAUTH_TIMEOUT_MS,
   pkcePair,
   randomState,
+  reachError,
   registerPublicClient,
+  secretRequest,
   tokenRequest,
   tokenResponse,
 } from "../oauth";
@@ -70,7 +74,12 @@ export async function discoverMcpAuth(
   let prm: z.infer<typeof resourceMetadata> | null = null;
   for (const candidate of candidates) {
     if (new URL(candidate).origin !== origin) continue;
-    const res = await doFetch(candidate, { headers: { accept: "application/json" } });
+    const res = await doFetch(candidate, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(OAUTH_TIMEOUT_MS),
+    }).catch((err: unknown) => {
+      throw reachError(candidate, err);
+    });
     const found = res.ok ? resourceMetadata.safeParse(await res.json().catch(() => null)) : null;
     if (found?.success) {
       prm = found.data;
@@ -97,6 +106,12 @@ export async function discoverMcpAuth(
   if (server.registration_endpoint) endpoints.push(server.registration_endpoint);
   if (!endpoints.every((e) => URL.canParse(e) && isSafeSite(e)))
     throw new Error(`${name}'s sign-in pages aren't all https. Clockout won't use them.`);
+  // Revocation is optional and best effort: an unsafe address is dropped, not a reason to stop.
+  if (
+    server.revocation_endpoint &&
+    !(URL.canParse(server.revocation_endpoint) && isSafeSite(server.revocation_endpoint))
+  )
+    delete server.revocation_endpoint;
   const methods = server.code_challenge_methods_supported;
   if (methods && !methods.includes("S256"))
     throw new Error(`${name}'s sign-in doesn't support PKCE (S256), so Clockout can't use it.`);
@@ -261,13 +276,21 @@ export function mcpAuth(
 export async function revokeMcp(creds: McpCredentials, doFetch: Fetch = fetch): Promise<void> {
   if (!creds.revocation_endpoint) return;
   const token = creds.refresh_token ?? creds.access_token;
-  await doFetch(creds.revocation_endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      token,
-      token_type_hint: creds.refresh_token ? "refresh_token" : "access_token",
-      client_id: creds.client_id,
-    }),
-  }).catch(() => undefined);
+  const endpoint = creds.revocation_endpoint;
+  // A saved address that isn't safe (an older sign-in, or a file edited by hand) gets nothing.
+  if (!URL.canParse(endpoint) || !isSafeSite(endpoint)) return;
+  await assertLocalIfPlain(endpoint)
+    .then(() =>
+      doFetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          token,
+          token_type_hint: creds.refresh_token ? "refresh_token" : "access_token",
+          client_id: creds.client_id,
+        }),
+        ...secretRequest(),
+      }),
+    )
+    .catch(() => undefined);
 }

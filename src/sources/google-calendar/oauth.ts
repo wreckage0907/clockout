@@ -1,6 +1,13 @@
 import { z } from "zod";
 import type { Config } from "../../config/schema";
-import { loopback, pkcePair, randomState } from "../../oauth";
+import {
+  isTimeout,
+  loopback,
+  OAUTH_TIMEOUT_MS,
+  pkcePair,
+  randomState,
+  secretRequest,
+} from "../../oauth";
 
 export { pkcePair };
 
@@ -61,9 +68,12 @@ const tokenError = z.object({
 });
 
 const unreachable = (cause: unknown) =>
-  new Error("Google Calendar: couldn't reach Google. Check your connection and try again.", {
-    cause,
-  });
+  new Error(
+    isTimeout(cause)
+      ? `Google Calendar: Google didn't answer within ${OAUTH_TIMEOUT_MS / 1000} seconds. Try again later.`
+      : "Google Calendar: couldn't reach Google. Check your connection and try again.",
+    { cause },
+  );
 
 export function authUrl(
   client: GoogleClient,
@@ -127,6 +137,7 @@ export async function connectGoogle(
         grant_type: "authorization_code",
         code_verifier: verifier,
       }),
+      ...secretRequest(),
     }).catch((err: unknown) => {
       throw unreachable(err);
     });
@@ -227,6 +238,7 @@ export async function accessToken(
       refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
+    ...secretRequest(),
   }).catch((err: unknown) => {
     throw unreachable(err);
   });
@@ -256,7 +268,11 @@ export function refreshError(status: number, json: unknown): Error {
 }
 
 export async function revoke(refreshToken: string, doFetch: Fetch = fetch): Promise<void> {
-  await doFetch(`${REVOKE_URL}?${new URLSearchParams({ token: refreshToken })}`, {
+  // The token goes in the body, not the address, which would end up in proxy and server logs.
+  await doFetch(REVOKE_URL, {
     method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token: refreshToken }),
+    ...secretRequest(),
   }).catch(() => undefined);
 }

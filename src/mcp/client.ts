@@ -1,12 +1,15 @@
 import { z } from "zod";
 import { cleanText } from "../core/text";
-import type { Fetch } from "../oauth";
+import { assertLocalIfPlain, type Fetch } from "../oauth";
 
 // A small MCP client: JSON-RPC over streamable HTTP, only what Clockout uses (initialize,
 // tools/list, tools/call). Written here rather than taken from the SDK (ADR 0009). What a server
 // says (tool descriptions, results, errors) is data, never instructions.
 
 export const PROTOCOL_VERSION = "2025-06-18";
+
+/** The most a server may send in one reply; more is a server gone wrong, or hostile. */
+export const MAX_REPLY_BYTES = 5 * 1024 * 1024;
 
 /** The server refused the sign-in (or wants one and there is none). */
 export class McpAuthError extends Error {
@@ -85,7 +88,11 @@ export function mcpClient(opts: McpClientOptions): McpClient {
     };
     if (version) headers["mcp-protocol-version"] = version;
     if (session) headers["mcp-session-id"] = session;
-    if (opts.token) headers.authorization = `Bearer ${await opts.token(retried)}`;
+    if (opts.token) {
+      // A token never goes over plain http to a host that isn't this machine.
+      await assertLocalIfPlain(opts.url);
+      headers.authorization = `Bearer ${await opts.token(retried)}`;
+    }
     const res = await doFetch(opts.url, {
       method: "POST",
       headers,
@@ -126,8 +133,8 @@ export function mcpClient(opts: McpClientOptions): McpClient {
     }
     if (method === "initialize") session = res.headers.get("mcp-session-id") ?? undefined;
     const reply = (res.headers.get("content-type") ?? "").includes("text/event-stream")
-      ? await fromStream(res, id)
-      : await res.json().catch(() => null);
+      ? await fromStream(res, id, opts.name)
+      : await readJson(res, opts.name);
     const parsed = rpcReply.safeParse(reply);
     if (!parsed.success || parsed.data.id !== id)
       throw new Error(`${opts.name} sent an answer to ${method} that isn't MCP.`);
@@ -203,14 +210,60 @@ function clip(text: string): string {
   return line.length > 300 ? `${line.slice(0, 299)}…` : line;
 }
 
-/** Reads server-sent events until the reply with this id; notifications on the way are skipped. */
-async function fromStream(res: Response, id: number): Promise<unknown> {
+const tooBig = (name: string) =>
+  new Error(
+    `${name} sent a reply larger than ${MAX_REPLY_BYTES / 1024 / 1024} MB, which Clockout won't read.`,
+  );
+
+/** The reply's JSON (null when it isn't), read up to the size limit. */
+async function readJson(res: Response, name: string): Promise<unknown> {
+  const declared = Number(res.headers.get("content-length"));
+  if (declared > MAX_REPLY_BYTES) {
+    await res.body?.cancel();
+    throw tooBig(name);
+  }
   if (!res.body) return null;
-  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-  let buffer = "";
+  const reader = res.body.getReader();
+  const chunks: Buffer[] = [];
+  let total = 0;
   try {
     for (;;) {
       const { value, done } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_REPLY_BYTES) throw tooBig(name);
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reads server-sent events until the reply with this id; notifications on the way are skipped.
+ * The whole stream counts towards the size limit.
+ */
+async function fromStream(res: Response, id: number, name: string): Promise<unknown> {
+  if (!res.body) return null;
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let total = 0;
+  try {
+    for (;;) {
+      const { value: bytes, done } = await reader.read();
+      let value = "";
+      if (bytes) {
+        total += bytes.byteLength;
+        if (total > MAX_REPLY_BYTES) throw tooBig(name);
+        value = decoder.decode(bytes, { stream: true });
+      }
+      if (done) value += decoder.decode();
       if (value) buffer += value.replace(/\r\n?/g, "\n");
       let end = buffer.indexOf("\n\n");
       while (end >= 0 || (done && buffer.trim())) {

@@ -107,7 +107,10 @@ export function listTool(tools: readonly McpTool[], wanted?: string): McpTool | 
       tools.find((t) => t.name === wanted) ??
       tools.find((t) => t.name.toLowerCase() === wanted.toLowerCase())
     );
+  // Nothing is called on a guess unless its name starts with a read verb: a list of write verbs
+  // can't be complete (start_, share_, schedule_, cancel_, invite, upload…).
   const scored = tools
+    .filter((t) => READ_TOOL.test(t.name))
     .filter((t) => !WRITE_TOOL.test(t.name))
     .filter((t) => /meeting|recording/i.test(`${t.name} ${t.description ?? ""}`))
     .map((t) => ({ t, score: score(t) }))
@@ -162,6 +165,8 @@ export function meetingRows(answer: unknown): unknown[] | null {
 }
 
 // ── The server's words ───────────────────────────────────────────────────────
+
+const READ_TOOL = /^(list|get|search|find|read)_/i;
 
 const WRITE_TOOL =
   /(create|add|write|save|update|edit|delete|remove|send|post|append|confirm|archive)/i;

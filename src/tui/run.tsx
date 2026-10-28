@@ -1,6 +1,5 @@
 import { homedir } from "node:os";
 import clipboard from "clipboardy";
-import { execa } from "execa";
 import { Box, render, Text, useWindowSize } from "ink";
 import { type AiChoice, BACKEND_NAMES, chooseBackend, detectBackends } from "../ai";
 import { stopHelpers } from "../ai/cli";
@@ -22,6 +21,7 @@ import { applySettings, type SettingEffect } from "../config/setting-ops";
 import { localDate } from "../core/time";
 import { commitEdits, undoEdit } from "../corrections";
 import { errorLogPath, logError } from "../log";
+import { openUrl } from "../open-url";
 import { applyPush, preparePush } from "../push";
 import { antigravity } from "../sources/antigravity";
 import { listClaudeProjects } from "../sources/claude-code/paths";
@@ -40,13 +40,7 @@ import { MOUSE_OFF, MOUSE_ON, withMouse } from "./mouse";
 
 /** Opens a URL in the default browser, quietly: the screen belongs to the app. */
 async function openQuietly(url: string): Promise<void> {
-  const [cmd, args] =
-    process.platform === "darwin"
-      ? ["open", [url]]
-      : process.platform === "win32"
-        ? ["cmd", ["/c", "start", "", url]]
-        : ["xdg-open", [url]];
-  await execa(cmd, args as string[]).catch(() => undefined);
+  await openUrl(url).catch(() => undefined);
 }
 
 /** Below this the cards and dialogs don't fit. */
