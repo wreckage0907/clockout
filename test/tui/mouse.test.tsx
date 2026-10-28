@@ -283,49 +283,18 @@ describe("mouse input", () => {
     expect(lastFrame()).toContain("[x] Daily standup");
   });
 
-  it("clicks: the ERP block asks for the address and signs in on Enter", async () => {
-    const events = new EventEmitter();
-    const { actions, calls } = fakeActions();
-    const { lastFrame, stdin } = render(
-      <MouseProvider events={events}>
-        <App
-          initialDate={FIXTURE_DATE}
-          today={FIXTURE_DATE}
-          config={config}
-          actions={actions}
-          width={120}
-          height={40}
-        />
-      </MouseProvider>,
-    );
-    await until(lastFrame, "6h of 8h");
-    stdin.write("\u0010"); // ctrl+p
-    await until(lastFrame, "What Clockout reads");
-    click(events, find(lastFrame() ?? "", " ERP "));
-    await until(lastFrame, "ERP address");
-    click(events, find(lastFrame() ?? "", "ERP address"));
-    await tick();
-    stdin.write("erp.example.com");
-    await until(lastFrame, "erp.example.com");
-    stdin.write("\r");
-    await until(lastFrame, "Days go to erp.example.com");
-    expect(calls.signedIn).toEqual(["erp.example.com"]);
-    expect(lastFrame()).toContain("as dev@example.com");
-    expect(lastFrame()).toContain("No tasks picked yet");
-  });
-
-  it("clicks: a connected ERP lists its tasks, forgets one, and signs out", async () => {
+  it("clicks: a connected timesheet system lists its tasks and forgets one", async () => {
     const events = new EventEmitter();
     const withErp = {
       ...config,
       timesheet: {
-        type: "next-pms" as const,
+        type: "http" as const,
         url: "https://erp.example.com",
         map: [{ project: "acme/api", erp_task: "TASK-1", label: "Acme API build" }],
       },
     };
     const { actions, calls } = fakeActions({
-      setup: { config: withErp, erp: { connected: true, user: "dev@example.com" } },
+      setup: { config: withErp, erp: { connected: true } },
     });
     const { lastFrame } = render(
       <MouseProvider events={events}>
@@ -348,9 +317,6 @@ describe("mouse input", () => {
     click(events, find(lastFrame() ?? "", "✕ forget"));
     await until(lastFrame, "No tasks picked yet");
     expect(calls.saved.at(-1)).toMatchObject({ timesheet: { map: [] } });
-    click(events, find(lastFrame() ?? "", "Sign out"));
-    await until(lastFrame, "Signed out · erp.example.com");
-    expect(calls.signedOut).toBe(1);
   });
 
   it("clicks: the date opens the picker, and Yesterday switches the day", async () => {

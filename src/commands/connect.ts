@@ -1,21 +1,18 @@
 import { homedir } from "node:os";
 import {
   credentialsPath,
-  loadErpCredentials,
   loadGoogleCredentials,
   loadMcpCredentials,
   type McpCredentials,
-  removeErpCredentials,
   removeGoogleCredentials,
   removeMcpCredentials,
-  saveErpCredentials,
   saveGoogleCredentials,
   saveMcpCredentials,
 } from "../config/credentials";
-import { withErpSite, withMcpServer, withSource } from "../config/edit";
+import { withMcpServer, withSource } from "../config/edit";
 import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths, tildify } from "../config/paths";
-import { type Config, isSafeSite, mcpServer } from "../config/schema";
+import { type Config, mcpServer } from "../config/schema";
 import { cleanText } from "../core/text";
 import { dayRange, localDate } from "../core/time";
 import { clientFor, connectMcp, revokeMcp } from "../mcp";
@@ -23,7 +20,6 @@ import { openUrl } from "../open-url";
 import { googleCalendar } from "../sources/google-calendar";
 import { connectGoogle, googleClient, revoke } from "../sources/google-calendar/oauth";
 import { WISPR_SERVER, WISPR_URL } from "../sources/wispr-flow";
-import { connectErp, revokeErp, siteOrigin } from "../targets/next-pms/oauth";
 
 /** Opens a URL in the default browser; the URL is printed too, in case that fails. */
 const openInBrowser = (what: string) => async (url: string) => {
@@ -43,22 +39,20 @@ const KNOWN_SERVERS: Record<string, { url: string; source?: "wispr-flow" }> = {
   wispr: { url: WISPR_URL, source: "wispr-flow" },
 };
 
-function check(service: string): "google" | "erp" | "mcp" {
-  if (service === "google" || service === "erp") return service;
+function check(service: string): "google" | "mcp" {
+  if (service === "google") return service;
   if (/^[a-z][a-z0-9-]{0,31}$/.test(service)) return "mcp";
   throw new Error(
-    `Connect "google" (your calendar), "erp" (where your timesheet goes) or an MCP server by a short lowercase name: clockout connect <name> <https://…/mcp>`,
+    `Connect "google" (your calendar) or an MCP server by a short lowercase name: clockout connect <name> <https://…/mcp>`,
   );
 }
 
 /**
  * `clockout connect google`: sign in once; Clockout reads your calendar from then on.
- * `clockout connect erp <url>`: sign in to your ERP so `clockout push` can fill your timesheet.
  * `clockout connect <name> [url]`: sign in to an MCP server, kept in `[[mcp]]`.
  */
 export async function runConnect(service: string, url?: string) {
   const kind = check(service);
-  if (kind === "erp") return connectErpSite(url);
   if (kind === "mcp") return connectMcpServer(service, url);
   const { configFile } = resolvePaths();
   const config = await loadConfig(configFile);
@@ -110,63 +104,6 @@ async function showToday(config: Config) {
   console.log(
     `Found ${count} event${count === 1 ? "" : "s"} today. Run \`clockout\` to review your day.`,
   );
-}
-
-async function connectErpSite(url: string | undefined) {
-  const { configFile } = resolvePaths();
-  const config = await loadConfig(configFile);
-  const site = url ?? (config?.timesheet?.type === "command" ? undefined : config?.timesheet?.url);
-  if (!site)
-    throw new Error("Give your ERP's address: clockout connect erp https://erp.example.com");
-  const origin = erpOrigin(site);
-  console.log(
-    `Clockout signs in to ${origin} as you. It only reads and writes your own timesheet entries, and only when you send a day.`,
-  );
-  const connected = await signInErp(origin, openInBrowser("ERP"));
-  console.log(
-    `Connected${connected.user ? ` as ${connected.user}` : ""}. The sign-in is kept in ${tildify(credentialsPath(), homedir())} (only you can read it).`,
-  );
-  if (!config) {
-    console.log("Run `clockout init` to finish setting up.");
-    return;
-  }
-  await saveConfig(configFile, withErpSite(config, connected.url));
-  console.log("Review a day with `clockout`, then send it with ctrl+s (or `clockout push`).");
-}
-
-/** "erp.example.com" or a full address → "https://erp.example.com". */
-export function erpOrigin(site: string): string {
-  const trimmed = site.trim().replace(/[.,!]+$/, "");
-  let origin: string;
-  try {
-    origin = siteOrigin(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
-  } catch {
-    throw new Error(`"${site}" isn't a web address. Use e.g. https://erp.example.com`);
-  }
-  // Before signing in: the sign-in and your timesheet would cross the network unencrypted.
-  if (!isSafeSite(origin)) throw new Error(`Use your ERP's https:// address (got ${origin}).`);
-  return origin;
-}
-
-/** Signs in to the ERP in the browser and keeps the sign-in. */
-export async function signInErp(site: string, open: (url: string) => Promise<void>) {
-  const connected = await connectErp(erpOrigin(site), open);
-  await saveErpCredentials({
-    url: connected.url,
-    client_id: connected.clientId,
-    refresh_token: connected.refreshToken,
-    ...(connected.user ? { user: connected.user } : {}),
-    connected_at: new Date().toISOString(),
-  });
-  return connected;
-}
-
-/** Revokes the ERP sign-in and forgets it; the site and task mappings stay in the config. */
-export async function signOutErp(): Promise<string | null> {
-  const creds = await loadErpCredentials();
-  if (creds) await revokeErp(creds);
-  await removeErpCredentials();
-  return creds?.url ?? null;
 }
 
 /** Revokes the Google sign-in and forgets it; true if there was one. */
@@ -257,7 +194,7 @@ export async function signOutMcp(name: string): Promise<boolean> {
   return creds !== null;
 }
 
-/** `clockout disconnect google|erp|<name>`: revokes access and forgets the sign-in. */
+/** `clockout disconnect google|<name>`: revokes access and forgets the sign-in. */
 export async function runDisconnect(service: string) {
   if (check(service) === "mcp") {
     const had = await signOutMcp(service);
@@ -265,15 +202,6 @@ export async function runDisconnect(service: string) {
       had
         ? `Disconnected from ${service}. It stays in your config's [[mcp]] list until you remove it.`
         : `${service} wasn't connected.`,
-    );
-    return;
-  }
-  if (check(service) === "erp") {
-    const url = await signOutErp();
-    console.log(
-      url
-        ? `Disconnected from ${url}. Your task mappings stay in the config.`
-        : "No ERP was connected.",
     );
     return;
   }

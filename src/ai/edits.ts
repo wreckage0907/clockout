@@ -35,7 +35,7 @@ Settings (what Clockout reads and how it counts), from "settings" in the input:
 - Export formats ("add a Harvest export with hours as h:mm", "a Slack export, one line per row", "make harvest what ctrl+y copies"): export_format with the whole format (an existing one from exports, with only what they asked to change), remove_export, copy_default. Built-in csv, tsv, md and json can't be changed or named. Columns are only the listed fields; text lines only fill in {field}s.
 - Something they want kept in mind that no setting covers ("remember that I write for a non-technical audience", "remember my ticket keys come first"): remember, in their words, shortened to one line. A style, a rule, a task name or a limit is a setting, so use that instead. "forget …" or "stop remembering …": forget, with the memory's words from memories.
 - Durations are like "7h30m", "45m"; working hours "HH:MM-HH:MM".
-- Google Calendar and the ERP need a sign-in in the browser: use connect (with the ERP's address when they give one) and disconnect. Never ask for passwords, tokens or private calendar links.
+- Google Calendar needs a sign-in in the browser: use connect and disconnect. Never ask for passwords, tokens or private calendar links. The timesheet system's address and token are set by hand in config.toml, never by you: if they ask to change either, say so in reply and change nothing.
 - "Send <project> to <task>" or "log <project> against <task>": erp_task with the words they used to name the task as search.
 - A request about settings changes no blocks, and a correction to the day changes no settings.
 - Rebuilding the day from the latest activity ("refresh", "pull in the new activity", "start the day over"): rebuild true, no ops and no settings.
@@ -57,7 +57,6 @@ export type Correction = Omit<z.infer<typeof correctionSchema>, "settings"> & {
 /** What's on this machine besides the config, for the settings the AI sees. */
 export interface SettingsFacts {
   googleConnected: boolean;
-  erpConnected: boolean;
   claudeProjects: (ClaudeProjectRef & { recent?: number })[];
 }
 
@@ -113,10 +112,10 @@ export function settingsContext(config: Config, facts: SettingsFacts) {
       ...(p.ignore ? { ignore: true } : {}),
       ...p.match,
     })),
-    erp: config.timesheet
+    // Where days go and which tasks projects map to: never the address's path or the token.
+    timesheet: config.timesheet
       ? {
           site: targetHost(config.timesheet) ?? "a program on this machine",
-          signed_in: facts.erpConnected,
           sends: config.timesheet.map.map((m) => ({
             project: m.project,
             ...(m.task ? { task: m.task } : {}),
@@ -185,7 +184,7 @@ export async function parseCorrection(
   const local = localCorrection(text);
   if (local) return local;
   refuseSecrets(text);
-  const facts = opts.facts ?? { googleConnected: false, erpConnected: false, claudeProjects: [] };
+  const facts = opts.facts ?? { googleConnected: false, claudeProjects: [] };
   const prompt = JSON.stringify(
     {
       day: correctionContext(day, config),
@@ -247,18 +246,15 @@ function isCalendarFeed(url: string): boolean {
   }
 }
 
-const SERVICE = "(?:my\\s+|the\\s+)?(erp|google(?:\\s+calendar)?|calendar)";
-const CONNECT = new RegExp(
-  `^(?:connect|sign\\s+in\\s+to)\\s+${SERVICE}(?:\\s+(?:at\\s+)?(\\S+))?[.!]?$`,
-  "i",
-);
+const SERVICE = "(?:my\\s+|the\\s+)?(google(?:\\s+calendar)?|calendar)";
+const CONNECT = new RegExp(`^(?:connect|sign\\s+in\\s+to)\\s+${SERVICE}[.!]?$`, "i");
 const DISCONNECT = new RegExp(`^(?:disconnect|sign\\s+out\\s+of)\\s+${SERVICE}[.!]?$`, "i");
 const REBUILD =
   /^(?:refresh|rebuild|reload|redraft|start\s+over)(?:\s+(?:the\s+|this\s+|my\s+)?day)?[.!]?$/i;
 
 /**
  * What can be done without the AI: a pasted private calendar link (which must never reach the
- * AI), plain "connect erp <address>" / "disconnect google", and "refresh". Null for anything else.
+ * AI), plain "connect google" / "disconnect google", and "refresh". Null for anything else.
  */
 export function localCorrection(text: string): Correction | null {
   const feed = text.match(URLS)?.find(isCalendarFeed);
@@ -271,25 +267,18 @@ export function localCorrection(text: string): Correction | null {
   const said = text.trim();
   if (REBUILD.test(said))
     return { ops: [], rebuild: true, reply: "Rebuild the day from the latest activity" };
-  const which = (s: string) => (s.toLowerCase() === "erp" ? "erp" : "google");
-  const c = CONNECT.exec(said);
-  if (c?.[1]) {
-    const service = which(c[1]);
+  if (CONNECT.test(said))
     return {
       ops: [],
-      settings: [{ op: "connect", service, ...(service === "erp" && c[2] ? { url: c[2] } : {}) }],
-      reply: service === "erp" ? "Connect your ERP" : "Connect Google Calendar",
+      settings: [{ op: "connect", service: "google" }],
+      reply: "Connect Google Calendar",
     };
-  }
-  const d = DISCONNECT.exec(said);
-  if (d?.[1]) {
-    const service = which(d[1]);
+  if (DISCONNECT.test(said))
     return {
       ops: [],
-      settings: [{ op: "disconnect", service }],
-      reply: service === "erp" ? "Sign out of your ERP" : "Sign out of Google Calendar",
+      settings: [{ op: "disconnect", service: "google" }],
+      reply: "Sign out of Google Calendar",
     };
-  }
   return null;
 }
 

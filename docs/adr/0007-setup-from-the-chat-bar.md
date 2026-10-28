@@ -1,6 +1,6 @@
 # 0007. Setup from the chat bar
 
-Status: accepted (2026-10-21)
+Status: accepted (2026-10-21). The ERP sign-in parts ("connect my ERP", the `erp` service of `connect` and `disconnect`) were removed by [0013](0013-timesheet-systems-speak-one-api.md); task mapping by chat stands.
 
 ## Context
 

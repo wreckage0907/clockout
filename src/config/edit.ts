@@ -134,13 +134,6 @@ export function withoutTaskMapping(config: Config, mapping: Pick<TaskMapping, "p
   return { ...config, timesheet: { ...t, map } };
 }
 
-/** Sends days to the ERP at `origin`; keeps the task mappings if it's the same site. */
-export function withErpSite(config: Config, origin: string): Config {
-  const t = config.timesheet;
-  const same = t && t.type !== "command" && new URL(t.url).origin === new URL(origin).origin;
-  return { ...config, timesheet: same ? t : { type: "next-pms", url: origin, map: [] } };
-}
-
 type ExportFormatInput = Omit<ExportFormat, "merge"> & { merge?: boolean };
 
 /** Adds an export format, or replaces the one with its name; a new default takes over from the old. */

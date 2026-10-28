@@ -76,7 +76,7 @@ program
 program
   .command("push")
   .argument("[date]", "today, yesterday, -N or YYYY-MM-DD (default: today)")
-  .description("Send the day to your ERP timesheet, after showing what would change")
+  .description("Send the day to your timesheet system, after showing what would change")
   .option("-n, --dry-run", "show what would change without sending")
   .option("-y, --yes", "send without asking")
   .option("--no-ai", "use session and PR titles instead of AI summaries")
@@ -147,16 +147,14 @@ program
 
 program
   .command("connect")
-  .argument("<service>", "google, erp, or a name for an MCP server")
-  .argument("[url]", "for erp: your ERP's address; for an MCP server: its https:// address")
-  .description(
-    "Sign in once: google reads your calendar, erp lets Clockout fill your timesheet, a named MCP server is added to [[mcp]]",
-  )
+  .argument("<service>", "google, or a name for an MCP server")
+  .argument("[url]", "for an MCP server: its https:// address")
+  .description("Sign in once: google reads your calendar, a named MCP server is added to [[mcp]]")
   .action((service: string, url?: string) => runConnect(service, url));
 
 program
   .command("disconnect")
-  .argument("<service>", "google, erp, or an MCP server's name")
+  .argument("<service>", "google, or an MCP server's name")
   .description("Revoke access and forget the sign-in")
   .action((service: string) => runDisconnect(service));
 

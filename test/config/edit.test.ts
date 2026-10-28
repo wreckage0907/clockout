@@ -7,13 +7,12 @@ import {
   withAi,
   withClaudeExclude,
   withDay,
-  withErpSite,
   withoutTaskMapping,
   withSource,
   withTaskMapping,
 } from "../../src/config/edit";
 import { parseConfig } from "../../src/config/load";
-import { configSchema } from "../../src/config/schema";
+import { type Config, configSchema } from "../../src/config/schema";
 
 const config = configSchema.parse({
   me: { name: "Dev", emails: ["dev@example.com"], timezone: "Asia/Kolkata" },
@@ -22,7 +21,10 @@ const config = configSchema.parse({
 
 describe("config edits from setup", () => {
   it("forgets one ERP task mapping and keeps the others", () => {
-    let c = withErpSite(config, "https://erp.example.com");
+    let c: Config = {
+      ...config,
+      timesheet: { type: "http", url: "https://pms.example.com", map: [] },
+    };
     c = withTaskMapping(c, { project: "acme/api", erp_task: "T-1" });
     c = withTaskMapping(c, { project: "acme/api", task: "Code Review", erp_task: "T-2" });
     const out = withoutTaskMapping(c, { project: "acme/api" });
@@ -63,21 +65,5 @@ describe("config edits from setup", () => {
     expect(durationText(45)).toBe("45m");
     expect(clockMinutes("09:30")).toBe(570);
     expect(clockText(570)).toBe("09:30");
-  });
-});
-
-describe("withErpSite", () => {
-  it("keeps task mappings for the same site and starts fresh for another", () => {
-    const map = [{ project: "acme/api", erp_task: "TASK-1" }];
-    const on = {
-      ...config,
-      timesheet: { type: "next-pms" as const, url: "https://erp.example.com", map },
-    };
-    expect(withErpSite(on, "https://erp.example.com").timesheet?.map).toEqual(map);
-    expect(withErpSite(on, "https://other.example.com").timesheet).toEqual({
-      type: "next-pms",
-      url: "https://other.example.com",
-      map: [],
-    });
   });
 });

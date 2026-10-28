@@ -11,7 +11,7 @@ import { FIXTURE_DATE, fixtureConfig } from "../helpers/fixture-day";
 const config = fixtureConfig({
   sources: [],
   timesheet: {
-    type: "next-pms",
+    type: "http",
     url: "https://erp.example.com",
     map: [{ project: "acme/api", erp_task: "TASK-DEV", label: "API maintenance" }],
   },
@@ -71,9 +71,9 @@ describe("clockout push", () => {
     expect(process.exitCode).toBe(1);
   });
 
-  it("explains how to connect when no ERP is set up", async () => {
+  it("explains how to set one up when no timesheet system is configured", async () => {
     await expect(
       runPush(FIXTURE_DATE, {}, { config: fixtureConfig(), store: (await app()).store }),
-    ).rejects.toThrow("clockout connect erp");
+    ).rejects.toThrow("[timesheet]");
   });
 });

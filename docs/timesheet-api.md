@@ -1,21 +1,29 @@
 # Clockout's timesheet API
 
 Clockout can send a day to any timesheet or project-management system that answers these five
-requests. next-pms on Frappe/ERPNext has its own built-in target; this one is for everything
-else: your company's PMS, a small service in front of one, or the mock PMS used in the tests.
+requests. Clockout has no ERP built in: this is how it reaches your company's PMS, a small
+service in front of an ERP, or the mock PMS used in the tests. (Nothing speaks it? A `command`
+target runs a program of yours instead, with the same shapes on stdin and stdout: see
+"Sending the day" in the spec.)
 
 ```toml
 [timesheet]
 type = "http"
 url = "https://pms.example.com/api/clockout"   # https; plain http only on this machine
-token_env = "CLOCKOUT_TIMESHEET_TOKEN"         # the default; the token is never in this file
+token = "…"                                    # the bearer token, in this file (see below), or
+# token_env = "PMS_TOKEN"                      # the environment variable that holds it instead
 
 [[timesheet.map]]                              # which task each project's rows go to
 project = "acme/api"
 erp_task = "TASK-API"
 ```
 
-Run Clockout with the token in that variable: `CLOCKOUT_TIMESHEET_TOKEN=… clockout`.
+Give the token one way: `token = "…"` in this file, or `token_env = "NAME"` and that variable set
+when you run Clockout. With neither, Clockout reads `CLOCKOUT_TIMESHEET_TOKEN`
+(`CLOCKOUT_TIMESHEET_TOKEN=… clockout`). `config.toml` is written readable only by you, but a
+token in it is a secret: don't commit or share the file. Clockout never prints the token, never
+sends it to the AI helper, and no setting changed from the chat bar or Setup can read or change it
+or the address.
 
 ## Requests
 
@@ -45,7 +53,7 @@ refused entry doesn't stop the others.
 
 | Status | Clockout says |
 |---|---|
-| 401, 403 | the token in `token_env` was refused: check it or get a new one |
+| 401, 403 | the token (in config.toml, or in `token_env`'s variable) was refused: check it or get a new one |
 | 404 on a read | there's no timesheet API at `url` |
 | 5xx | the system isn't answering; try again later (with its `error`, if any) |
 | anything else | its `error` |

@@ -97,20 +97,66 @@ describe("opening an http target from config", () => {
     await expect(openTarget(config(), { env: {} })).rejects.toThrow(
       "Set CLOCKOUT_TIMESHEET_TOKEN to your timesheet API's token",
     );
+    await expect(openTarget(config({ token_env: "PMS_TOKEN" }), { env: {} })).rejects.toThrow(
+      "Set PMS_TOKEN to your timesheet API's token",
+    );
     const t = await openTarget(config({ token_env: "PMS_TOKEN" }), {
       env: { PMS_TOKEN: pms.token },
     });
     expect(await t?.searchTasks("")).toHaveLength(3);
   });
 
-  it("refuses a token in the config itself, and plain http off this machine", () => {
-    expect(() => config({ token: "secret" })).not.toThrow(); // unknown keys are ignored…
-    expect(config({ token: "secret" }).timesheet).not.toHaveProperty("token"); // …and dropped
+  it("takes the token from config.toml itself when it's there", async () => {
+    const t = await openTarget(config({ token: pms.token }), { env: {} });
+    expect(await t?.searchTasks("")).toHaveLength(3);
+  });
+
+  it("wants exactly one of token and token_env, and a token with no spaces", () => {
+    const issues = (extra: object) => {
+      const r = configSchema.safeParse({
+        me: { name: "Dev", emails: ["dev@example.com"], timezone: "UTC" },
+        timesheet: { type: "http", url: pms.url, ...extra },
+      });
+      return r.success ? [] : [...new Set(r.error.issues.map((i) => i.path.join(".")))];
+    };
+    expect(issues({ token: "abc", token_env: "PMS_TOKEN" })).toEqual(["timesheet.token"]);
+    expect(issues({ token: "two words" })).toEqual(["timesheet.token"]);
+    expect(issues({ token: "" })).toEqual(["timesheet.token"]);
+    expect(issues({ token: "abc" })).toEqual([]);
+    expect(issues({})).toEqual([]);
+  });
+
+  it("refuses plain http off this machine", () => {
     expect(() =>
       configSchema.parse({
         me: { name: "Dev", emails: ["dev@example.com"], timezone: "UTC" },
         timesheet: { type: "http", url: "http://pms.example.com/api" },
       }),
     ).toThrow("https");
+  });
+
+  it("says config.toml, never the token, when the system refuses the one in it", async () => {
+    const t = await openTarget(config({ token: "wrong-inline-secret" }), { env: {} });
+    const err = await t?.day(DATE).catch((e: Error) => e);
+    expect((err as Error).message).toContain("refused the token in config.toml");
+    expect((err as Error).message).not.toContain("wrong-inline-secret");
+  });
+
+  it("blanks the token out of anything a server says back, wherever it came from", async () => {
+    const echo = async (_url: string | URL | Request, init?: RequestInit) => {
+      const sent = new Headers(init?.headers).get("authorization") ?? "";
+      return new Response(JSON.stringify({ error: `Bad request (${sent})` }), { status: 400 });
+    };
+    for (const [extra, env] of [
+      [{ token: "inline-secret-123" }, {}],
+      [{ token_env: "PMS_TOKEN" }, { PMS_TOKEN: "inline-secret-123" }],
+    ] as const) {
+      const t = await openTarget(config(extra), { env, fetch: echo });
+      const err = await t
+        ?.create(DATE, { task: "TASK-API", hours: 1, description: "x" })
+        .catch((e: Error) => e);
+      expect((err as Error).message).toContain("Bad request");
+      expect((err as Error).message).not.toContain("inline-secret-123");
+    }
   });
 });

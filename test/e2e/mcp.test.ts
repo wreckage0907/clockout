@@ -192,7 +192,7 @@ describe("connecting an MCP server, when it can't", () => {
     const sb = await sandbox();
     const r = await sb.run(["connect", "My Server"]);
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain('Connect "google" (your calendar), "erp"');
+    expect(r.stderr).toContain('Connect "google" (your calendar) or an MCP server');
   });
 
   it("says where nothing answers", async () => {

@@ -2,7 +2,7 @@ import type { RemoteEntry } from "../../src/core/push";
 import type { EntryInput, RemoteTask, Target } from "../../src/targets/types";
 
 /**
- * A timesheet system in memory that behaves like next-pms: a create doesn't say what id it made,
+ * A timesheet system in memory that behaves like a real one: a create doesn't say what id it made,
  * and `fail` makes chosen writes throw like a validation error.
  */
 export function fakeTarget(
