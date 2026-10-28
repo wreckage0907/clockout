@@ -87,6 +87,8 @@ of these (your [[timesheet.map]] entries stay as they are):
                     url = "https://…", and its token in the environment variable named by
                     token_env, or as token = "…"
   type = "command"  a program you name: run = ["your-program", "--timesheet"]
+Still on next-pms? docs/next-pms-setup.md walks through the command target for it:
+https://github.com/wreckage0907/clockout/blob/main/docs/next-pms-setup.md
 Or delete the [timesheet] section to stop sending. The ERP sign-in in credentials.json is no
 longer used.`;
 

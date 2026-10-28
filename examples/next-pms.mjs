@@ -4,16 +4,8 @@
 // stdout, in the shapes of docs/timesheet-api.md. It calls the same whitelisted methods next-pms's
 // own web app calls, so all of next-pms's rules apply.
 //
-//   [timesheet]
-//   type = "command"
-//   run = ["/path/to/clockout/examples/next-pms.mjs"]
-//
-// The site and its API key live in a JSON file readable only by you, by default
-// ~/.config/clockout/next-pms.json (or the path in NEXT_PMS_SETTINGS):
-//
-//   { "url": "https://erp.example.com", "api_key": "…", "api_secret": "…" }
-//
-// Generate the key in the ERP: your user → Settings → API Access → Generate Keys.
+// Setting it up (an API key, a settings file only you can read, the [timesheet] section):
+// docs/next-pms-setup.md.
 // No dependencies: Node 22.12 or newer.
 
 import { realpathSync } from "node:fs";
