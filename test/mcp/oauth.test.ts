@@ -102,6 +102,76 @@ describe("MCP sign-in", () => {
   });
 });
 
+describe("what a server's metadata may point at", () => {
+  /** The mock's own metadata, with some fields replaced. */
+  function withMetadata(change: Record<string, unknown>) {
+    return (async (input: string | URL | Request, init?: RequestInit) => {
+      const res = await fetch(input, init);
+      if (!String(input).includes("oauth-authorization-server")) return res;
+      return Response.json({ ...((await res.json()) as object), ...change });
+    }) as typeof fetch;
+  }
+
+  it("drops a revocation endpoint that isn't https and keeps signing in", async () => {
+    const m = await start();
+    const plan = await discoverMcpAuth(
+      "wispr",
+      m.url,
+      withMetadata({ revocation_endpoint: "http://evil.example/revoke" }),
+    );
+    expect(plan?.server.revocation_endpoint).toBeUndefined();
+    expect(plan?.server.token_endpoint).toBe(`${m.origin}/auth/token`);
+  });
+
+  it("drops a revocation endpoint that isn't an address", async () => {
+    const m = await start();
+    const plan = await discoverMcpAuth(
+      "wispr",
+      m.url,
+      withMetadata({ revocation_endpoint: "not a url" }),
+    );
+    expect(plan?.server.revocation_endpoint).toBeUndefined();
+  });
+
+  it("keeps a revocation endpoint that is safe", async () => {
+    const m = await start();
+    const plan = await discoverMcpAuth("wispr", m.url);
+    expect(plan?.server.revocation_endpoint).toBe(`${m.origin}/auth/revoke`);
+  });
+
+  it("refuses an authorization server whose metadata names another issuer", async () => {
+    const m = await start();
+    await expect(
+      discoverMcpAuth("wispr", m.url, withMetadata({ issuer: "https://evil.example" })),
+    ).rejects.toThrow("names itself https://evil.example");
+  });
+
+  it("sends no revocation to an unsafe address saved earlier", async () => {
+    const m = await start();
+    const creds = (await connectMcp("wispr", m.url, browser)) as McpCredentials;
+    let called = false;
+    const spy = (async () => {
+      called = true;
+      return new Response(null);
+    }) as typeof fetch;
+    await revokeMcp({ ...creds, revocation_endpoint: "http://evil.example/revoke" }, spy);
+    expect(called).toBe(false);
+  });
+
+  it("doesn't follow a redirect when it revokes or signs in", async () => {
+    const m = await start();
+    const seen: RequestInit[] = [];
+    const spy = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (init?.method === "POST") seen.push(init);
+      return fetch(input, init);
+    }) as typeof fetch;
+    const creds = (await connectMcp("wispr", m.url, browser, { fetch: spy })) as McpCredentials;
+    await revokeMcp(creds, spy);
+    // registration, token exchange, revocation
+    expect(seen.filter((i) => i.redirect === "error")).toHaveLength(3);
+  });
+});
+
 describe("signed-in calls", () => {
   async function signedIn(opts: MockMcpOptions = {}) {
     const m = await start(opts);

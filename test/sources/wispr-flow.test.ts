@@ -209,6 +209,33 @@ describe("choosing the list tool", () => {
     expect(listTool(tools, "nothing")).toBeUndefined();
   });
 
+  it("only considers tools that start with a read verb", () => {
+    const meetings = "Meetings you recorded";
+    const props = { from: { type: "string" }, to: { type: "string" } };
+    for (const name of [
+      "start_meeting_recording",
+      "share_meeting",
+      "schedule_meeting",
+      "cancel_meeting",
+      "invite_to_meeting",
+      "upload_meeting_audio",
+      "meetings",
+      "export_meetings",
+    ])
+      expect(listTool([tool(name, meetings, props)]), name).toBeUndefined();
+    for (const name of ["list_x", "get_x", "search_x", "find_x", "read_x"])
+      expect(listTool([tool(name, meetings, props)])?.name).toBe(name);
+  });
+
+  it("never prefers a write tool, however well it matches", () => {
+    const props = { from: { type: "string" }, to: { type: "string" } };
+    const tools = [
+      tool("start_meeting", "Meetings between times", props),
+      tool("get_meeting", "A recorded meeting", {}),
+    ];
+    expect(listTool(tools)?.name).toBe("get_meeting");
+  });
+
   it("finds nothing when the server only writes", () => {
     expect(listTool([tool("write_note", "Adds a note")])).toBeUndefined();
   });

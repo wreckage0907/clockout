@@ -135,4 +135,78 @@ describe("MCP client and sign-in", () => {
     );
     expect(asked).toEqual([false, true]);
   });
+
+  describe("reply size", () => {
+    const rpc = (id: number, result: unknown) => ({ jsonrpc: "2.0", id, result });
+    const limit = 5 * 1024 * 1024;
+
+    /** A server that answers every request with this body. */
+    const serving = (make: () => Response) =>
+      mcpClient({
+        url: "https://big.example/mcp",
+        name: "big",
+        fetch: (async () => make()) as unknown as typeof fetch,
+      });
+
+    it("reads a big but allowed JSON reply", async () => {
+      const name = "x".repeat(1024 * 1024);
+      const big = rpc(1, { protocolVersion: "2025-06-18", serverInfo: { name } });
+      const c = serving(() => Response.json(big));
+      await expect(c.initialize()).resolves.toMatchObject({ name });
+    });
+
+    it("refuses a JSON reply over the limit, by its declared length", async () => {
+      const c = serving(
+        () => new Response("{}", { headers: { "content-length": String(limit + 1) } }),
+      );
+      await expect(c.initialize()).rejects.toThrow("big sent a reply larger than 5 MB");
+    });
+
+    it("refuses a JSON reply over the limit that doesn't declare its length", async () => {
+      const chunk = new Uint8Array(1024 * 1024).fill(32);
+      let sent = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          sent++;
+          if (sent > 10) controller.close();
+          else controller.enqueue(chunk);
+        },
+      });
+      const c = serving(
+        () => new Response(body, { headers: { "content-type": "application/json" } }),
+      );
+      await expect(c.initialize()).rejects.toThrow("big sent a reply larger than 5 MB");
+      expect(sent).toBeLessThan(10);
+    });
+
+    it("refuses an event stream that never says anything useful", async () => {
+      const line = new TextEncoder().encode(
+        `data: ${JSON.stringify({ id: 999, junk: "y".repeat(100_000) })}\n\n`,
+      );
+      let sent = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          sent++;
+          controller.enqueue(line);
+        },
+      });
+      const c = serving(
+        () => new Response(body, { headers: { "content-type": "text/event-stream" } }),
+      );
+      await expect(c.initialize()).rejects.toThrow("big sent a reply larger than 5 MB");
+      expect(sent).toBeLessThan(100);
+    });
+
+    it("still reads a streamed reply under the limit", async () => {
+      const init = rpc(1, { protocolVersion: "2025-06-18" });
+      const c = serving(
+        () =>
+          new Response(`data: ${JSON.stringify(init)}\n\n`, {
+            headers: { "content-type": "text/event-stream" },
+          }),
+      );
+      // initialize works; the follow-up notification gets the same stream and is cancelled.
+      await expect(c.initialize()).resolves.toMatchObject({ name: "big" });
+    });
+  });
 });

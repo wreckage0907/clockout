@@ -1,5 +1,4 @@
 import { homedir } from "node:os";
-import { execa } from "execa";
 import {
   credentialsPath,
   loadErpCredentials,
@@ -20,6 +19,7 @@ import { type Config, isSafeSite, mcpServer } from "../config/schema";
 import { cleanText } from "../core/text";
 import { dayRange, localDate } from "../core/time";
 import { clientFor, connectMcp, revokeMcp } from "../mcp";
+import { openUrl } from "../open-url";
 import { googleCalendar } from "../sources/google-calendar";
 import { connectGoogle, googleClient, revoke } from "../sources/google-calendar/oauth";
 import { WISPR_SERVER, WISPR_URL } from "../sources/wispr-flow";
@@ -30,13 +30,9 @@ const openInBrowser = (what: string) => async (url: string) => {
   console.log(
     `\nOpening ${what} sign-in in your browser. If it doesn't open, visit:\n\n  ${url}\n`,
   );
-  const [cmd, args] =
-    process.platform === "darwin"
-      ? ["open", [url]]
-      : process.platform === "win32"
-        ? ["cmd", ["/c", "start", "", url]]
-        : ["xdg-open", [url]];
-  await execa(cmd, args as string[]).catch(() => undefined);
+  await openUrl(url).catch((err: unknown) => {
+    console.log(`Not opened: ${err instanceof Error ? err.message : String(err)}`);
+  });
 };
 
 /**
