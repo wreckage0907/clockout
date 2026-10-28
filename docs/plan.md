@@ -205,6 +205,7 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 - [x] `token = "…"` for the `http` target in config.toml, beside `token_env` (one of them); the config file's mode is tightened on save
 - [x] The token never reaches the AI (settings summary tested), is never printed (dry run, errors, a server echoing it back, TOML syntax errors) and can't be set, changed or read by any setting operation
 - [x] A config with `type = "next-pms"` stops with a message that says what to write instead
+- [x] `examples/next-pms.mjs`: next-pms as a `command` target outside the CLI (Frappe API key in a 0600 settings file), tested against a fake site
 
 ## Day 12 — Publish (milestone)
 
