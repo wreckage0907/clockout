@@ -1,5 +1,10 @@
 import pkg from "../../package.json" with { type: "json" };
-import { loadMcpCredentials, type McpCredentials, saveMcpCredentials } from "../config/credentials";
+import {
+  loadMcpCredentials,
+  type McpCredentials,
+  saveMcpCredentials,
+  withMcpCredentials,
+} from "../config/credentials";
 import type { McpServer } from "../config/schema";
 import type { Fetch } from "../oauth";
 import { type McpClient, mcpClient } from "./client";
@@ -31,6 +36,18 @@ export async function clientFor(
     name: server.name,
     version: pkg.version,
     ...(opts.fetch ? { fetch: opts.fetch } : {}),
-    ...(creds ? { token: mcpAuth(server.name, creds, save, opts.fetch) } : {}),
+    ...(creds
+      ? {
+          token: mcpAuth(
+            server.name,
+            creds,
+            save,
+            opts.fetch,
+            // Saving to the credentials file: refresh under its lock, from what's saved now.
+            // A caller with its own `save` (the sign-in flow) hasn't written the file yet.
+            opts.save ? undefined : (fn) => withMcpCredentials(server.name, fn),
+          ),
+        }
+      : {}),
   });
 }

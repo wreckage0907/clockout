@@ -6,6 +6,7 @@ import { stripVTControlCharacters } from "node:util";
 import { execa } from "execa";
 import { z } from "zod";
 import { redactSecrets } from "../core/secrets";
+import { releaseHeldLocks } from "../lock";
 
 /** Every AI call runs in a fresh folder with this prefix; sources skip sessions started in one. */
 export const TEMP_PREFIX = "clockout-ai-";
@@ -193,6 +194,8 @@ function watchExit(): void {
   ] as const)
     process.once(signal, () => {
       stopHelpers();
+      // process.exit skips `finally` blocks, which is where locks are let go.
+      releaseHeldLocks();
       process.exit(code);
     });
 }
