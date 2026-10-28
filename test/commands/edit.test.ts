@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Correction } from "../../src/ai/edits";
 import type { CompleteRequest, LlmBackend } from "../../src/ai/types";
-import { runEdit } from "../../src/commands/edit";
+import { type EditDeps, type EditOptions, runEdit } from "../../src/commands/edit";
 import { loadConfig } from "../../src/config/load";
 import type { Config } from "../../src/config/schema";
 import { DayStore } from "../../src/store/json-store";
@@ -62,20 +62,21 @@ function backend(correction: Partial<Correction>): LlmBackend {
   };
 }
 
-async function edit(correction: Partial<Correction>) {
+async function edit(
+  correction: Partial<Correction>,
+  opts: EditOptions = { yes: true },
+  deps: EditDeps = {},
+) {
   const out: string[] = [];
   const log = console.log;
   console.log = (line: string) => void out.push(line);
   try {
-    await runEdit(
-      "remember the reader isn't technical",
-      {},
-      {
-        config,
-        store,
-        backend: backend(correction),
-      },
-    );
+    await runEdit("remember the reader isn't technical", opts, {
+      config,
+      store,
+      backend: backend(correction),
+      ...deps,
+    });
   } finally {
     console.log = log;
   }
@@ -105,7 +106,7 @@ describe("settings said to clockout edit", () => {
       edit({
         settings: [{ op: "remember", text: "token ghp_4f9adc3b21e7a1b2c3d4e5f6a7b8c9d0e1f2a3b" }],
       }),
-    ).rejects.toThrow(/looks like a password or a token/);
+    ).rejects.toThrow(/looks like a token/);
     expect((await loadConfig(configFile))?.memories).toEqual([]);
     expect(await readFile(configFile, "utf8")).not.toContain("ghp_");
   });
@@ -117,7 +118,7 @@ describe("settings said to clockout edit", () => {
     try {
       await runEdit(
         "remember the reader isn't technical",
-        { dryRun: true },
+        { dryRun: true, yes: true },
         {
           config,
           store,
@@ -129,5 +130,73 @@ describe("settings said to clockout edit", () => {
     }
     expect(out.join("\n")).toContain("dry run: nothing saved");
     expect((await loadConfig(configFile))?.memories).toEqual([]);
+  });
+});
+
+describe("confirming settings", () => {
+  const remember = { settings: [{ op: "remember" as const, text: "The reader isn't technical" }] };
+
+  it("asks first on a terminal, and saves on a yes", async () => {
+    const asked: string[] = [];
+    const out = await edit(
+      remember,
+      {},
+      {
+        interactive: true,
+        ask: async (m) => {
+          asked.push(m);
+          return true;
+        },
+      },
+    );
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toContain("config.toml");
+    expect(out).toContain("Saved to");
+    expect((await loadConfig(configFile))?.memories).toEqual(["The reader isn't technical"]);
+  });
+
+  it("saves nothing on a no", async () => {
+    const out = await edit(remember, {}, { interactive: true, ask: async () => false });
+    expect(out).toContain("Settings not saved.");
+    expect(out).not.toContain("Saved to");
+    expect((await loadConfig(configFile))?.memories).toEqual([]);
+  });
+
+  it("refuses without a terminal unless --yes is given", async () => {
+    await expect(edit(remember, {}, { interactive: false })).rejects.toThrow(/Add --yes/);
+    expect((await loadConfig(configFile))?.memories).toEqual([]);
+    await edit(remember, { yes: true }, { interactive: false });
+    expect((await loadConfig(configFile))?.memories).toEqual(["The reader isn't technical"]);
+  });
+
+  it("doesn't ask when there are no settings", async () => {
+    const out = await edit(
+      { reply: "Nothing to change." },
+      {},
+      {
+        interactive: false,
+        ask: async () => {
+          throw new Error("asked");
+        },
+      },
+    );
+    expect(out).toContain("Nothing to change.");
+  });
+
+  it("prints what the AI wrote without escape codes", async () => {
+    const out = await edit(
+      { reply: "Done\u001b]0;pwned\u0007 \u001b[31mred\u001b[0m", settings: [] },
+      {},
+      { interactive: false },
+    );
+    expect(out).toBe("Done red");
+    const proposal = await edit(
+      {
+        settings: [{ op: "remember", text: "keep\u001b[2Jthis" }],
+        reply: "ok\u001b[2J",
+      },
+      { yes: true },
+    );
+    expect(proposal).not.toContain("\u001b");
   });
 });

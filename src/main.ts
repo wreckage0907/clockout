@@ -63,6 +63,7 @@ program
   .description('Correct a day in plain words, e.g. clockout edit "the gap was lunch"')
   .option("-d, --date <date>", "day to edit (default: today)")
   .option("--dry-run", "show the changes without saving them")
+  .option("-y, --yes", "save settings changes without asking")
   .action((words: string[], opts) => runEdit(words.join(" "), opts));
 
 program

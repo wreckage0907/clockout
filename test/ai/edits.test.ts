@@ -206,6 +206,54 @@ describe("settings in the chat", () => {
     expect(() => refuseSecrets("reviewed acme/api#212 in -Users-dev-work-acme-api")).not.toThrow();
   });
 
+  it("shows the AI a program destination only as a program on this machine", () => {
+    const ctx = settingsContext(
+      {
+        ...config,
+        exports: [
+          {
+            name: "writer",
+            type: "json",
+            merge: true,
+            to: { command: ["/opt/me/bin/writer", "--x"] },
+          },
+          { name: "note", type: "markdown", merge: true, to: { file: "~/Vault/{date}.md" } },
+          { name: "wiki", type: "text", merge: true, to: { mcp: "notion", tool: "append" } },
+        ],
+      },
+      facts,
+    );
+    expect(ctx.exports).toEqual([
+      expect.objectContaining({ name: "writer", to: { program: "a program on this machine" } }),
+      expect.objectContaining({ name: "note", to: undefined }),
+      expect.objectContaining({ name: "wiki", to: { mcp: "notion", tool: "append" } }),
+    ]);
+    const text = JSON.stringify(ctx);
+    expect(text).not.toContain("/opt/me");
+    expect(text).not.toContain("Vault");
+  });
+
+  it("drops an answer whose settings carry a token", async () => {
+    const token = "ghp_abcdefghijklmnopqrstuvwxyz0123";
+    for (const settings of [
+      [{ op: "remember", text: `use ${token}` }],
+      [{ op: "descriptions", examples: [`Fixed ${token}`] }],
+      [
+        {
+          op: "export_format",
+          name: "wiki",
+          type: "text",
+          to: { mcp: "notion", tool: "append", arguments: { auth: token } },
+        },
+      ],
+    ]) {
+      const { backend } = recording({ ops: [], settings, reply: "Done." });
+      await expect(parseCorrection("remember it", day, config, backend)).rejects.toThrow(
+        /looks like a token/,
+      );
+    }
+  });
+
   it("understands plain connect and disconnect without the AI", () => {
     expect(localCorrection("connect my ERP at erp.example.com")?.settings).toEqual([
       { op: "connect", service: "erp", url: "erp.example.com" },

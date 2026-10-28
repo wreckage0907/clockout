@@ -1,7 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { configSchema } from "../../src/config/schema";
-import { addTimeProjects } from "../../src/core/projects";
-import type { Block, Day } from "../../src/core/types";
+import { addTimeProjects, resolveProject } from "../../src/core/projects";
+import type { Activity, Block, Day } from "../../src/core/types";
+
+describe("title rules", () => {
+  const meeting = (title: string): Activity => ({
+    source: "calendar",
+    kind: "meeting",
+    actor: "human",
+    start: new Date("2026-10-16T10:00:00Z"),
+    end: new Date("2026-10-16T10:30:00Z"),
+    title,
+  });
+
+  it("matches a title", () => {
+    const rules = [{ name: "Sync", match: { title: "standup" } }];
+    expect(resolveProject(meeting("Daily standup"), rules)).toBe("Sync");
+  });
+
+  it("never runs a pattern that can backtrack without end", () => {
+    const started = Date.now();
+    const project = resolveProject(meeting(`${"a".repeat(40)}!`), [
+      { name: "Evil", match: { title: "(a+)+$" } },
+    ]);
+    expect(project).toBe("Meetings");
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+});
 
 const config = configSchema.parse({
   me: { name: "Dev", emails: ["dev@example.com"], timezone: "UTC" },

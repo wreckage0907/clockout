@@ -99,8 +99,14 @@ export function settingsContext(config: Config, facts: SettingsFacts) {
     descriptions: config.descriptions,
     standup: config.standup,
     memories: config.memories,
-    // A file a destination writes to is set by hand and stays out of what the AI sees.
-    exports: config.exports.map((e) => (e.to && "file" in e.to ? { ...e, to: undefined } : e)),
+    // A file or a program a destination uses is set by hand and stays out of what the AI sees.
+    exports: config.exports.map((e) =>
+      e.to && "file" in e.to
+        ? { ...e, to: undefined }
+        : e.to && "command" in e.to
+          ? { ...e, to: { program: "a program on this machine" } }
+          : e,
+    ),
     project_rules: config.projects.map((p) => ({
       name: p.name,
       ...(p.task ? { task: p.task } : {}),
@@ -205,7 +211,7 @@ export async function parseCorrection(
  * than to show a proposal that fails, or lands, when accepted.
  */
 function checkAnswer(answer: Correction, day: Day, config: Config): void {
-  const words = [answer.reply, ...answer.ops.flatMap((o) => Object.values(o))].filter(
+  const words = [answer.reply, ...strings(answer.ops), ...strings(answer.settings)].filter(
     (w): w is string => typeof w === "string",
   );
   if (words.some(hasSecret))
@@ -219,6 +225,14 @@ function checkAnswer(answer: Correction, day: Day, config: Config): void {
     throw new Error("The AI's answer didn't fit this day. Try saying it differently.", {
       cause: new Error(errors.join(" ")),
     });
+}
+
+/** Every string anywhere inside a value, however deep: settings carry lists and objects. */
+function strings(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(strings);
+  if (value && typeof value === "object") return Object.values(value).flatMap(strings);
+  return [];
 }
 
 const URLS = /\b(?:https?|webcal):\/\/[^\s<>"']+/gi;

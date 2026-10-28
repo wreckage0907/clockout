@@ -10,6 +10,23 @@ function issues(input: unknown): string[] {
   return r.success ? [] : r.error.issues.map((i) => i.path.join("."));
 }
 
+describe("project title patterns", () => {
+  const withTitle = (title: string) => ({
+    ...minimal,
+    projects: [{ name: "Sync", match: { title } }],
+  });
+
+  it("accepts an ordinary pattern", () => {
+    expect(issues(withTitle("^(daily|weekly) sync"))).toEqual([]);
+  });
+
+  it("refuses a pattern that can backtrack without end, and a very long one", () => {
+    expect(issues(withTitle("(a+)+$"))).toEqual(["projects.0.match.title"]);
+    expect(issues(withTitle("(a|a)*"))).toEqual(["projects.0.match.title"]);
+    expect(issues(withTitle("a".repeat(201)))).toEqual(["projects.0.match.title"]);
+  });
+});
+
 describe("configSchema", () => {
   it("fills defaults for a minimal config", () => {
     const c = configSchema.parse(minimal);

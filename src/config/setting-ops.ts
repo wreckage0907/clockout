@@ -397,13 +397,21 @@ export function applySettings(
           break;
         }
         const { op: _, name, type, columns, ...rest } = op;
-        // A file path is only ever set by hand, so an update keeps the one it already had.
-        const had = next.exports.find((e) => e.name === name.trim().toLowerCase());
-        const keep = !op.to && had?.to && "file" in had.to ? had.to : undefined;
+        const key = name.trim().toLowerCase();
+        // A path is only ever set by hand, and where a scheduled job sends things is the person's
+        // standing confirmation (ADR 0012), so an update keeps the destination it already had.
+        const had = next.exports.find((e) => e.name === key);
+        if (op.to && next.schedule.some((j) => j.format === key) && !sameJson(op.to, had?.to)) {
+          errors.push(
+            `The export “${key}” is used by a scheduled job, so its destination can't be changed from here. Change it in config.toml.`,
+          );
+          break;
+        }
+        const keep = !op.to && had?.to ? had.to : undefined;
         next = withExport(next, {
           ...defined(rest),
           ...(keep ? { to: keep } : {}),
-          name: name.trim().toLowerCase(),
+          name: key,
           type,
           // TOML has no undefined: leave out what wasn't said.
           ...(columns
@@ -640,8 +648,29 @@ function describeExport(op: z.infer<typeof exportFormat>): string {
   const extras = [
     op.merge === false ? "one row per block" : "",
     op.default ? "what Ctrl+Y copies" : "",
+    op.to ? `sent to ${describeTo(op.to)}` : "",
   ].filter(Boolean);
   return `Export ${op.name.trim().toLowerCase()}: ${what}${extras.length ? ` · ${extras.join(" · ")}` : ""}`;
+}
+
+/** Where an export goes, in full: the server, the tool and each argument's template. */
+function describeTo(to: NonNullable<z.infer<typeof exportFormat>["to"]>): string {
+  const args = Object.entries(to.arguments ?? {}).map(([k, v]) => `${k}=${JSON.stringify(v)}`);
+  return `${to.mcp} · ${to.tool}${args.length ? ` (${args.join(", ")})` : ""}`;
+}
+
+/** The same destination, whatever order its keys came in. */
+function sameJson(a: unknown, b: unknown): boolean {
+  const norm = (v: unknown): unknown =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.entries(v)
+            .filter(([, x]) => x !== undefined)
+            .sort(([x], [y]) => x.localeCompare(y))
+            .map(([k, x]) => [k, norm(x)]),
+        )
+      : v;
+  return JSON.stringify(norm(a)) === JSON.stringify(norm(b));
 }
 
 function defined<T extends object>(o: T): Partial<T> {
