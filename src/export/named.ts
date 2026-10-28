@@ -8,7 +8,7 @@ import {
 import { mappingFor } from "../core/push";
 import { blockRows, timesheetRows } from "../core/timesheet";
 import type { Day, TimesheetRow } from "../core/types";
-import { inert, toCsv, toMarkdown, toTsv } from "./formats";
+import { inert, mdCell, toCsv, toMarkdown, toTsv } from "./formats";
 
 // Your own export formats from `[[exports]]` (ADR 0009): columns, headers, date and hours
 // formats, text lines. Templates only fill in fields; nothing is evaluated.
@@ -97,7 +97,7 @@ export function renderNamed(format: ExportFormat, rows: TimesheetRow[], config: 
         .join("\n")}\n`;
     }
     case "markdown": {
-      const esc = (v: string) => v.replace(/\|/g, "\\|").replace(/[\r\n]+/g, " ");
+      const esc = mdCell;
       const lines = [
         `| ${columns.map((c) => esc(header(c))).join(" | ")} |`,
         `|${columns.map((c) => (c.field === "hours" ? "---:" : "---")).join("|")}|`,

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { configSchema } from "../../src/config/schema";
 import { openTarget } from "../../src/targets";
 import { httpTarget } from "../../src/targets/http";
@@ -52,6 +52,22 @@ describe("http timesheet target", () => {
     await expect(
       target().create(DATE, { task: "TASK-API", hours: 30, description: "x" }),
     ).rejects.toThrow("Hours must be more than 0 and at most 24.");
+  });
+
+  it("cleans the system's words of escape codes before they become an error", async () => {
+    const hostile = "Nope\u001b]52;c;ZXZpbA==\u0007\u001b[2J‮";
+    for (const status of [400, 401, 500]) {
+      const spy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(Response.json({ error: hostile }, { status }));
+      const err = (await target()
+        .create(DATE, { task: "TASK-API", hours: 1, description: "x" })
+        .catch((e: Error) => e)) as Error;
+      spy.mockRestore();
+      expect(err.message).toContain("Nope");
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: that's what the test is about
+      expect(err.message).not.toMatch(/[\u0000-\u001f\u007f-\u009f‮]/);
+    }
   });
 
   it("names the token's variable when it's refused, never the token", async () => {

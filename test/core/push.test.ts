@@ -73,6 +73,16 @@ describe("planPush", () => {
     expect(describeItem(plan.items[0] as PushItem)).toContain("1h00 → 2h15");
   });
 
+  it("describes an item on one clean line even when the server's words are hostile", () => {
+    const hostile = "Old\u001b]52;c;ZXZpbA==\u0007\u001b[2J\nwords‮";
+    const plan = planPush(DATE, [auth], map, remote(entry({ id: "e9", description: hostile })), []);
+    const theirs = plan.items.find((i) => i.action === "theirs") as PushItem;
+    const line = describeItem(theirs);
+    expect(line).toContain("Old words");
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: that's what the test is about
+    expect(line).not.toMatch(/[\u0000-\u001f\u007f-\u009f‮]/);
+  });
+
   it("updates, not duplicates, when the description changed (the row's key changed)", () => {
     const ledger: PushedEntry[] = [{ key: "old-key", id: "e1", parent: "TS-1", task: "TASK-1" }];
     const sent = entry({ id: "e1", description: "Old words" });
@@ -189,6 +199,14 @@ describe("ledgerAfter", () => {
 describe("plainText", () => {
   it("reads rich-text descriptions as plain text", () => {
     expect(plainText("<p>Fix &amp; ship</p><p>Review&nbsp;PR</p>")).toBe("Fix & ship\nReview PR");
+  });
+
+  it("removes escape codes and invisible characters from what the server sent", () => {
+    expect(plainText("Done\u001b]52;c;ZXZpbA==\u0007 \u001b[2Jfor‮you​")).toBe("Done foryou");
+  });
+
+  it("makes a rejected description comparable to the one sent", () => {
+    expect(plainText("a​b")).toBe(plainText("ab"));
   });
 });
 

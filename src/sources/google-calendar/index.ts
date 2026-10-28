@@ -32,6 +32,9 @@ const page = z.object({
   nextPageToken: z.string().optional(),
 });
 
+/** Most meetings kept for a day from one calendar. */
+export const MAX_MEETINGS_PER_DAY = 500;
+
 /** Not meetings: you're away, or it's a label on the day. */
 const SKIP_TYPES = new Set(["outOfOffice", "workingLocation", "birthday"]);
 
@@ -64,6 +67,7 @@ export function createGoogleCalendarSource(
         );
       const token = await accessToken(client, creds.refresh_token, doFetch);
       for (const calendarId of cfg.calendars) {
+        let count = 0;
         let pageToken: string | undefined;
         do {
           const q = new URLSearchParams({
@@ -90,7 +94,16 @@ export function createGoogleCalendarSource(
             const parsed = event.safeParse(raw);
             if (parsed.success) {
               const a = toActivity(parsed.data);
-              if (a) yield a;
+              if (!a) continue;
+              // A flooded calendar (a recurring event every few minutes) can't bury the day.
+              if (count >= MAX_MEETINGS_PER_DAY) {
+                ctx.warn?.(
+                  `Google Calendar: more than ${MAX_MEETINGS_PER_DAY} events on one day in a calendar; the rest were left out.`,
+                );
+                return;
+              }
+              count++;
+              yield a;
             }
           }
           pageToken = body.nextPageToken;

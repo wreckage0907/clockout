@@ -29,8 +29,21 @@ export function toCsv(rows: TimesheetRow[]): string {
     .join("\r\n")}\r\n`;
 }
 
+/**
+ * A table cell as text. Titles come from anyone, and a note app loads a remote image the moment
+ * the note opens (a tracking beacon) and shows raw HTML: so no images, HTML tags or links.
+ */
+export function mdCell(v: string): string {
+  return v
+    .replace(/\|/g, "\\|")
+    .replace(/[\r\n]+/g, " ")
+    .replace(/!\[/g, "!\\[")
+    .replace(/\]\(/g, "]\\(")
+    .replace(/</g, "&lt;");
+}
+
 export function toMarkdown(rows: TimesheetRow[]): string {
-  const esc = (v: string) => v.replace(/\|/g, "\\|").replace(/[\r\n]+/g, " ");
+  const esc = mdCell;
   const total = rows.reduce((s, r) => s + r.hours, 0);
   return [
     `| ${COLUMNS.join(" | ")} |`,

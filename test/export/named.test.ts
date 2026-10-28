@@ -170,6 +170,16 @@ describe("your own formats", () => {
     );
   });
 
+  it("shows remote images and HTML in a custom Markdown export as text", () => {
+    const config = withExports([{ name: "notes", type: "markdown" }]);
+    const evil = [
+      { ...rows[0], description: "![](https://tracker.example/x.png) <script>x</script>" },
+    ] as TimesheetRow[];
+    const out = render(named(config, "notes"), evil, config);
+    expect(out).not.toMatch(/(^|[^\\])!\[/);
+    expect(out).not.toContain("<script>");
+  });
+
   it("writes JSON keyed by header, hours as numbers when decimal or minutes", () => {
     const config = withExports([
       {

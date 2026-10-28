@@ -5,6 +5,7 @@ import { loadConfig, saveConfig } from "../config/load";
 import { resolvePaths } from "../config/paths";
 import { type Config, targetWhere } from "../config/schema";
 import { changes, describeItem, type PushPlan, type PushRow } from "../core/push";
+import { cleanLines, cleanText } from "../core/text";
 import { logError } from "../log";
 import { applyPush, type PushResult, preparePush } from "../push";
 import { openTarget } from "../targets";
@@ -99,7 +100,7 @@ export async function runPush(
 
 function report({ done, failed, unconfirmed }: PushResult) {
   console.log(`\nSent ${done} change${done === 1 ? "" : "s"}.`);
-  for (const f of failed) console.error(`  ✗ ${describeItem(f.item)}\n    ${f.error}`);
+  for (const f of failed) console.error(`  ✗ ${describeItem(f.item)}\n    ${cleanLines(f.error)}`);
   if (unconfirmed)
     console.error(
       `Couldn't check what the ERP now has (${unconfirmed}). Run the same push again to check; nothing is sent twice.`,
@@ -119,7 +120,11 @@ async function pickTasks(rows: PushRow[], config: Config, target: Target): Promi
     const tasks = [...new Map([...matches, ...recent].map((t) => [t.id, t])).values()];
     const choice = await autocomplete({
       message: `Which ERP task is ${project}? (type to filter)`,
-      options: tasks.map((t) => ({ value: t.id, label: t.subject, hint: t.project })),
+      options: tasks.map((t) => ({
+        value: t.id,
+        label: cleanText(t.subject),
+        hint: cleanText(t.project),
+      })),
       placeholder: name,
     });
     if (isCancel(choice)) break;

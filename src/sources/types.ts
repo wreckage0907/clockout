@@ -8,6 +8,8 @@ export interface SourceContext {
   config: Config;
   homeDir: string;
   env: NodeJS.ProcessEnv;
+  /** A problem that leaves the source working: some records were skipped. One line, shown with the day's warnings. */
+  warn?: (message: string) => void;
   /** "owner/name" for a working directory; defaults to reading its git origin remote. */
   resolveRepo?: (cwd: string) => Promise<string | undefined>;
 }

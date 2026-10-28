@@ -60,11 +60,11 @@ export function httpTarget(
     const said = failure.safeParse(json);
     if (res.status === 401 || res.status === 403)
       throw new Error(
-        `${host} refused the token in ${tokenEnv}${said.success ? ` (${said.data.error})` : ""}. Check it, or get a new one.`,
+        `${host} refused the token in ${tokenEnv}${said.success ? ` (${plainText(said.data.error)})` : ""}. Check it, or get a new one.`,
       );
     if (res.status >= 500)
       throw new Error(
-        `${host} isn't answering right now (HTTP ${res.status}${said.success ? `: ${said.data.error}` : ""}). Try again later.`,
+        `${host} isn't answering right now (HTTP ${res.status}${said.success ? `: ${plainText(said.data.error)}` : ""}). Try again later.`,
       );
     // A read answered 404: the address is wrong. A write's 404 is about the entry, in its words.
     if (res.status === 404 && method === "GET")
