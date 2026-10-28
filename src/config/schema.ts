@@ -451,8 +451,8 @@ export const configSchema = z.object({
     .optional(),
   ai: z
     .object({
-      /** "auto" uses the first installed of Claude Code, Codex, opencode and Pi. */
-      backend: z.enum(["auto", "claude-code", "codex", "opencode", "pi", "none"]).default("auto"),
+      /** "auto" uses the first installed of Claude Code, opencode and Pi. */
+      backend: z.enum(["auto", "claude-code", "opencode", "pi", "none"]).default("auto"),
       /**
        * Model for the helper; leave out for its default (haiku for Claude Code, your own default
        * in the others). A Claude model only goes to Claude Code, any other only to the rest.

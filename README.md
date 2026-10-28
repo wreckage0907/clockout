@@ -94,7 +94,7 @@
 
 - `gh auth login` — GitHub activity
 - An AI helper for descriptions and plain-language corrections, on your own subscription:
-  `claude`, `codex`, `opencode` or `pi` (the first one installed is used; pick another in
+  `claude`, `opencode` or `pi` (the first one installed is used; pick another in
   Setup). Without one, descriptions come from titles and corrections are made on the cards
 
 </samp>
@@ -193,8 +193,7 @@ when new activity arrives; refreshing keeps them whenever the original blocks st
 Use `--no-ai` for titles and heuristic summaries instead.
 
 The AI helper is your own agent CLI, run with its tools off, in an empty temporary folder,
-saving nothing: Claude Code (`claude -p`, schema enforced), Codex (`codex exec`, read-only
-sandbox, schema enforced), opencode (`opencode run` as an agent that may use no tools; the
+saving nothing: Claude Code (`claude -p`, schema enforced), opencode (`opencode run` as an agent that may use no tools; the
 session is deleted afterwards) or Pi (`pi -p --no-tools`). It only sees titles, branch names
 and PR subjects. Antigravity can't be the helper: its print mode runs an agent, saves a
 conversation, and Google's terms don't allow other products to use it.

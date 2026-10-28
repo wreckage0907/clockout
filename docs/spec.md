@@ -17,7 +17,7 @@ Existing trackers don't solve this for developers. They see *which app* was open
 ## 2. Principles
 
 - **Works with whatever you use.** Any coding agent, any forge, any calendar. Unknown tools plug in through a generic command or JSONL source.
-- **Uses what you already pay for.** The AI work runs through your own installed agent CLI (Claude Code, Codex, Copilot, …) on your existing subscription. API keys and local models are options, not requirements. Works with no AI at all.
+- **Uses what you already pay for.** The AI work runs through your own installed agent CLI (Claude Code, opencode, Pi, …) on your existing subscription. API keys and local models are options, not requirements. Works with no AI at all.
 - **Local-first.** Everything is read and stored on your machine. Only short titles go to the AI, never code or full prompts.
 - **Voice-first review.** You talk over a drafted day; Clockout proposes the edits; you approve.
 
@@ -172,9 +172,9 @@ interface LlmBackend {
 
 | Backend | How | Structured output | Status |
 |---|---|---|---|
-| **Claude Code** | `claude -p --output-format json --json-schema … --tools "" --strict-mcp-config --setting-sources "" --no-session-persistence --model haiku`, prompt on stdin, empty temp dir | Enforced | ✓ Allowed: your own unmodified `claude` on your own login; Clockout never reads your credentials |
-| **Codex** | `codex exec --output-schema <file> --output-last-message <file> --sandbox read-only --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check -c model_reasoning_effort="low"`, instructions first in the prompt (no system-prompt flag), empty temp dir | Enforced, in OpenAI's strict form: every key required, optional ones nullable, `anyOf` for `oneOf`; nulls are dropped before validation | ✓ No switch turns tools off: the read-only sandbox has no network and no writes, in an empty folder, without your config's MCP servers or hooks |
-| **opencode** | `opencode run --standalone --format json --agent clockout`, with the agent (system prompt, `permission: {"*": "deny"}`, model) in `OPENCODE_CONFIG_CONTENT`; `--standalone` so a private server reads it; the session is deleted afterwards and the opencode source skips Clockout's temp folders | Prompted + validated | ✓ Uses the provider you set up in opencode (its free tier refuses outside opencode itself). A model goes in the agent config: `--model` drops the agent's prompt |
+| **Claude Code** | `claude -p --output-format json --json-schema … --tools "" --strict-mcp-config --setting-sources "" --no-session-persistence --model haiku --system-prompt-file <0600 file in the temp dir>`, prompt on stdin, empty temp dir | Enforced | ✓ Allowed: your own unmodified `claude` on your own login; Clockout never reads your credentials |
+| **Codex** | — | — | **Removed for now.** `codex exec --sandbox read-only` still gives the model a shell that can read any file, so text planted in a calendar or PR title could pull e.g. `~/.ssh` into a description. Comes back once it can run with its shell, `unified_exec`, apps and plugins off and a stripped environment (plan.md, "Later"). An existing `ai.backend = "codex"` is read as `"auto"` with a warning |
+| **opencode** | `opencode run --standalone --format json --agent clockout`, with the agent (system prompt, `permission: {"*": "deny"}`, model) in `OPENCODE_CONFIG_CONTENT`; `--standalone` so a private server reads it; `XDG_CONFIG_HOME` points at an empty folder in the temp dir so your global opencode config (MCP servers, plugins) isn't merged in, while sign-ins in the data folder still work (a custom provider defined only in your config file isn't seen); the session is deleted afterwards and the opencode source skips Clockout's temp folders | Prompted + validated | ✓ Uses the provider you set up in opencode (its free tier refuses outside opencode itself). A model goes in the agent config: `--model` drops the agent's prompt |
 | **Pi** | `pi -p --no-session --no-tools --no-extensions --no-skills --no-prompt-templates --no-context-files --no-mcp --no-themes --no-approve --system-prompt …` | Prompted + validated | ✓ Uses the provider you set up in Pi |
 | **Antigravity** | — | — | **Not supported.** Tried `agy -p --output-format json --json-schema …`: 40 s and ~46k tokens for one block, it tries to run commands, answers empty when they're denied, and saves a conversation the Antigravity source would read back as work. Google's terms also forbid using it "in connection with products not provided by us" |
 | **GitHub Copilot** | `copilot -p … --output-format json`, tools off | Prompted + validated | later |
@@ -182,13 +182,13 @@ interface LlmBackend {
 | **API key** | Anthropic / OpenAI / Google / OpenRouter | Enforced | later |
 | **None** | Titles as descriptions; corrections on the cards and with `/` commands | — | ✓ |
 
-Auto-detect order (when `backend = "auto"`): Claude Code → Codex → opencode → Pi → none. `ai.model` is optional (each helper's default otherwise: haiku for Claude Code, your own default in the rest); a Claude model (`haiku`, `sonnet`, `opus`, `claude-…`) only goes to Claude Code and any other only to the rest, so switching helpers never breaks on a leftover model.
+Auto-detect order (when `backend = "auto"`): Claude Code → opencode → Pi → none. `ai.model` is optional (each helper's default otherwise: haiku for Claude Code, your own default in the rest); a Claude model (`haiku`, `sonnet`, `opus`, `claude-…`) only goes to Claude Code and any other only to the rest, so switching helpers never breaks on a leftover model.
 
-Rules for every CLI backend: run in an empty temp dir with tools off (denied or read-only where there's no switch) and nothing saved; batch the whole day into one call; validate the output with Zod and ask once more on bad output; show which backend and model were used. Pro/Max-style plans assume normal individual use, so keep calls few and small.
+Rules for every CLI backend: run in an empty temp dir with tools off (denied or read-only where there's no switch) and nothing saved; batch the whole day into one call; start the CLI with an allowlisted environment (`extendEnv: false`: PATH, HOME, locale, temp and XDG variables, proxy and certificate settings, and the CLI's own config and provider variables such as `ANTHROPIC_*`, `CLAUDE_*`, `OPENAI_*`, `AWS_*`, `*_API_KEY`), never `GITHUB_TOKEN`, `GH_TOKEN`, any `CLOCKOUT_*` or the variable the timesheet target's `token_env` names; keep system prompts (they hold your remembered notes) off the command line where the CLI can read them from a file (Claude Code does; Pi's `--system-prompt` takes text only, so it still shows in `ps`); validate the output with Zod and ask once more on bad output; show which backend and model were used. Pro/Max-style plans assume normal individual use, so keep calls few and small.
 
 **Without a helper.** Choosing a helper never fails: when the configured one (or, for `auto`, every one) isn't on PATH, Clockout runs without AI and says why — on stderr for commands, as a toast when the review screen opens, and in the chat bar's hint. Typed sentences then get a toast saying what to do (turn it on in Setup, or install and sign in to a helper) and stay in the bar; durations, the cards, `/` commands, export and push all work. `clockout edit` says the same and exits non-zero.
 
-**Errors.** A helper's failure shows the CLI's own words, never its command line (which holds the schema and prompt), plus how to sign in again when that's the problem ("Codex: … run `codex login`."), with anything that looks like a token redacted. Summaries that fail fall back to titles with a warning.
+**Errors.** A helper's failure shows the CLI's own words, never its command line (which holds the schema and prompt), plus how to sign in again when that's the problem ("opencode: … run `opencode auth login`."), with anything that looks like a token redacted. Summaries that fail fall back to titles with a warning.
 
 **What you tell it to remember** ([ADR 0011](adr/0011-remember-what-people-say.md)): `memories` in the config, at most 20 short lines, in your own words. They go into the descriptions prompt, the standup prompt and the settings prompt ("remember …" / "forget …" are the `remember` and `forget` settings operations, proposed and confirmed like any other change). A memory that looks like a token or a key is refused; one that's really a setting ("write in past tense", "leave out my dotfiles") becomes that setting instead. Memories are part of the descriptions cache key, so changing them writes the day's descriptions again. They're listed in Setup → AI helper under "Remembered", each removable.
 
@@ -219,7 +219,7 @@ target = "8h"        # hours you aim to log; the review screen fills towards it
 memories = ["Ticket keys come first", "The reader isn't technical"]
 
 [ai]
-backend = "auto"     # auto | claude-code | codex | opencode | pi | none
+backend = "auto"     # auto | claude-code | opencode | pi | none
 # model = "haiku"   # optional; each helper's own default otherwise
 
 [descriptions]       # how the AI writes descriptions; without it, titles are used as they are
@@ -340,7 +340,7 @@ allow_open = false  # false: open questions make the run exit 1
 - [ ] `git`, `github`
 - [ ] Calendar: ICS URL, macOS EventKit helper, times-only fallback
 - [ ] `command` and `jsonl` sources
-- [ ] AI backends: Claude Code, Codex, Ollama, API key, none (others behind the same interface as time allows)
+- [ ] AI backends: Claude Code, Ollama, API key, none (others behind the same interface as time allows)
 - [ ] Edit operations + diff + undo
 - [ ] Ink TUI review screen with the "say it" bar
 - [ ] `clockout today | yesterday | week | --from --to`, `--md`, `--json`
@@ -402,7 +402,7 @@ See [ADR 0004](adr/0004-toolchain.md) for the toolchain and [docs/plan.md](plan.
 | 2–3 | Agent sources (Claude Code, Codex, Antigravity, opencode, pi) + `git` |
 | 4 | `github`, calendar ICS + EventKit helper, attendance |
 | 5–6 | Project resolution, blocks, gaps, heuristic summaries, `--md` / `--json` output |
-| 7–8 | AI backend interface (Claude Code, Codex, Ollama, API key), summaries, edit operations, undo |
+| 7–8 | AI backend interface (Claude Code, Ollama, API key), summaries, edit operations, undo |
 | 9–10 | Ink TUI review screen, "say it" bar, Wispr testing across terminals |
 | 11 | Exports, `command` / `jsonl` sources |
 | 12 | Publish to npm; run on own two weeks → **real result** |

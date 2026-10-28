@@ -1,6 +1,7 @@
 import { tmpdir } from "node:os";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  agentEnv,
   cliFailure,
   cliRunner,
   jsonIn,
@@ -92,6 +93,82 @@ describe("agent CLI helpers", () => {
       run("sh", ["-c", "sleep 30 & echo started; wait"], { input: "", cwd: tmpdir() }),
     ).rejects.toThrow("didn't answer within 1 second");
     expect(Date.now() - started).toBeLessThan(5000);
+  });
+
+  it("gives a helper only what it needs from the environment, never Clockout's secrets", () => {
+    const env = agentEnv(
+      {
+        PATH: "/usr/bin",
+        HOME: "/home/dev",
+        LANG: "en_US.UTF-8",
+        LC_ALL: "C",
+        TMPDIR: "/tmp",
+        XDG_DATA_HOME: "/data",
+        ANTHROPIC_API_KEY: "sk-ant-own",
+        CLAUDE_CONFIG_DIR: "/cfg",
+        OPENAI_API_KEY: "sk-own",
+        OPENROUTER_API_KEY: "or-own",
+        AWS_PROFILE: "work",
+        SOME_NEW_PROVIDER_API_KEY: "key",
+        OPENCODE_CONFIG: "/oc",
+        PI_CODING_AGENT_DIR: "/pi",
+        GITHUB_TOKEN: "ghp_secret",
+        GH_TOKEN: "gho_secret",
+        CLOCKOUT_TIMESHEET_TOKEN: "pms_secret",
+        CLOCKOUT_CONFIG: "/etc/clockout.toml",
+        MY_PMS_TOKEN: "pms_other_secret",
+        SSH_AUTH_SOCK: "/agent",
+        NPM_TOKEN: "npm_secret",
+        EDITOR: "vim",
+      },
+      ["MY_PMS_TOKEN"],
+    );
+    expect(Object.keys(env).sort()).toEqual(
+      [
+        "ANTHROPIC_API_KEY",
+        "AWS_PROFILE",
+        "CLAUDE_CONFIG_DIR",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "OPENAI_API_KEY",
+        "OPENCODE_CONFIG",
+        "OPENROUTER_API_KEY",
+        "PATH",
+        "PI_CODING_AGENT_DIR",
+        "SOME_NEW_PROVIDER_API_KEY",
+        "TMPDIR",
+        "XDG_DATA_HOME",
+      ].sort(),
+    );
+  });
+
+  it("holds back a withheld name even where a provider pattern would let it through", () => {
+    const env = { OPENAI_API_KEY: "k", FOO_API_KEY: "timesheet", GITHUB_TOKEN: "t" };
+    expect(agentEnv(env, ["foo_api_key"])).toEqual({ OPENAI_API_KEY: "k" });
+  });
+
+  describe("the process a helper runs as", () => {
+    afterEach(() => vi.unstubAllEnvs());
+
+    it("starts with the filtered environment plus what the backend adds, not Clockout's own", async () => {
+      vi.stubEnv("GITHUB_TOKEN", "ghp_secret");
+      vi.stubEnv("GH_TOKEN", "gho_secret");
+      vi.stubEnv("CLOCKOUT_TIMESHEET_TOKEN", "pms_secret");
+      vi.stubEnv("MY_PMS_TOKEN", "pms_other_secret");
+      vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-own");
+      const r = await cliRunner(10_000, ["MY_PMS_TOKEN"])(
+        process.execPath,
+        ["-e", "console.log(JSON.stringify(process.env))"],
+        { input: "", cwd: tmpdir(), env: { ADDED_BY_BACKEND: "1" } },
+      );
+      const seen = JSON.parse(r.stdout) as Record<string, string>;
+      expect(seen.ANTHROPIC_API_KEY).toBe("sk-ant-own");
+      expect(seen.ADDED_BY_BACKEND).toBe("1");
+      expect(seen.PATH).toBeTruthy();
+      for (const secret of ["GITHUB_TOKEN", "GH_TOKEN", "CLOCKOUT_TIMESHEET_TOKEN", "MY_PMS_TOKEN"])
+        expect(seen).not.toHaveProperty(secret);
+    });
   });
 
   it("says when the helper isn't installed", async () => {

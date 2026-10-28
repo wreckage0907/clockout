@@ -24,6 +24,11 @@ describe("opencode CLI backend", () => {
     const config = JSON.parse(ask?.env?.OPENCODE_CONFIG_CONTENT ?? "{}");
     expect(config.agent.clockout.permission).toEqual({ "*": "deny" });
     expect(config.agent.clockout.prompt).toMatch(/^Write timesheet descriptions\./);
+    // An empty config folder in the call's temp dir, so the user's own MCP servers and plugins stay
+    // out; the data folder (sign-in) isn't moved.
+    expect(ask?.env?.XDG_CONFIG_HOME).toMatch(/clockout-ai-[^/]+\/config$/);
+    expect(ask?.env).not.toHaveProperty("XDG_DATA_HOME");
+    expect(del?.env?.XDG_CONFIG_HOME).toBe(ask?.env?.XDG_CONFIG_HOME);
     expect(del?.args).toEqual(["session", "delete", session, "--standalone"]);
   });
 

@@ -1,3 +1,5 @@
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { z } from "zod";
 import {
   cliFailure,
@@ -35,7 +37,9 @@ export function claudeCliBackend(model = "haiku", run: Runner = runCli): LlmBack
     id: "claude-code",
     label: `${name} (${model})`,
     complete<T>(req: CompleteRequest<T>): Promise<T> {
-      const args = [
+      // The system prompt carries the user's notes, which a command line would show to every
+      // user's `ps`; it goes in a private file in the call's temp folder instead.
+      const args = (promptFile: string) => [
         "-p",
         "--output-format",
         "json",
@@ -49,14 +53,18 @@ export function claudeCliBackend(model = "haiku", run: Runner = runCli): LlmBack
         "--setting-sources",
         "",
         "--no-session-persistence",
-        "--system-prompt",
-        req.system,
+        "--system-prompt-file",
+        promptFile,
       ];
-      return inTempDir((_, cwd) =>
-        validated(name, req.schema, async () => {
-          const r = await run("claude", args, { input: req.prompt, cwd }).catch((err: Error) => {
-            throw new Error(`${name} ${err.message}.`);
-          });
+      return inTempDir(async (dir, cwd) => {
+        const promptFile = join(dir, "system-prompt.txt");
+        await writeFile(promptFile, req.system, { mode: 0o600 });
+        return validated(name, req.schema, async () => {
+          const r = await run("claude", args(promptFile), { input: req.prompt, cwd }).catch(
+            (err: Error) => {
+              throw new Error(`${name} ${err.message}.`);
+            },
+          );
           // A failure still prints the JSON envelope, with the reason in `result`.
           const out = envelope.safeParse(parseJson(r.stdout));
           if (out.success && out.data.is_error)
@@ -65,8 +73,8 @@ export function claudeCliBackend(model = "haiku", run: Runner = runCli): LlmBack
             throw failure(lastLine(r.stderr) || `exited with code ${r.exitCode}`);
           if (!out.success) return undefined;
           return out.data.structured_output ?? parseJson(out.data.result ?? "");
-        }),
-      );
+        });
+      });
     },
   };
 }

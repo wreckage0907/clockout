@@ -25,11 +25,91 @@ export type Runner = (
 ) => Promise<Ran>;
 
 /**
+ * What an agent CLI may inherit from Clockout's environment: an allowlist, not a blocklist, so a
+ * secret Clockout holds (or one added to the shell tomorrow) never reaches a model that has just
+ * read text from a calendar or a PR title. Only what the CLI needs to start, find its own
+ * login and reach its provider.
+ */
+const PASS_EXACT = new Set([
+  // Finding programs, the user's home and the terminal.
+  ...[
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "TERM",
+    "COLORTERM",
+    "NO_COLOR",
+    "LANG",
+    "LANGUAGE",
+  ],
+  ...["TMPDIR", "TMP", "TEMP", "TZ"],
+  // Windows equivalents of the above.
+  ...["SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "USERPROFILE", "USERNAME", "APPDATA"],
+  ...["LOCALAPPDATA", "PROGRAMDATA", "PROGRAMFILES", "HOMEDRIVE", "HOMEPATH"],
+  // Networks behind a proxy or a private certificate authority.
+  ...["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"],
+  ...[
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "NODE_EXTRA_CA_CERTS",
+    "REQUESTS_CA_BUNDLE",
+    "CURL_CA_BUNDLE",
+  ],
+  // Version managers whose shims start the CLI.
+  ...["NVM_DIR", "VOLTA_HOME", "PNPM_HOME", "ASDF_DIR", "ASDF_DATA_DIR", "MISE_DATA_DIR"],
+  // The CLIs' own config folders and providers without a common prefix (Pi's list, `pi --help`).
+  ...["CLAUDE_CONFIG_DIR", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_GATEWAY_ID", "AI_GATEWAY_API_KEY"],
+]);
+const PASS_PREFIX = [
+  "LC_",
+  "XDG_",
+  // Claude Code, opencode and Pi's own settings, and the providers they sign in to.
+  ...["CLAUDE_", "ANTHROPIC_", "OPENCODE_", "PI_", "OPENAI_", "OPENROUTER_", "AZURE_", "AWS_"],
+  ...["GOOGLE_", "GEMINI_", "VERTEX_", "GROQ_", "MISTRAL_", "DEEPSEEK_", "XAI_", "TOGETHER_"],
+  ...["FIREWORKS_", "CEREBRAS_", "OLLAMA_", "MOONSHOT_", "ZAI_", "MINIMAX_", "NVIDIA_"],
+];
+/** Any other provider's key or endpoint, e.g. FOO_API_KEY, as Pi and opencode read them. */
+const PASS_PATTERN = /^[A-Z0-9]+(?:_[A-Z0-9]+)*_(?:API_KEY|BASE_URL|API_BASE)$/;
+
+/** Held by Clockout itself, so never passed on, even where a pattern above would match. */
+const WITHHELD_EXACT = new Set([
+  ...["GITHUB_TOKEN", "GH_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"],
+]);
+const WITHHELD_PREFIX = ["CLOCKOUT_"];
+
+/**
+ * The environment for an agent CLI: `base` (Clockout's own) cut down to what the CLI needs.
+ * `withheld` names more variables to hold back, like the one the timesheet token is read from.
+ */
+export function agentEnv(
+  base: NodeJS.ProcessEnv = process.env,
+  withheld: readonly string[] = [],
+): Record<string, string> {
+  const held = new Set([...WITHHELD_EXACT, ...withheld.map((n) => n.toUpperCase())]);
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(base)) {
+    if (value === undefined) continue;
+    const name = key.toUpperCase(); // Windows spells it Path
+    if (held.has(name) || WITHHELD_PREFIX.some((p) => name.startsWith(p))) continue;
+    if (
+      PASS_EXACT.has(name) ||
+      PASS_PREFIX.some((p) => name.startsWith(p)) ||
+      PASS_PATTERN.test(name)
+    )
+      out[key] = value;
+  }
+  return out;
+}
+
+/**
  * Runs an agent CLI in its own process group, so that on a timeout, or when Clockout quits
  * (Ctrl+C, a closed terminal), the whole group goes: agent CLIs start processes of their own,
- * which would otherwise keep running and keep the output open.
+ * which would otherwise keep running and keep the output open. It gets `agentEnv`, plus
+ * `opts.env`; `withheld` names further variables of Clockout's that must not reach it.
  */
-export function cliRunner(timeoutMs: number): Runner {
+export function cliRunner(timeoutMs: number, withheld: readonly string[] = []): Runner {
   return async (cmd, args, { input, cwd, env }) => {
     const sub = execa(cmd, args, {
       input,
@@ -37,7 +117,8 @@ export function cliRunner(timeoutMs: number): Runner {
       reject: false,
       detached: true,
       cleanup: false,
-      ...(env ? { env } : {}),
+      extendEnv: false,
+      env: { ...agentEnv(process.env, withheld), ...env },
     });
     const pid = sub.pid;
     if (pid) helpers.add(pid);

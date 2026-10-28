@@ -76,11 +76,10 @@ const taskNames = z
     meeting: z.string().min(1).optional(),
   })
   .describe("Default task names by kind of block");
-const HELPERS = ["claude-code", "codex", "opencode", "pi"] as const;
+const HELPERS = ["claude-code", "opencode", "pi"] as const;
 /** The agent CLIs that can be the AI helper, by config name. */
 export const HELPER_NAMES: Record<(typeof HELPERS)[number], string> = {
   "claude-code": "Claude Code",
-  codex: "Codex",
   opencode: "opencode",
   pi: "Pi",
 };

@@ -36,9 +36,27 @@ export function parseConfig(text: string, file = "config.toml"): Config {
   }
   if (raw && typeof raw === "object" && Object.keys(raw).length === 0)
     throw new ConfigError(file, "It's empty. Run `clockout init --force` to write one.");
+  dropRemovedHelper(raw);
   const result = configSchema.safeParse(raw);
   if (!result.success) throw new ConfigError(file, z.prettifyError(result.error));
   return result.data;
+}
+
+let warnedRemovedHelper = false;
+
+/**
+ * The Codex AI helper was removed (docs/plan.md, "Later"). A config that still names it keeps
+ * working on "auto", with one line saying so; the next save writes the new value.
+ */
+function dropRemovedHelper(raw: unknown): void {
+  const ai = raw && typeof raw === "object" ? (raw as { ai?: unknown }).ai : undefined;
+  if (!ai || typeof ai !== "object" || (ai as { backend?: unknown }).backend !== "codex") return;
+  (ai as { backend: string }).backend = "auto";
+  if (warnedRemovedHelper) return;
+  warnedRemovedHelper = true;
+  console.error(
+    'warning: the Codex AI helper was removed; using ai.backend = "auto" instead. Set it to claude-code, opencode, pi or none in config.toml to silence this.',
+  );
 }
 
 /**

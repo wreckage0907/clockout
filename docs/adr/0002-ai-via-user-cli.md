@@ -15,3 +15,7 @@ The MVP backend shells out to the user's installed `claude -p` with `--output-fo
 - No API key needed for the MVP user.
 - Each call has CLI start-up latency, so the whole day goes in one call.
 - Usage counts against the user's plan limits; keep calls few and small.
+
+## Update (2026-10-28)
+
+The Codex helper was built and then removed: no `codex exec` switch turns its shell off, so text from a calendar or PR title could make it read local files. It returns when it can run without tools (docs/plan.md, "Later").

@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfigError, loadConfig, saveConfig } from "../../src/config/load";
 import type { ConfigInput } from "../../src/config/schema";
 
@@ -31,6 +31,23 @@ describe("config files", () => {
     const file = join(dir, "config.toml");
     await saveConfig(file, config);
     expect((await stat(file)).mode & 0o777).toBe(0o600);
+  });
+
+  it("reads the removed Codex AI helper as auto, with one warning", async () => {
+    const file = join(dir, "config.toml");
+    await writeFile(
+      file,
+      '[me]\nname = "Dev"\nemails = ["dev@example.com"]\ntimezone = "UTC"\n\n[ai]\nbackend = "codex"\n',
+    );
+    const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      expect((await loadConfig(file))?.ai.backend).toBe("auto");
+      expect((await loadConfig(file))?.ai.backend).toBe("auto");
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toMatch(/Codex AI helper was removed.*"auto"/);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("returns null when there is no config yet", async () => {

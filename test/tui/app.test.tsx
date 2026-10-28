@@ -323,7 +323,7 @@ describe("day view", () => {
   });
 
   it("says at the start that there's no AI helper, and why", async () => {
-    const noAi = "No AI helper found (Claude Code, Codex, opencode or Pi).";
+    const noAi = "No AI helper found (Claude Code, opencode or Pi).";
     const { ui } = open({ noAi });
     await until(ui.lastFrame, "No AI helper found");
     expect(ui.lastFrame()).toContain("No AI helper: Enter opens the day, / lists commands");
@@ -770,22 +770,22 @@ describe("setup", () => {
   it("offers every agent installed here as the AI helper, and auto says which it uses", async () => {
     const helpers = [
       { id: "claude-code" as const, name: "Claude Code" },
-      { id: "codex" as const, name: "Codex" },
+      { id: "opencode" as const, name: "opencode" },
     ];
     // Saving takes a while, as writing the file does: a second → before it's done still counts.
     const { ui, calls } = await openSetup({ setup: { helpers }, saveDelay: 50 });
     await down(ui, 2); // AI helper
     await until(ui.lastFrame, "using Claude Code");
-    for (const label of ["Auto", "Claude Code", "Codex", "No AI"])
+    for (const label of ["Auto", "Claude Code", "opencode", "No AI"])
       expect(ui.lastFrame()).toContain(label);
     ui.stdin.write(RIGHT); // into the rows: Helper, on Auto
     await tick();
     ui.stdin.write(RIGHT); // → Claude Code
     await tick();
-    ui.stdin.write(RIGHT); // → Codex, before Claude Code is saved
+    ui.stdin.write(RIGHT); // → opencode, before Claude Code is saved
     for (let i = 0; i < 50 && calls.saved.length < 2; i++)
       await new Promise((r) => setTimeout(r, 10));
-    expect((calls.saved as Config[]).map((c) => c.ai.backend)).toEqual(["claude-code", "codex"]);
+    expect((calls.saved as Config[]).map((c) => c.ai.backend)).toEqual(["claude-code", "opencode"]);
   });
 
   it("writes a description prompt on its own page: enter saves, esc leaves it as it was", async () => {
