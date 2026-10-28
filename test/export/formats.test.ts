@@ -49,6 +49,27 @@ describe("timesheet formats", () => {
     expect(toTsv(evil)).toMatch(/\t'=HYPERLINK/);
   });
 
+  it("shows remote images, HTML and links in titles as text, never loading them", () => {
+    const evil = [
+      {
+        ...rows[0],
+        description:
+          '![](https://tracker.example/x.png) <img src="https://t.example/p"> [a](https://b.example)',
+      } as TimesheetRow,
+    ];
+    const line = toMarkdown(evil).split("\n")[2] ?? "";
+    expect(line).toContain("!\\[]\\(https://tracker.example/x.png)");
+    expect(line).not.toMatch(/(^|[^\\])!\[/);
+    expect(line).not.toContain("<img");
+    expect(line).toContain("&lt;img");
+    expect(line).toContain("[a]\\(https://b.example)");
+  });
+
+  it("leaves ordinary text readable in Markdown", () => {
+    const plain = [{ ...rows[0], description: "Fix auth (v2) & ship: a < b" } as TimesheetRow];
+    expect(toMarkdown(plain).split("\n")[2]).toContain("Fix auth (v2) & ship: a &lt; b");
+  });
+
   it("keeps a Markdown row on one line", () => {
     const multi = [{ ...rows[0], description: "one\r\ntwo" } as TimesheetRow];
     expect(toMarkdown(multi).split("\n")[2]).toBe(

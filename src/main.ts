@@ -17,6 +17,7 @@ import {
 } from "./commands/schedule-cli";
 import { runStandup } from "./commands/standup";
 import { tildify } from "./config/paths";
+import { cleanLines } from "./core/text";
 import { errorLogPath, isBug, logError } from "./log";
 
 const program = new Command().name("clockout").description(pkg.description).version(pkg.version);
@@ -197,7 +198,8 @@ try {
 } catch (err) {
   // Expected failures (bad config, no TTY) are Errors with a readable message; no stack trace.
   if (!(err instanceof Error)) throw err;
-  console.error(`clockout: ${err.message}`);
+  // The message can hold text from a server (an OAuth error, a tool name): no escape codes.
+  console.error(`clockout: ${cleanLines(err.message)}`);
   const bug = isBug(err);
   if (bug) console.error("That's a bug in Clockout. Please report it with the details below.");
   if (err.cause !== undefined || bug) {

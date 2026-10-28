@@ -1,4 +1,5 @@
 import type { TaskMapping } from "../config/schema";
+import { cleanLines, cleanText } from "./text";
 import { formatDuration } from "./time";
 import { rowKey } from "./timesheet";
 import type { TimesheetRow } from "./types";
@@ -91,19 +92,20 @@ export function roundHours(h: number): number {
 
 /** Text as stored: rich-text editors save HTML, compare it as plain text. */
 export function plainText(s: string): string {
-  return s
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li)>/gi, "\n")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\s*\n\s*/g, "\n")
-    .trim();
+  // Cleaned last: text from the server must not reach the terminal with escape codes or
+  // invisible format characters in it (including ones an entity just produced).
+  return cleanLines(
+    s
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li)>/gi, "\n")
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, "&"),
+  );
 }
 
 function same(want: Desired, r: RemoteEntry): boolean {
@@ -295,6 +297,11 @@ const hours = (h: number) => formatDuration(h * 60);
 
 /** One line per item, for the CLI and the review screen. */
 export function describeItem(i: PushItem): string {
+  // Remote descriptions, task names and reasons come from the server: one clean line.
+  return cleanText(describe(i));
+}
+
+function describe(i: PushItem): string {
   switch (i.action) {
     case "create":
       return `Add ${hours(i.want.hours)} to ${i.want.label}: ${i.want.description}`;

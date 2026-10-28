@@ -126,6 +126,18 @@ describe("arguments", () => {
   });
 });
 
+describe("error text", () => {
+  it("never carries escape codes or invisible characters to the terminal", async () => {
+    // The unknown command's name is echoed in the message, like text from a server would be.
+    const r = await set.run(["x\u001b]52;c;ZXZpbA==\u0007\u001b[2Jy‮z"]);
+    expect(r.code).toBe(1);
+    expect(r.stdout).toBe("");
+    expect(reason(r.stderr)).toMatch(/^clockout: Unknown command "xyz"\./);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: that's what the test is about
+    expect(r.stderr).not.toMatch(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f‮]/);
+  });
+});
+
 describe("files it can't write", () => {
   it("says why, and where the details are", async () => {
     const r = await set.run(["export", DATE, "-o", join(set.home, "missing", "x.csv")]);

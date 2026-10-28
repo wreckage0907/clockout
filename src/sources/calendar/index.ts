@@ -1,6 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import ical, { type Attendee, type VEvent } from "node-ical";
+import ical, { type Attendee, type CalendarComponent, type VEvent } from "node-ical";
 import type { Activity, Attendance } from "../../core/types";
 import type { Detected, Source } from "../types";
 
@@ -12,10 +12,49 @@ export interface CalendarConfig {
 
 export type IcsFetcher = (url: string) => Promise<string>;
 
+/** A calendar of meetings is far below this; a bigger feed is a mistake or an attack. */
+export const MAX_FEED_BYTES = 10 * 1024 * 1024;
+/** Most instances of one event kept for a day (an hourly event is 24). */
+export const MAX_INSTANCES_PER_EVENT = 48;
+/** Most meetings kept for a day. */
+export const MAX_MEETINGS_PER_DAY = 500;
+
+const tooBig = () =>
+  new Error(
+    "Calendar: the calendar feed is larger than 10 MB, which is too big for a calendar. Check that the address is your calendar's iCal feed.",
+  );
+
+/** The body as text, stopping at the size limit instead of buffering what a server keeps sending. */
+async function readCapped(res: Response): Promise<string> {
+  const declared = Number(res.headers.get("content-length"));
+  if (declared > MAX_FEED_BYTES) {
+    await res.body?.cancel().catch(() => undefined);
+    throw tooBig();
+  }
+  if (!res.body) return "";
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for await (const chunk of res.body) {
+    size += chunk.byteLength;
+    if (size > MAX_FEED_BYTES) {
+      await res.body.cancel().catch(() => undefined);
+      throw tooBig();
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 /** Downloads the feed. Errors never include the URL: it's a secret. */
 export async function fetchIcs(url: string): Promise<string> {
   if (url.startsWith("file:")) {
-    return readFile(fileURLToPath(url), "utf8").catch(() => {
+    const file = fileURLToPath(url);
+    const size = await stat(file).then(
+      (st) => st.size,
+      () => 0,
+    );
+    if (size > MAX_FEED_BYTES) throw tooBig();
+    return readFile(file, "utf8").catch(() => {
       throw new Error("Calendar: couldn't read the local .ics file");
     });
   }
@@ -39,7 +78,8 @@ export async function fetchIcs(url: string): Promise<string> {
       `Calendar: the feed returned HTTP ${res.status}. If you reset the secret address, run \`clockout init\` again.`,
     );
   }
-  return res.text().catch((err: unknown) => {
+  return readCapped(res).catch((err: unknown) => {
+    if (err instanceof Error && err.message === tooBig().message) throw err;
     throw failed(err);
   });
 }
@@ -63,19 +103,38 @@ export function createCalendarSource(fetcher: IcsFetcher = fetchIcs): Source<Cal
     detect: async (): Promise<Detected | null> => null,
     async *collect(range, cfg, ctx) {
       const me = ctx.config.me.emails.map((e) => e.toLowerCase());
-      const data = ical.parseICS(checkIcs(await fetcher(cfg.url)));
-      for (const item of Object.values(data)) {
+      const parsed = parseFeed(checkIcs(await fetcher(cfg.url)));
+      let skipped = parsed.skipped;
+      let kept = 0;
+      for (const item of parsed.items) {
         if (item?.type !== "VEVENT" || item.status === "CANCELLED") continue;
-        const instances = ical.expandRecurringEvent(item, {
-          from: range.from,
-          to: range.to,
-          expandOngoing: true,
-        });
+        // One invite can't break the calendar: a repeat rule that fires every second or minute
+        // (a flood of meetings), or one the library can't expand, skips that event only.
+        if (repeatsTooOften(item)) {
+          skipped++;
+          continue;
+        }
+        let instances: ReturnType<typeof ical.expandRecurringEvent>;
+        try {
+          instances = ical.expandRecurringEvent(item, {
+            from: range.from,
+            to: range.to,
+            expandOngoing: true,
+          });
+        } catch {
+          skipped++;
+          continue;
+        }
+        let fromEvent = 0;
         for (const inst of instances) {
           if (inst.isFullDay || inst.event.status === "CANCELLED") continue;
           const start = new Date(inst.start.getTime());
           const end = new Date(inst.end.getTime());
           if (!(start < range.to && end > range.from) || end <= start) continue;
+          if (fromEvent >= MAX_INSTANCES_PER_EVENT || kept >= MAX_MEETINGS_PER_DAY) {
+            skipped++;
+            break;
+          }
           const others = attendeeEmails(inst.event).filter((e) => !me.includes(e));
           const a: Activity = {
             source: "calendar",
@@ -88,14 +147,53 @@ export function createCalendarSource(fetcher: IcsFetcher = fetchIcs): Source<Cal
             refs: [`event:${inst.event.uid}`],
           };
           if (others.length) a.attendees = others;
+          fromEvent++;
+          kept++;
           yield a;
         }
       }
+      if (skipped)
+        ctx.warn?.(
+          `Calendar: skipped ${skipped} event${skipped === 1 ? "" : "s"} that repeat every second or minute, can't be read, or are more than a day can hold.`,
+        );
     },
   };
 }
 
 export const calendar = createCalendarSource();
+
+/**
+ * The feed's components. One event the parser rejects (a repeat rule it can't read) fails the
+ * whole parse, so then each event is parsed alone, with the feed's time zones, and the bad ones
+ * are counted and left out.
+ */
+export function parseFeed(text: string): { items: CalendarComponent[]; skipped: number } {
+  try {
+    return { items: defined(Object.values(ical.parseICS(text))), skipped: 0 };
+  } catch {
+    const events = text.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/gi) ?? [];
+    const head = text
+      .replace(/BEGIN:VEVENT[\s\S]*?END:VEVENT/gi, "")
+      .replace(/END:VCALENDAR\s*$/i, "");
+    const items: CalendarComponent[] = [];
+    let skipped = 0;
+    for (const ev of events) {
+      try {
+        items.push(...defined(Object.values(ical.parseICS(`${head}${ev}\r\nEND:VCALENDAR\r\n`))));
+      } catch {
+        skipped++;
+      }
+    }
+    return { items, skipped };
+  }
+}
+
+const defined = <T>(xs: (T | undefined)[]): T[] => xs.filter((x): x is T => x !== undefined);
+
+/** A repeat rule by the second or minute: no real meeting does that, and it floods the day. */
+function repeatsTooOften(event: VEvent): boolean {
+  return /FREQ=(SECONDLY|MINUTELY)/i.test(String(event.rrule?.toString() ?? ""));
+}
 
 /**
  * Your RSVP. Events with no guest list are blocks on your own calendar (lunch, gym, focus time):

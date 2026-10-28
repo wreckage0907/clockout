@@ -33,7 +33,16 @@ export async function collect(
   log?: LogError,
 ): Promise<Collected> {
   const range = dayRange(date, config.me.timezone);
-  const full: SourceContext = { config, homeDir: homedir(), env: process.env, ...ctx };
+  const warnings: string[] = [];
+  const full: SourceContext = {
+    config,
+    homeDir: homedir(),
+    env: process.env,
+    warn: (message) => {
+      if (!warnings.includes(message)) warnings.push(message);
+    },
+    ...ctx,
+  };
   const results = await Promise.allSettled(
     config.sources.map(async (cfg) => {
       const source = lookup(cfg.type);
@@ -44,7 +53,6 @@ export async function collect(
     }),
   );
   const activities: Activity[] = [];
-  const warnings: string[] = [];
   const ok = new Set<string>();
   results.forEach((r, i) => {
     if (r.status === "fulfilled") {

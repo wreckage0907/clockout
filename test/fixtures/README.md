@@ -12,5 +12,6 @@ Synthetic data for one working day, **Fri 16 Oct 2026, Asia/Kolkata** (UTC+05:30
 | `github/contributions-2026-10-16.json` | GraphQL `viewer.contributionsCollection` | PRs acme/api#87 and clockout#48 opened; review of acme/api#212 (comments 16:40–16:52, submitted 16:55); `viewer.issueComments`: one on acme/api#90 during the morning session, one on #212, one the day before; commit counts |
 | `next-pms/*.json` | Responses of a Frappe site running next-pms (shapes recorded from a local test site) | Week of 12 Oct: one entry on Mon; on the 16th an entry sent before (HTML description), an approved standup and a rejected row. Two tasks to pick from; an employee; a backdating error; OAuth server metadata |
 | `ics/calendar.ics` | Google Calendar secret iCal address | Daily standup 09:30 (recurring, accepted, cancelled on 15 Oct); design sync 15:00 (tentative, overlaps coding); vendor demo 17:00 (declined); all-day event; focus block 17:30 (no guests, so it's asked about); Acme sync 18:00 (no response) |
+| `ics/hostile.ics` | A feed with hostile invites | A normal meeting on the 16th; events repeating every second and every minute; an hourly one; one with 288 slots a day; one with an unreadable `RRULE` (which fails the whole parse) |
 
 Your address in the calendar is `dev@example.com`. Lunch 12:15–14:00 is an intentional gap.
