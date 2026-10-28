@@ -93,7 +93,9 @@ export async function chooseBackend(
   if (backend === "none") return { backend: null, notice: null };
   // Variables of ours that no helper gets: the timesheet token's own, beside the fixed ones.
   const withheld =
-    config.timesheet && "token_env" in config.timesheet ? [config.timesheet.token_env] : [];
+    config.timesheet && "token_env" in config.timesheet && config.timesheet.token_env
+      ? [config.timesheet.token_env]
+      : [];
   const wanted = backend === "auto" ? BACKENDS : BACKENDS.filter((b) => b.id === backend);
   for (const b of wanted) {
     if (await cliVersion(b.command, env))
