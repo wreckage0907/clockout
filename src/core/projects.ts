@@ -1,4 +1,5 @@
 import type { Config } from "../config/schema";
+import { unsafePatternReason } from "./regex";
 import type { Activity, Day } from "./types";
 
 /** Lunch and other breaks: not billed, never on the sheet. */
@@ -50,6 +51,8 @@ function safeRegex(source: string): RegExp | null {
   if (!regexCache.has(source)) {
     let re: RegExp | null = null;
     try {
+      // Config is checked when it's read; this covers a rule that got here some other way.
+      if (unsafePatternReason(source)) throw new Error("unsafe pattern");
       // Allow a leading (?i) as in most regex dialects.
       re = source.startsWith("(?i)") ? new RegExp(source.slice(4), "i") : new RegExp(source);
     } catch {

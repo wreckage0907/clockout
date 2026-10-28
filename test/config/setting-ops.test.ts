@@ -239,6 +239,114 @@ describe("standup style by chat", () => {
   });
 });
 
+describe("export destinations by chat", () => {
+  const notion = { mcp: "notion", tool: "append_block", arguments: { content: "{text}" } };
+  const propose = (to: unknown): SettingOp => ({
+    op: "export_format",
+    name: "daily-note",
+    type: "markdown",
+    to: to as never,
+  });
+  const base = {
+    ...config,
+    mcp: [{ name: "notion", url: "https://mcp.example.com/mcp" }],
+    exports: [{ name: "daily-note", type: "markdown" as const, merge: true, to: notion }],
+  };
+  const scheduled = {
+    ...base,
+    schedule: [
+      {
+        name: "evening",
+        at: "18:30",
+        day: "today" as const,
+        kind: "export" as const,
+        format: "daily-note",
+        allow_open: false,
+      },
+    ],
+  };
+
+  it("shows where the export goes whenever the proposal sets it", () => {
+    expect(describeSettings([propose(notion)])).toEqual([
+      'Export daily-note: Markdown · sent to notion · append_block (content="{text}")',
+    ]);
+    const elsewhere = { mcp: "slack", tool: "post", arguments: { c: "{text}", x: "other" } };
+    expect(describeSettings([propose(elsewhere)])[0]).toContain(
+      'sent to slack · post (c="{text}", x="other")',
+    );
+  });
+
+  it("keeps the destination it had when the update leaves it out", () => {
+    const r = applySettings(base, [propose(undefined)]);
+    expect(r.errors).toEqual([]);
+    expect(r.config.exports[0]?.to).toEqual(notion);
+    const files = {
+      ...base,
+      exports: [
+        {
+          name: "daily-note",
+          type: "markdown" as const,
+          merge: true,
+          to: { file: "~/Vault/{date}.md", append: true },
+        },
+      ],
+    };
+    expect(applySettings(files, [propose(undefined)]).config.exports[0]?.to).toEqual({
+      file: "~/Vault/{date}.md",
+      append: true,
+    });
+  });
+
+  it("changes the destination of an export no job uses", () => {
+    const r = applySettings(base, [propose({ mcp: "notion", tool: "other" })]);
+    expect(r.errors).toEqual([]);
+    expect(r.config.exports[0]?.to).toMatchObject({ tool: "other" });
+  });
+
+  it("refuses to repoint an export a scheduled job uses", () => {
+    const r = applySettings(scheduled, [propose({ mcp: "notion", tool: "other" })]);
+    expect(r.errors).toEqual([
+      "The export “daily-note” is used by a scheduled job, so its destination can't be changed from here. Change it in config.toml.",
+    ]);
+    expect(r.config.exports[0]?.to).toEqual(notion);
+  });
+
+  it("refuses to give a scheduled export a destination it had none of", () => {
+    const none = {
+      ...scheduled,
+      exports: [{ name: "daily-note", type: "markdown" as const, merge: true }],
+    };
+    const r = applySettings(none, [propose(notion)]);
+    expect(r.errors).toHaveLength(1);
+    expect(r.config.exports[0]).not.toHaveProperty("to");
+  });
+
+  it("lets a scheduled export be updated when its destination is unchanged or left out", () => {
+    expect(applySettings(scheduled, [propose(notion)]).errors).toEqual([]);
+    expect(applySettings(scheduled, [propose(undefined)]).errors).toEqual([]);
+    expect(applySettings(scheduled, [propose(undefined)]).config.exports[0]?.to).toEqual(notion);
+  });
+});
+
+describe("project rule title patterns", () => {
+  it("refuses a title that can backtrack without end", () => {
+    const r = applySettings(config, [{ op: "project_rule", name: "Sync", title: "(a+)+$" }]);
+    expect(r.errors).toEqual([
+      "projects.0.match.title: the title pattern has a repeat inside a repeat, which can hang the app",
+    ]);
+  });
+
+  it("refuses a very long title pattern, and takes an ordinary one", () => {
+    expect(
+      applySettings(config, [{ op: "project_rule", name: "Sync", title: "a".repeat(201) }]).errors,
+    ).toHaveLength(1);
+    expect(
+      applySettings(config, [{ op: "project_rule", name: "Sync", title: "^(daily|weekly) sync" }])
+        .errors,
+    ).toEqual([]);
+  });
+});
+
 describe("export formats by chat", () => {
   const harvest: SettingOp = {
     op: "export_format",

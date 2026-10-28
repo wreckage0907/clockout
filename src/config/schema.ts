@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { unsafePatternReason } from "../core/regex";
 
 const clockTime = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -129,7 +130,13 @@ const projectRule = z.object({
       /** "owner/name" */
       repo: z.string().optional(),
       /** Regular expression tested against meeting and session titles. */
-      title: z.string().optional(),
+      title: z
+        .string()
+        .superRefine((t, ctx) => {
+          const why = unsafePatternReason(t);
+          if (why) ctx.addIssue({ code: "custom", message: `the title pattern ${why}` });
+        })
+        .optional(),
       /** e.g. "acme.com": meetings with attendees from this domain. */
       attendee_domain: z.string().optional(),
     })
