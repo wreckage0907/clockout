@@ -91,8 +91,6 @@ src/files.ts      readable reasons a file couldn't be written
 
 ## Commits
 
-Commit straight to `main` and push; there are no pull requests (no one else reviews). CI still runs on every push.
-
 1. Start from an up-to-date `main`: `git switch main && git pull`.
 2. Commit with Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`). The pre-commit hook (lefthook) runs Biome, the typecheck and the tests.
 3. `git push`, then check CI (`gh run watch`). Fix failures with a follow-up commit.
