@@ -30,13 +30,13 @@ or the address.
 
 Every request carries `Authorization: Bearer <token>` and is JSON. Paths are under `url`.
 
-| Request | Body | Answer |
-|---|---|---|
-| `GET /entries?date=YYYY-MM-DD` | | `{ "entries": [Entry], "closed"?: "why" }` |
-| `GET /tasks?search=text` | | `{ "tasks": [{ "id", "subject", "project" }] }`, best matches first; an empty search lists them all |
-| `POST /entries` | `{ "date", "task", "hours", "description" }` | 201 `{ "id" }` |
-| `PUT /entries/{id}` | `{ "date", "task", "hours", "description" }` | 200 |
-| `DELETE /entries/{id}` | | 204 |
+| Request                        | Body                                         | Answer                                                                                              |
+| ------------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `GET /entries?date=YYYY-MM-DD` |                                              | `{ "entries": [Entry], "closed"?: "why" }`                                                          |
+| `GET /tasks?search=text`       |                                              | `{ "tasks": [{ "id", "subject", "project" }] }`, best matches first; an empty search lists them all |
+| `POST /entries`                | `{ "date", "task", "hours", "description" }` | 201 `{ "id" }`                                                                                      |
+| `PUT /entries/{id}`            | `{ "date", "task", "hours", "description" }` | 200                                                                                                 |
+| `DELETE /entries/{id}`         |                                              | 204                                                                                                 |
 
 `Entry` is `{ "id", "task", "hours", "description", "locked"?: "why" }`: your entries on that
 date, any task. `id` may be a string or a number. Hours are decimal (`1.25`). A description may
@@ -52,12 +52,12 @@ Any refusal is a non-2xx status with `{ "error": "a sentence for the user" }`, s
 written next to the row it's about (e.g. 422 `{ "error": "There's no task TASK-9." }`). One
 refused entry doesn't stop the others.
 
-| Status | Clockout says |
-|---|---|
-| 401, 403 | the token (in config.toml, or in `token_env`'s variable) was refused: check it or get a new one |
-| 404 on a read | there's no timesheet API at `url` |
-| 5xx | the system isn't answering; try again later (with its `error`, if any) |
-| anything else | its `error` |
+| Status        | Clockout says                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------- |
+| 401, 403      | the token (in config.toml, or in `token_env`'s variable) was refused: check it or get a new one |
+| 404 on a read | there's no timesheet API at `url`                                                               |
+| 5xx           | the system isn't answering; try again later (with its `error`, if any)                          |
+| anything else | its `error`                                                                                     |
 
 ## What Clockout does with it
 

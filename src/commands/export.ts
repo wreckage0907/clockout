@@ -49,6 +49,7 @@ export async function runExport(
   const today = resolveDate(undefined, tz);
   // A range may run past today (the whole month, mid-month); it stops at today.
   const end = resolveDate(opts.to ?? opts.from ?? dateInput, tz, undefined, { future: true });
+  // biome-ignore lint/complexity/useMathMinMax: these are YYYY-MM-DD strings; Math.min gives NaN
   const to = end > today ? today : end;
   const from = resolveDate(opts.from ?? (opts.to ? to : dateInput), tz);
   if (to < from) throw new Error(`--to (${to}) is before --from (${from}).`);

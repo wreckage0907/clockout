@@ -8,7 +8,7 @@ Clockout already has settings for most preferences: how descriptions read (`[des
 standup reads (`[standup]`), project rules, task names, export formats, and the AI changed them
 from the chat bar ([ADR 0007](0007-setup-from-the-chat-bar.md), [ADR 0009](0009-change-clockout-through-config.md)).
 What's left over is the small stuff that has no setting: "the reader of my timesheet isn't
-technical", "we spell it *frontend*", "never mention the client's name in a standup". Said once,
+technical", "we spell it _frontend_", "never mention the client's name in a standup". Said once,
 it should stick, without a new schema field for every possible preference and without the person
 repeating it every day.
 

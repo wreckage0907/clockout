@@ -105,18 +105,17 @@
 
 **🪴 Usage**
 
-1. Install it:
+1.  Install it:
 
-       npm install --global clockout-cli
+        npm install --global clockout-cli
 
-2. Find your tools and create a config:
+2.  Find your tools and create a config:
 
-       clockout init
+        clockout init
 
-3. Review today:
+3.  Review today:
 
-       clockout
-
+        clockout
 <br>
 
 **🛠️ From source**
@@ -142,14 +141,14 @@ becomes `node dist/cli.js` when you run it from a clone.
 
 <samp>
 
-| | Step | What happens |
-|---|---|---|
-| **1** | **Run `init`** | Clockout detects local agent logs, GitHub and an AI helper, then asks for your time zone, working hours and calendar. |
-| **2** | **Open the day** | Press Enter to expand the timesheet cards. Move with **↑ ↓**, edit a duration with **Enter**, and nudge it with **− / +**. Click checkboxes or press **Space** to select several; **Shift-click** (or **Option-click**, e.g. inside herdr) a card to tick it, or a range once one is ticked. |
-| **3** | **Say what is wrong** | Type or dictate a correction. Review the proposed operations, **Enter** to apply, **Esc** to revise, **Ctrl+Z** to undo. |
-| **4** | **Take the sheet** | **Ctrl+Y** copies tab-separated rows (or your default export), or only the checked rows when any are selected; `/copy md`, `/copy csv` or `/copy <your export>` copy another format. The selection toolbar can also map or remove several cards together. Use `export` for a file, another format or a range of dates. |
-| **5** | **Say your standup** | `clockout standup` (or `/standup` in the app) writes it from the previous working day, today's meetings and your open PRs, and copies it. Blockers are only what you add: `-b "waiting on API keys"` or `/standup waiting on API keys`. |
-| **6** | **Pick another day** | Run `yesterday` or `day 2026-10-16`; in the review screen, click the date or use **PgUp / PgDn**. |
+|       | Step                  | What happens                                                                                                                                                                                                                                                                                                           |
+| ----- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | **Run `init`**        | Clockout detects local agent logs, GitHub and an AI helper, then asks for your time zone, working hours and calendar.                                                                                                                                                                                                  |
+| **2** | **Open the day**      | Press Enter to expand the timesheet cards. Move with **↑ ↓**, edit a duration with **Enter**, and nudge it with **− / +**. Click checkboxes or press **Space** to select several; **Shift-click** (or **Option-click**, e.g. inside herdr) a card to tick it, or a range once one is ticked.                           |
+| **3** | **Say what is wrong** | Type or dictate a correction. Review the proposed operations, **Enter** to apply, **Esc** to revise, **Ctrl+Z** to undo.                                                                                                                                                                                               |
+| **4** | **Take the sheet**    | **Ctrl+Y** copies tab-separated rows (or your default export), or only the checked rows when any are selected; `/copy md`, `/copy csv` or `/copy <your export>` copy another format. The selection toolbar can also map or remove several cards together. Use `export` for a file, another format or a range of dates. |
+| **5** | **Say your standup**  | `clockout standup` (or `/standup` in the app) writes it from the previous working day, today's meetings and your open PRs, and copies it. Blockers are only what you add: `-b "waiting on API keys"` or `/standup waiting on API keys`.                                                                                |
+| **6** | **Pick another day**  | Run `yesterday` or `day 2026-10-16`; in the review screen, click the date or use **PgUp / PgDn**.                                                                                                                                                                                                                      |
 
 Anything you'd rather say once ("remember the reader isn't technical", "remember we spell it
 frontend") is kept as a memory: Clockout hands it to the AI helper with every description and

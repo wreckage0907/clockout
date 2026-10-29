@@ -1,6 +1,6 @@
 # Clockout — research notes
 
-Collected 2026-10-18. Sources were checked on the web (via Firecrawl) and, for agent storage, on the dev machine (structure only, never message content or credentials). Rows marked *docs* were not checked locally.
+Collected 2026-10-18. Sources were checked on the web (via Firecrawl) and, for agent storage, on the dev machine (structure only, never message content or credentials). Rows marked _docs_ were not checked locally.
 
 ---
 
@@ -8,18 +8,18 @@ Collected 2026-10-18. Sources were checked on the web (via Firecrawl) and, for a
 
 ### General auto time trackers
 
-| Tool | Form | How it collects | Project mapping | Meetings | Privacy | Price |
-|---|---|---|---|---|---|---|
-| Timely (AutoSheet) | Desktop + web | OS window/doc titles; OAuth to calendar, Gmail, Zoom, GitHub, Jira | Per-user ML; drafts a full timesheet each morning for review | Events → entries; no RSVP check | Cloud | $9–28/user/mo |
-| Memtime | Desktop | Window titles, files, email subjects, tabs | Manual drag or auto-log | Via connected apps | **Local only** | ~€12–25/mo |
-| Rize | Desktop + browser extension | Foreground app/URL, calendar, Linear/Asana | AI + user rules | Auto-maps meetings to projects | Cloud | $10–40/mo + AI credits |
-| Timing | macOS app | App, window title, path, URL | Path/title/URL rules, first match wins; **has an MCP server** for Claude Code/Codex | — | Local | $9–16/mo |
-| Toggl Track | Web + desktop | Timeline of apps/sites | Rules by dragging over a window | Calendar auto-track; tracked/untracked "pills" | Cloud | Free–$20 |
-| Clockify | Desktop | Record per app/tab switch | Manual conversion | Separate | Local, 45-day retention | Free+ |
-| WakaTime | Editor plugins + CLI | Heartbeats every ~2 min, merged with a 15-min timeout; **Claude Code plugin via hooks** tags "AI coding" | Repo/folder | Google Calendar | Cloud | Free/paid |
-| ActivityWatch | Open-source desktop | Local server + "watchers" (window, AFK, browser, editor) | Regex category rules | None | Local | Free |
-| Tempo (Jira) | Jira app | Calendar, Jira, IDE, GitHub webhooks | Jira key in commit/branch; priority calendar > Jira > code; "expand suggestions" stretches blocks to fill the day | Drops Private/Free events; no RSVP check | Cloud | Per Jira user |
-| Harvest / Everhour / 7pace | Web | Manual timers or manually pulled calendar events | Manual / issue = task | Manual | Cloud | ~$8–11/user |
+| Tool                       | Form                        | How it collects                                                                                          | Project mapping                                                                                                   | Meetings                                       | Privacy                 | Price                  |
+| -------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ----------------------- | ---------------------- |
+| Timely (AutoSheet)         | Desktop + web               | OS window/doc titles; OAuth to calendar, Gmail, Zoom, GitHub, Jira                                       | Per-user ML; drafts a full timesheet each morning for review                                                      | Events → entries; no RSVP check                | Cloud                   | $9–28/user/mo          |
+| Memtime                    | Desktop                     | Window titles, files, email subjects, tabs                                                               | Manual drag or auto-log                                                                                           | Via connected apps                             | **Local only**          | ~€12–25/mo             |
+| Rize                       | Desktop + browser extension | Foreground app/URL, calendar, Linear/Asana                                                               | AI + user rules                                                                                                   | Auto-maps meetings to projects                 | Cloud                   | $10–40/mo + AI credits |
+| Timing                     | macOS app                   | App, window title, path, URL                                                                             | Path/title/URL rules, first match wins; **has an MCP server** for Claude Code/Codex                               | —                                              | Local                   | $9–16/mo               |
+| Toggl Track                | Web + desktop               | Timeline of apps/sites                                                                                   | Rules by dragging over a window                                                                                   | Calendar auto-track; tracked/untracked "pills" | Cloud                   | Free–$20               |
+| Clockify                   | Desktop                     | Record per app/tab switch                                                                                | Manual conversion                                                                                                 | Separate                                       | Local, 45-day retention | Free+                  |
+| WakaTime                   | Editor plugins + CLI        | Heartbeats every ~2 min, merged with a 15-min timeout; **Claude Code plugin via hooks** tags "AI coding" | Repo/folder                                                                                                       | Google Calendar                                | Cloud                   | Free/paid              |
+| ActivityWatch              | Open-source desktop         | Local server + "watchers" (window, AFK, browser, editor)                                                 | Regex category rules                                                                                              | None                                           | Local                   | Free                   |
+| Tempo (Jira)               | Jira app                    | Calendar, Jira, IDE, GitHub webhooks                                                                     | Jira key in commit/branch; priority calendar > Jira > code; "expand suggestions" stretches blocks to fill the day | Drops Private/Free events; no RSVP check       | Cloud                   | Per Jira user          |
+| Harvest / Everhour / 7pace | Web                         | Manual timers or manually pulled calendar events                                                         | Manual / issue = task                                                                                             | Manual                                         | Cloud                   | ~$8–11/user            |
 
 ### Developer / AI-agent specific
 
@@ -36,7 +36,7 @@ Collected 2026-10-18. Sources were checked on the web (via Firecrawl) and, for a
 
 ### What users complain about
 
-- Trackers see the *app*, not the *client or reason* ("I spend time in notepad++ but it won't tie it to the case").
+- Trackers see the _app_, not the _client or reason_ ("I spend time in notepad++ but it won't tie it to the case").
 - Review overhead: "if it's not 99% automatic and 99% correct you're not saving me time".
 - Cold start: ML tools need weeks of manual logging first.
 - Price and AI-credit metering; cloud privacy; platform lock-in (Mac-only, Jira-only, one calendar only).
@@ -64,18 +64,18 @@ Collected 2026-10-18. Sources were checked on the web (via Firecrawl) and, for a
 
 ## 2. Where coding agents store sessions
 
-| Agent | Path | Format | Time/project fields | Effort |
-|---|---|---|---|---|
-| Claude Code | `~/.claude/projects/<slug>/<sessionId>.jsonl` (+ `<sessionId>/subagents/`) | JSONL | `timestamp`, `cwd`, `gitBranch`, `sessionId`, `isSidechain`; `ai-title` gives a title. **Transcripts are deleted after ~30 days by default (`cleanupPeriodDays`).** | Easy |
-| Codex CLI | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (sometimes `.zst`) + `~/.codex/state_5.sqlite` | JSONL + SQLite | `session_meta` (`cwd`, `git.branch`, `git.repository_url`); `task_started/complete` with `duration_ms`; SQLite `threads` table has `cwd, created_at_ms, updated_at_ms, title, first_user_message, git_branch, git_origin_url` | Easy |
-| opencode | `~/.local/share/opencode/opencode.db` | SQLite | `session_v2`: `directory, title, time_created, time_updated` | Easy |
-| Cline / Roo | VS Code `globalStorage/<ext-id>/tasks/<id>/` | JSON | `ui_messages.json` `ts` per message | Easy–medium |
-| Copilot Chat | VS Code `workspaceStorage/<hash>/chatSessions/*.jsonl` | JSONL snapshot + patch ops | `creationDate`, request timestamps; project from `workspace.json` | Medium |
-| Gemini CLI *(docs)* | `~/.gemini/tmp/<project_hash>/chats/` | JSON | Message timestamps; project is a hash of the root dir | Medium |
-| Aider *(docs)* | `.aider.chat.history.md` per repo | Markdown | Only "chat started at" headers | Medium |
-| Cursor *(docs)* | `…/Cursor/User/globalStorage/state.vscdb` (`cursorDiskKV`) + `~/.cursor/…` | SQLite KV | `composerData:<id>` (`createdAt`), `bubbleId:…` | Hard |
-| Antigravity | IDE: `~/.gemini/antigravity/conversations/*.pb`; CLI: `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl` + `conversation_summaries.db` | IDE: binary protobuf; CLI: JSONL + SQLite | CLI steps: `type`, `source`, `created_at` | IDE not feasible; CLI easy (read since 2026-10-22) |
-| Windsurf *(docs)* | `~/.codeium/windsurf/cascade/*.pb` | Encrypted protobuf | — | Not feasible; use hooks |
+| Agent               | Path                                                                                                                                                               | Format                                    | Time/project fields                                                                                                                                                                                                           | Effort                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Claude Code         | `~/.claude/projects/<slug>/<sessionId>.jsonl` (+ `<sessionId>/subagents/`)                                                                                         | JSONL                                     | `timestamp`, `cwd`, `gitBranch`, `sessionId`, `isSidechain`; `ai-title` gives a title. **Transcripts are deleted after ~30 days by default (`cleanupPeriodDays`).**                                                           | Easy                                               |
+| Codex CLI           | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (sometimes `.zst`) + `~/.codex/state_5.sqlite`                                                                      | JSONL + SQLite                            | `session_meta` (`cwd`, `git.branch`, `git.repository_url`); `task_started/complete` with `duration_ms`; SQLite `threads` table has `cwd, created_at_ms, updated_at_ms, title, first_user_message, git_branch, git_origin_url` | Easy                                               |
+| opencode            | `~/.local/share/opencode/opencode.db`                                                                                                                              | SQLite                                    | `session_v2`: `directory, title, time_created, time_updated`                                                                                                                                                                  | Easy                                               |
+| Cline / Roo         | VS Code `globalStorage/<ext-id>/tasks/<id>/`                                                                                                                       | JSON                                      | `ui_messages.json` `ts` per message                                                                                                                                                                                           | Easy–medium                                        |
+| Copilot Chat        | VS Code `workspaceStorage/<hash>/chatSessions/*.jsonl`                                                                                                             | JSONL snapshot + patch ops                | `creationDate`, request timestamps; project from `workspace.json`                                                                                                                                                             | Medium                                             |
+| Gemini CLI _(docs)_ | `~/.gemini/tmp/<project_hash>/chats/`                                                                                                                              | JSON                                      | Message timestamps; project is a hash of the root dir                                                                                                                                                                         | Medium                                             |
+| Aider _(docs)_      | `.aider.chat.history.md` per repo                                                                                                                                  | Markdown                                  | Only "chat started at" headers                                                                                                                                                                                                | Medium                                             |
+| Cursor _(docs)_     | `…/Cursor/User/globalStorage/state.vscdb` (`cursorDiskKV`) + `~/.cursor/…`                                                                                         | SQLite KV                                 | `composerData:<id>` (`createdAt`), `bubbleId:…`                                                                                                                                                                               | Hard                                               |
+| Antigravity         | IDE: `~/.gemini/antigravity/conversations/*.pb`; CLI: `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl` + `conversation_summaries.db` | IDE: binary protobuf; CLI: JSONL + SQLite | CLI steps: `type`, `source`, `created_at`                                                                                                                                                                                     | IDE not feasible; CLI easy (read since 2026-10-22) |
+| Windsurf _(docs)_   | `~/.codeium/windsurf/cascade/*.pb`                                                                                                                                 | Encrypted protobuf                        | —                                                                                                                                                                                                                             | Not feasible; use hooks                            |
 
 ### Push-based collection (optional, more accurate)
 
@@ -90,25 +90,25 @@ Use: parse logs as the baseline (zero setup, works on past days), offer `clockou
 
 ## 3. Form factor
 
-| Option | Reads local agent logs? | Effort | Verdict |
-|---|---|---|---|
-| CLI | Yes | Low | Core |
-| CLI + local web UI (`clockout serve`) | Yes | Medium | **Recommended UI.** Same pattern as ActivityWatch (local server + web UI). A plain textarea works with Wispr Flow. |
-| MCP server over the same core | Yes | Low | Bonus: "fill my timesheet" from inside Claude Code / Codex |
-| Hosted web app | **No.** File System Access API is Chromium-only, blocks the home dir, the picker hides dotfolders, permissions don't persist | Medium | Only as a static demo on fixtures |
-| Desktop app (Tauri/Electron/menubar) | Yes | High (signing, notarization) | Not in 2 weeks |
-| Browser extension | No | — | No |
+| Option                                | Reads local agent logs?                                                                                                      | Effort                       | Verdict                                                                                                            |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| CLI                                   | Yes                                                                                                                          | Low                          | Core                                                                                                               |
+| CLI + local web UI (`clockout serve`) | Yes                                                                                                                          | Medium                       | **Recommended UI.** Same pattern as ActivityWatch (local server + web UI). A plain textarea works with Wispr Flow. |
+| MCP server over the same core         | Yes                                                                                                                          | Low                          | Bonus: "fill my timesheet" from inside Claude Code / Codex                                                         |
+| Hosted web app                        | **No.** File System Access API is Chromium-only, blocks the home dir, the picker hides dotfolders, permissions don't persist | Medium                       | Only as a static demo on fixtures                                                                                  |
+| Desktop app (Tauri/Electron/menubar)  | Yes                                                                                                                          | High (signing, notarization) | Not in 2 weeks                                                                                                     |
+| Browser extension                     | No                                                                                                                           | —                            | No                                                                                                                 |
 
 ---
 
 ## 4. Calendar
 
-| Option | Covers | Attendance data | Cost |
-|---|---|---|---|
-| **Private ICS URL** | Google, iCloud, most CalDAV; Outlook partly | **Google's secret ICS includes `ATTENDEE;PARTSTAT=…` for every guest, including you.** Outlook's published ICS reportedly drops attendees. | None. Default. |
-| macOS EventKit (Swift helper or `ekctl`) | Every account added to macOS Calendar | `EKParticipant.participantStatus` | One OS permission prompt. Mac only. |
-| Google Calendar API | Google | `attendees[].self.responseStatus`, `eventType` (skip focus time, OOO, working location) | `calendar.readonly` is a sensitive scope: verification takes days; unverified apps are capped at 100 users with a warning screen. Use "bring your own OAuth client" if at all. |
-| Microsoft Graph | M365 | `responseStatus` | App registration; many tenants need admin consent. |
+| Option                                   | Covers                                      | Attendance data                                                                                                                            | Cost                                                                                                                                                                           |
+| ---------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Private ICS URL**                      | Google, iCloud, most CalDAV; Outlook partly | **Google's secret ICS includes `ATTENDEE;PARTSTAT=…` for every guest, including you.** Outlook's published ICS reportedly drops attendees. | None. Default.                                                                                                                                                                 |
+| macOS EventKit (Swift helper or `ekctl`) | Every account added to macOS Calendar       | `EKParticipant.participantStatus`                                                                                                          | One OS permission prompt. Mac only.                                                                                                                                            |
+| Google Calendar API                      | Google                                      | `attendees[].self.responseStatus`, `eventType` (skip focus time, OOO, working location)                                                    | `calendar.readonly` is a sensitive scope: verification takes days; unverified apps are capped at 100 users with a warning screen. Use "bring your own OAuth client" if at all. |
+| Microsoft Graph                          | M365                                        | `responseStatus`                                                                                                                           | App registration; many tenants need admin consent.                                                                                                                             |
 
 **Did I actually attend?**
 - RSVP: accepted → count; tentative / needs-action → ask; declined → drop; events with no attendees (solo blocks) → count.
@@ -149,15 +149,15 @@ Findings that change round 1:
 - Borrowing Microsoft's own Graph PowerShell client ID works technically but isn't a sound basis. Register a Clockout public client and accept `--client-id`.
 - Unverified Google OAuth apps are capped at 100 users for the project's lifetime.
 
-| Provider | Best method | RSVP | Friction |
-|---|---|---|---|
-| Google personal | Secret ICS URL | Yes | Low |
-| Google Workspace | ICS if allowed → OS store → OAuth | Yes | Low–medium |
-| Outlook.com | Graph device code (`/consumers`) | Yes | Low |
-| M365 work | macOS EventKit / Windows Outlook COM / Graph with admin consent | Yes | High for Graph |
-| iCloud, Fastmail, Zoho | CalDAV + app password (or EventKit) | Yes | Medium |
-| Proton | Share-link ICS (paid) | Probably not | Low |
-| Exchange on-prem | EWS / Outlook COM / EventKit | Yes | Medium–high |
+| Provider               | Best method                                                     | RSVP         | Friction       |
+| ---------------------- | --------------------------------------------------------------- | ------------ | -------------- |
+| Google personal        | Secret ICS URL                                                  | Yes          | Low            |
+| Google Workspace       | ICS if allowed → OS store → OAuth                               | Yes          | Low–medium     |
+| Outlook.com            | Graph device code (`/consumers`)                                | Yes          | Low            |
+| M365 work              | macOS EventKit / Windows Outlook COM / Graph with admin consent | Yes          | High for Graph |
+| iCloud, Fastmail, Zoho | CalDAV + app password (or EventKit)                             | Yes          | Medium         |
+| Proton                 | Share-link ICS (paid)                                           | Probably not | Low            |
+| Exchange on-prem       | EWS / Outlook COM / EventKit                                    | Yes          | Medium–high    |
 
 **OS stores aggregate every account with no OAuth:** macOS EventKit (`EKParticipant.participantStatus`, `isCurrentUser`; full access on macOS 14+; permission goes to the terminal app; avoid icalBuddy on Sequoia), Windows classic Outlook COM (`ResponseStatus`), Linux khal/vdirsyncer folders.
 
@@ -165,18 +165,18 @@ Findings that change round 1:
 
 ## 8. More agents (checked locally where marked)
 
-| Agent | Path | Format | Fields | Hooks / OTel |
-|---|---|---|---|---|
-| Antigravity CLI ✓ | `~/.gemini/antigravity-cli/conversation_summaries.db`; `brain/<id>/.system_generated/logs/transcript.jsonl` | SQLite + JSONL | `conversation_id, title, workspace_uris, last_modified_time, last_user_input_time, step_count` | Hooks in `~/.gemini/config/hooks.json`; no OTel |
-| Antigravity IDE ✓ | `~/.gemini/antigravity/conversations/*.pb` | Opaque protobuf | — | Use the CLI index above, which also lists IDE conversations |
-| pi ✓ | `~/.pi/agent/sessions/--<cwd>--/<ts>_<uuid>.jsonl` | JSONL v3 | header `id, timestamp, cwd`; entry `timestamp` | Extension events |
-| opencode ✓ | `~/.local/share/opencode/opencode.db` | SQLite | `session_v2(directory, title, time_created, time_updated)` | Plugin events |
-| Copilot CLI ✓ | `~/.copilot/session-store.db` | SQLite + JSONL | `sessions(cwd, repository, branch, summary, created_at, updated_at)`, `turns.timestamp` | Hooks; OTel (`COPILOT_OTEL_ENABLED`) |
-| Gemini CLI | `~/.gemini/tmp/<hash>/chats/` | JSON / JSONL (two formats) | message timestamps; cwd only via hash | Hooks; OTel |
-| Goose | `~/.local/share/goose/sessions/sessions.db` | SQLite | `working_dir, created_at, updated_at` | OTel (unverified) |
-| Crush | `<project>/.crush/crush.db` + `~/.local/share/crush/projects.json` | SQLite | `sessions(title, created_at, updated_at)` | — |
-| Amp | `~/.local/share/amp/threads/*.json`; `amp threads export` | JSON | timestamps; no cwd | — |
-| Kiro | several stores across versions | Mixed | `title, workspacePaths, timestamp` | CLI hooks |
+| Agent             | Path                                                                                                        | Format                     | Fields                                                                                         | Hooks / OTel                                                |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Antigravity CLI ✓ | `~/.gemini/antigravity-cli/conversation_summaries.db`; `brain/<id>/.system_generated/logs/transcript.jsonl` | SQLite + JSONL             | `conversation_id, title, workspace_uris, last_modified_time, last_user_input_time, step_count` | Hooks in `~/.gemini/config/hooks.json`; no OTel             |
+| Antigravity IDE ✓ | `~/.gemini/antigravity/conversations/*.pb`                                                                  | Opaque protobuf            | —                                                                                              | Use the CLI index above, which also lists IDE conversations |
+| pi ✓              | `~/.pi/agent/sessions/--<cwd>--/<ts>_<uuid>.jsonl`                                                          | JSONL v3                   | header `id, timestamp, cwd`; entry `timestamp`                                                 | Extension events                                            |
+| opencode ✓        | `~/.local/share/opencode/opencode.db`                                                                       | SQLite                     | `session_v2(directory, title, time_created, time_updated)`                                     | Plugin events                                               |
+| Copilot CLI ✓     | `~/.copilot/session-store.db`                                                                               | SQLite + JSONL             | `sessions(cwd, repository, branch, summary, created_at, updated_at)`, `turns.timestamp`        | Hooks; OTel (`COPILOT_OTEL_ENABLED`)                        |
+| Gemini CLI        | `~/.gemini/tmp/<hash>/chats/`                                                                               | JSON / JSONL (two formats) | message timestamps; cwd only via hash                                                          | Hooks; OTel                                                 |
+| Goose             | `~/.local/share/goose/sessions/sessions.db`                                                                 | SQLite                     | `working_dir, created_at, updated_at`                                                          | OTel (unverified)                                           |
+| Crush             | `<project>/.crush/crush.db` + `~/.local/share/crush/projects.json`                                          | SQLite                     | `sessions(title, created_at, updated_at)`                                                      | —                                                           |
+| Amp               | `~/.local/share/amp/threads/*.json`; `amp threads export`                                                   | JSON                       | timestamps; no cwd                                                                             | —                                                           |
+| Kiro              | several stores across versions                                                                              | Mixed                      | `title, workspacePaths, timestamp`                                                             | CLI hooks                                                   |
 
 Good reference for 40+ agents' paths and schemas: getagentseal/codeburn `docs/providers`.
 
@@ -186,16 +186,16 @@ Good reference for 40+ agents' paths and schemas: getagentseal/codeburn `docs/pr
 
 Checked locally with `--help`: claude 2.1.302, codex 0.155, agy 1.3.5, opencode 2.0.29, pi 1.2.0, copilot 1.0.83.
 
-| Backend | Invocation | Structured output | Policy |
-|---|---|---|---|
-| Claude Code | `claude -p --output-format json --json-schema … --tools ""` | Enforced | Shelling out to the user's own unmodified `claude` is allowed. Using the Agent SDK or the user's token on a subscription is **not** allowed for third-party developers. Don't use `--bare` (reads only `ANTHROPIC_API_KEY`). |
-| Codex | `codex exec --output-schema … -s read-only --ephemeral` (or warm `codex app-server`) | Enforced | Allowed |
-| OpenAI "Sign in with ChatGPT" | App's own OAuth + Responses API | Enforced | Officially supported for open-source local apps (preview, Plus/Pro) |
-| Antigravity | `agy -p --output-format json --json-schema … --mode plan` | Enforced | Grey: terms forbid use "in connection with products not provided by us"; Google has banned accounts for third-party OAuth use. Opt-in only. |
-| Gemini CLI | — | — | No longer serves personal accounts since 18 Jun 2026 (replaced by Antigravity CLI); API key / Vertex only |
-| Copilot | `copilot -p … --output-format json` or `@github/copilot-sdk` | Prompted | Allowed; uses premium requests |
-| opencode / pi | `opencode run --format json` / `pi -p --mode json --no-tools` | Prompted | Depends on configured provider; never route Anthropic Pro/Max OAuth through them |
-| Ollama / LM Studio | localhost HTTP | Enforced | Free, private |
+| Backend                       | Invocation                                                                           | Structured output | Policy                                                                                                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code                   | `claude -p --output-format json --json-schema … --tools ""`                          | Enforced          | Shelling out to the user's own unmodified `claude` is allowed. Using the Agent SDK or the user's token on a subscription is **not** allowed for third-party developers. Don't use `--bare` (reads only `ANTHROPIC_API_KEY`). |
+| Codex                         | `codex exec --output-schema … -s read-only --ephemeral` (or warm `codex app-server`) | Enforced          | Allowed                                                                                                                                                                                                                      |
+| OpenAI "Sign in with ChatGPT" | App's own OAuth + Responses API                                                      | Enforced          | Officially supported for open-source local apps (preview, Plus/Pro)                                                                                                                                                          |
+| Antigravity                   | `agy -p --output-format json --json-schema … --mode plan`                            | Enforced          | Grey: terms forbid use "in connection with products not provided by us"; Google has banned accounts for third-party OAuth use. Opt-in only.                                                                                  |
+| Gemini CLI                    | —                                                                                    | —                 | No longer serves personal accounts since 18 Jun 2026 (replaced by Antigravity CLI); API key / Vertex only                                                                                                                    |
+| Copilot                       | `copilot -p … --output-format json` or `@github/copilot-sdk`                         | Prompted          | Allowed; uses premium requests                                                                                                                                                                                               |
+| opencode / pi                 | `opencode run --format json` / `pi -p --mode json --no-tools`                        | Prompted          | Depends on configured provider; never route Anthropic Pro/Max OAuth through them                                                                                                                                             |
+| Ollama / LM Studio            | localhost HTTP                                                                       | Enforced          | Free, private                                                                                                                                                                                                                |
 
 Sources: code.claude.com/docs/en/legal-and-compliance (wording checked); developers.openai.com/siwc/token-sharing-open-source; antigravity.google/terms; developers.googleblog.com (Gemini CLI transition).
 
@@ -205,12 +205,11 @@ Sources: code.claude.com/docs/en/legal-and-compliance (wording checked); develop
 
 ## 10. TUI vs web
 
-| Framework | `npx` on plain Node? | Fit |
-|---|---|---|
-| **Ink 8** (Claude Code, Gemini CLI) | Yes, Node ≥ 22 | High: React + TS; `usePaste` for bracketed paste |
-| OpenTUI (opencode) | No: Bun ≥ 1.3.14 or Node ≥ 26.4 with `--experimental-ffi` | Best widgets, but breaks `npx` |
-| Bubble Tea / Ratatui / Textual | Needs Go/Rust binaries or Python | Language switch |
-
+| Framework                           | `npx` on plain Node?                                      | Fit                                              |
+| ----------------------------------- | --------------------------------------------------------- | ------------------------------------------------ |
+| **Ink 8** (Claude Code, Gemini CLI) | Yes, Node ≥ 22                                            | High: React + TS; `usePaste` for bracketed paste |
+| OpenTUI (opencode)                  | No: Bun ≥ 1.3.14 or Node ≥ 26.4 with `--experimental-ffi` | Best widgets, but breaks `npx`                   |
+| Bubble Tea / Ratatui / Textual      | Needs Go/Rust binaries or Python                          | Language switch                                  |
 - **Wispr Flow** pastes into Terminal.app and iTerm2 (Accessibility permission), Warp, Ghostty, kitty, Alacritty, and the VS Code / Cursor terminals. Not over SSH or in WSL (use "paste last transcript"). Past breakages were in how the app handled pastes (Claude Code 2.1.83, fixed later), so use bracketed paste and never auto-submit on a newline.
 - **Competitor UX**: Timely AutoSheet's daily draft → review → submit with an evidence view is the closest flow. Timeline tools (Timing, Toggl) need a GUI because editing is drag-and-resize, which voice replaces.
 - **Demo**: VHS for GIFs; asciinema for playback on a web page; ttyd for a live hosted TUI.
