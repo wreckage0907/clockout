@@ -52,4 +52,3 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # The packed tarball, installed the way npm users get it, runs as `clockout`.
       - run: pnpm smoke
-

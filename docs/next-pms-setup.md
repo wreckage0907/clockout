@@ -71,14 +71,14 @@ When the plan looks right, send it from the review screen (**Ctrl+S**) or with `
 
 Clockout shows the program's message as it is.
 
-| Message | What to do |
-|---|---|
-| No next-pms settings at … | Step 3: the file is missing or at another path. |
-| … can be read by others | Run the `chmod 600` from step 3. |
-| … needs a "api_secret" | The settings file is missing that value. |
-| The ERP refused the API key | The key or secret is wrong, or was generated again: repeat steps 2 and 3. |
-| Your ERP user isn't linked to an employee | Ask whoever runs the ERP to link your user to your employee record. |
-| This ERP doesn't have next-pms | The site doesn't run next-pms, or its version is too old. |
-| Couldn't reach … | Check the address in the settings file and your connection. |
+| Message                                   | What to do                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------------- |
+| No next-pms settings at …                 | Step 3: the file is missing or at another path.                           |
+| … can be read by others                   | Run the `chmod 600` from step 3.                                          |
+| … needs a "api_secret"                    | The settings file is missing that value.                                  |
+| The ERP refused the API key               | The key or secret is wrong, or was generated again: repeat steps 2 and 3. |
+| Your ERP user isn't linked to an employee | Ask whoever runs the ERP to link your user to your employee record.       |
+| This ERP doesn't have next-pms            | The site doesn't run next-pms, or its version is too old.                 |
+| Couldn't reach …                          | Check the address in the settings file and your connection.               |
 
 The key is never shown to the AI helper, and Clockout never prints it.

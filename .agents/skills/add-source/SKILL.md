@@ -1,4 +1,5 @@
 ---
+
 name: add-source
 description: Add a new activity source to Clockout (a coding agent's session logs, a calendar, a code host, or any tool that records work). Use when asked to support a new tool as a data source or to read activity from somewhere new.
 ---

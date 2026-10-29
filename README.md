@@ -55,18 +55,17 @@
 
 **🪴 Usage**
 
-1. Install it:
+1.  Install it:
 
-       npm install --global clockout-cli
+        npm install --global clockout-cli
 
-2. Find your tools and create a config:
+2.  Find your tools and create a config:
 
-       clockout init
+        clockout init
 
-3. Review today:
+3.  Review today:
 
-       clockout
-
+        clockout
 <br>
 
 **🛠️ From source**
@@ -142,14 +141,14 @@ becomes `node dist/cli.js` when you run it from a clone.
 
 <samp>
 
-| | Step | What happens |
-|---|---|---|
-| **1** | **Run `init`** | Clockout detects local agent logs, GitHub and an AI helper, then asks for your time zone, working hours and calendar. |
-| **2** | **Open the day** | Press Enter to expand the timesheet cards. Move with **↑ ↓**, edit a duration with **Enter** and nudge it with **− / +**; press **Space** or click a checkbox to select several. |
-| **3** | **Say what is wrong** | Type or dictate a correction. Review the proposed operations, **Enter** to apply, **Esc** to revise, **Ctrl+Z** to undo. |
-| **4** | **Take the sheet** | **Ctrl+Y** copies tab-separated rows (or your default export), or only the checked rows when any are selected; `/copy md`, `/copy csv` or `/copy <your export>` copy another format. Use `export` for a file, another format or a range of dates. |
-| **5** | **Say your standup** | `clockout standup` (or `/standup` in the app) writes it from the previous working day, today's meetings and your open PRs, and copies it. Blockers are only what you add: `-b "waiting on API keys"` or `/standup waiting on API keys`. |
-| **6** | **Pick another day** | Run `yesterday` or `day 2026-10-16`; in the review screen, click the date or use **PgUp / PgDn**. |
+|       | Step                  | What happens                                                                                                                                                                                                                                      |
+| ----- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | **Run `init`**        | Clockout detects local agent logs, GitHub and an AI helper, then asks for your time zone, working hours and calendar.                                                                                                                             |
+| **2** | **Open the day**      | Press Enter to expand the timesheet cards. Move with **↑ ↓**, edit a duration with **Enter** and nudge it with **− / +**; press **Space** or click a checkbox to select several.                                                                  |
+| **3** | **Say what is wrong** | Type or dictate a correction. Review the proposed operations, **Enter** to apply, **Esc** to revise, **Ctrl+Z** to undo.                                                                                                                          |
+| **4** | **Take the sheet**    | **Ctrl+Y** copies tab-separated rows (or your default export), or only the checked rows when any are selected; `/copy md`, `/copy csv` or `/copy <your export>` copy another format. Use `export` for a file, another format or a range of dates. |
+| **5** | **Say your standup**  | `clockout standup` (or `/standup` in the app) writes it from the previous working day, today's meetings and your open PRs, and copies it. Blockers are only what you add: `-b "waiting on API keys"` or `/standup waiting on API keys`.           |
+| **6** | **Pick another day**  | Run `yesterday` or `day 2026-10-16`; in the review screen, click the date or use **PgUp / PgDn**.                                                                                                                                                 |
 
 Anything you'd rather say once ("remember the reader isn't technical", "remember we spell it
 frontend") is kept as a memory: Clockout hands it to the AI helper with every description and
@@ -178,15 +177,15 @@ clockout day 2026-10-16 --md --no-ai
 
 <samp>
 
-| Guide | Covers |
-|---|---|
-| [How it works](docs/how-it-works.md) | Evidence becoming time blocks, corrections staying yours, how rows and standups are written |
-| [Connections](docs/connections.md) | Google Calendar or ICS, sending days to a timesheet system, MCP servers, Wispr Flow recordings |
-| [Exports and destinations](docs/exports.md) | Named formats of your own, and `to =` places writes go (vault notes, MCP tools) |
-| [On a schedule](docs/scheduling.md) | A daily job: launchd, systemd or cron, what it writes and where |
-| [Troubleshooting](docs/troubleshooting.md) | When sources fail, no AI helper, a damaged saved day, Node too old |
-| [Timesheet API](docs/timesheet-api.md) | The five JSON requests any timesheet system answers |
-| [Google Calendar setup](docs/google-setup.md) | Creating the desktop sign-in client, and sign-in problems |
+| Guide                                         | Covers                                                                                         |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [How it works](docs/how-it-works.md)          | Evidence becoming time blocks, corrections staying yours, how rows and standups are written    |
+| [Connections](docs/connections.md)            | Google Calendar or ICS, sending days to a timesheet system, MCP servers, Wispr Flow recordings |
+| [Exports and destinations](docs/exports.md)   | Named formats of your own, and `to =` places writes go (vault notes, MCP tools)                |
+| [On a schedule](docs/scheduling.md)           | A daily job: launchd, systemd or cron, what it writes and where                                |
+| [Troubleshooting](docs/troubleshooting.md)    | When sources fail, no AI helper, a damaged saved day, Node too old                             |
+| [Timesheet API](docs/timesheet-api.md)        | The five JSON requests any timesheet system answers                                            |
+| [Google Calendar setup](docs/google-setup.md) | Creating the desktop sign-in client, and sign-in problems                                      |
 
 </samp>
 
