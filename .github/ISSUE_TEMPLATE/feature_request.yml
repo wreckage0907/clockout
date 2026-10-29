@@ -1,0 +1,16 @@
+name: Feature request
+description: A source, a command or a change you'd like
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The situation first, then what you'd like Clockout to do about it.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today
+      description: Any workaround, or another tool that does it.

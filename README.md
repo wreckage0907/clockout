@@ -85,8 +85,7 @@
 **📝 Prerequisites**
 
 1. **Node.js 22.12+** — use **22.13+** for opencode and Antigravity sources
-2. **pnpm 11** through Corepack
-3. At least one supported coding-agent, GitHub or calendar source
+2. At least one supported coding-agent, GitHub or calendar source
 
 <br>
 
@@ -106,21 +105,30 @@
 
 **🪴 Usage**
 
-1. Clone and build:
+1. Install it:
 
-       git clone https://github.com/wreckage0907/clockout
-       cd clockout
-       corepack enable
-       pnpm install
-       pnpm build
+       npm install --global clockout-cli
 
 2. Find your tools and create a config:
 
-       node dist/cli.js init
+       clockout init
 
 3. Review today:
 
-       node dist/cli.js
+       clockout
+
+<br>
+
+**🛠️ From source**
+
+Needs **pnpm 11** through Corepack. Every `clockout` command in this README
+becomes `node dist/cli.js` when you run it from a clone.
+
+    git clone https://github.com/wreckage0907/clockout
+    cd clockout
+    corepack enable
+    pnpm install
+    pnpm build
 
 </samp>
 
@@ -150,7 +158,7 @@ standup, and Setup → AI helper lists what it remembers.
 **One command, a finished sheet**
 
 ```sh
-node dist/cli.js day 2026-10-16 --md --no-ai
+clockout day 2026-10-16 --md --no-ai
 ```
 
 ```text
@@ -293,7 +301,7 @@ text.
 For Google Calendar, [create a desktop sign-in client](docs/google-setup.md), then run:
 
 ```sh
-node dist/cli.js connect google
+clockout connect google
 ```
 
 For any calendar with a private iCal address, choose **Paste a private calendar address (ICS)**
@@ -330,8 +338,8 @@ this changes only those cards, not the saved project mappings. From scripts, pre
 the same flow with:
 
 ```sh
-node dist/cli.js push yesterday --dry-run
-node dist/cli.js push yesterday --yes
+clockout push yesterday --dry-run
+clockout push yesterday --yes
 ```
 
 </samp>
@@ -358,9 +366,9 @@ to = { mcp = "notion", tool = "append_block", arguments = { content = "{text}" }
 ```
 
 ```sh
-node dist/cli.js export -f daily-note --dest          # asks first
-node dist/cli.js export -f daily-note --dest --dry-run
-node dist/cli.js standup --to daily-note              # the standup, into the same note
+clockout export -f daily-note --dest          # asks first
+clockout export -f daily-note --dest --dry-run
+clockout standup --to daily-note              # the standup, into the same note
 ```
 
 `{text}` and `{date}` are the only things filled in. A file path is set by hand (or in Setup),
@@ -378,11 +386,11 @@ too: `to = { command = ["my-writer"] }` gets `{ date, format, text }` as JSON on
 Write your day somewhere every day, without running anything:
 
 ```sh
-node dist/cli.js schedule add daily-note --at 18:30 --for today -f daily-note
-node dist/cli.js schedule                 # what's set up, and where each writes
-node dist/cli.js run daily-note           # what the scheduler runs (try it now)
-node dist/cli.js schedule log             # what the last runs did
-node dist/cli.js schedule remove daily-note
+clockout schedule add daily-note --at 18:30 --for today -f daily-note
+clockout schedule                 # what's set up, and where each writes
+clockout run daily-note           # what the scheduler runs (try it now)
+clockout schedule log             # what the last runs did
+clockout schedule remove daily-note
 ```
 
 Adding a job shows the time, the day and the exact place it writes — that's the confirmation;
@@ -408,9 +416,9 @@ Give a remote MCP server a short name and its address; Clockout signs in through
 (OAuth with dynamic registration) and lists the server's tools to show it works:
 
 ```sh
-node dist/cli.js connect notes https://notes.example.com/mcp
-node dist/cli.js connect notes      # sign in again later
-node dist/cli.js disconnect notes   # revoke and forget the sign-in
+clockout connect notes https://notes.example.com/mcp
+clockout connect notes      # sign in again later
+clockout disconnect notes   # revoke and forget the sign-in
 ```
 
 The server is kept in `[[mcp]]` in the config.
@@ -420,7 +428,7 @@ the source that reads them, so a meeting you recorded counts as attended for as 
 and its calendar event stops asking whether you were there:
 
 ```sh
-node dist/cli.js connect wispr
+clockout connect wispr
 ```
 
 What a recording says (its summary) is shown next to the meeting and nowhere else: it is never
@@ -436,7 +444,7 @@ sent to the AI helper or into an export. Note destinations for exports (a vault 
 
 Anything that answers five JSON requests (list a day's entries, search tasks, create, update,
 delete) with a bearer token can take your days: see [docs/timesheet-api.md](docs/timesheet-api.md).
-`pnpm mock-pms` runs a mock one on your machine to try it. For a system that doesn't, point
+In a clone, `pnpm mock-pms` runs a mock one on your machine to try it. For a system that doesn't, point
 Clockout at a program instead:
 
 ```toml
