@@ -4,7 +4,7 @@ Clockout can send a day to any timesheet or project-management system that answe
 requests. Clockout has no ERP built in: this is how it reaches your company's PMS, a small
 service in front of an ERP, or the mock PMS used in the tests. (Nothing speaks it? A `command`
 target runs a program of yours instead, with the same shapes on stdin and stdout: see
-"Sending the day" in the spec. For rtCamp's next-pms there is one ready: see
+"Sending the day" in the spec. For next-pms there is one ready: see
 [Send your day to next-pms](next-pms-setup.md).)
 
 ```toml

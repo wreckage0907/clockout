@@ -4,11 +4,11 @@ Status: accepted (2026-10-21). Superseded in part by [0013](0013-timesheet-syste
 
 ## Context
 
-Copying rows into a company ERP by hand is the step people skip. The spec had "pushing directly into any timesheet system's API" out of scope. The first target is a Frappe/ERPNext site running rtCamp's next-pms app, which is what the owner uses.
+Copying rows into a company ERP by hand is the step people skip. The spec had "pushing directly into any timesheet system's API" out of scope. The first target is a Frappe/ERPNext site running the next-pms app, which is what the owner uses.
 
 Two ways in were looked at:
 
-- **MCP.** rtCamp's ERP runs an MCP server, but its tools are generic (`create_document`, `update_document`, …), writes need a preview-then-confirm round trip and the MCP User / MCP Write User roles, and a generic create on `Timesheet` clashes with next-pms's one-timesheet-per-day-and-project rule. Frappe's own `frappe-mcp` is marked experimental. An MCP client would also be a new dependency.
+- **MCP.** The ERP runs an MCP server, but its tools are generic (`create_document`, `update_document`, …), writes need a preview-then-confirm round trip and the MCP User / MCP Write User roles, and a generic create on `Timesheet` clashes with next-pms's one-timesheet-per-day-and-project rule. Frappe's own `frappe-mcp` is marked experimental. An MCP client would also be a new dependency.
 - **next-pms's REST methods.** The ones its web app calls: `timesheet.save(date, task, hours, description)`, `update_timesheet_detail`, `delete`, `get_timesheet_data`, `task.get_task_list`. They keep all of next-pms's own rules (task required, backdating window, approved weeks, rejected rows). Frappe accepts an OAuth bearer token on any `/api/method` call, and Frappe 15+ supports PKCE public clients with dynamic registration, so a CLI can sign in like any app, no admin-issued API key.
 
 ## Decision

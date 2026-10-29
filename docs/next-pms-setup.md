@@ -1,6 +1,6 @@
 # Send your day to next-pms
 
-Clockout has no ERP built in ([ADR 0013](adr/0013-timesheet-systems-speak-one-api.md)). For rtCamp's next-pms on Frappe/ERPNext, a small program in this repository, [`examples/next-pms.mjs`](../examples/next-pms.mjs), sits between the two: Clockout asks it for your entries and tasks and hands it the rows to send, and it calls the same next-pms methods the ERP's own timesheet page uses. Everything next-pms checks there (a task on every entry, backdating limits, approved weeks) still applies.
+Clockout has no ERP built in ([ADR 0013](adr/0013-timesheet-systems-speak-one-api.md)). For next-pms on Frappe/ERPNext, a small program in this repository, [`examples/next-pms.mjs`](../examples/next-pms.mjs), sits between the two: Clockout asks it for your entries and tasks and hands it the rows to send, and it calls the same next-pms methods the ERP's own timesheet page uses. Everything next-pms checks there (a task on every entry, backdating limits, approved weeks) still applies.
 
 It takes about 5 minutes and you do it once. You need Node 22.12 or newer, which Clockout already needs.
 

@@ -91,7 +91,7 @@ confirm = { tool = "confirm_write", arguments = { preview = "{result.preview_id}
 ```
 
 - A tool's answer is read from `structuredContent`, or else its text content parsed as JSON. `isError` is shown as that system's error, next to the row, like an API's `error`.
-- `confirm` covers servers whose writes are a preview first and a confirmation second (rtCamp's ERP MCP works this way). Clockout makes the second call itself, because the person already confirmed the plan.
+- `confirm` covers servers whose writes are a preview first and a confirmation second (a Frappe ERP's MCP server works this way). Clockout makes the second call itself, because the person already confirmed the plan.
 - Sign-in follows MCP's authorization spec: protected-resource metadata, then the same discovery, dynamic registration, PKCE and loopback as `src/oauth.ts`, with `clockout connect mcp <url>`. A fixed token can come from `token_env` instead.
 - Clockout calls only the tools named in the mapping, and write tools only while sending a confirmed plan. Neither the AI nor the server decides what's called.
 - The AI drafts the mapping from the server's `tools/list` (names, descriptions, input schemas), never from any tool's results. Tool descriptions come from the server and can say anything, so they're treated as data. The drafted mapping is still only a proposal, shown in full before it's saved.

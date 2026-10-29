@@ -4,7 +4,7 @@ Status: accepted (2026-10-28). Supersedes in part [0006](0006-send-to-timesheet-
 
 ## Context
 
-ADR 0006 made rtCamp's Frappe next-pms the first timesheet target: its REST methods, signed in to with OAuth (discovery, dynamic client registration, PKCE, a rotating refresh token in `credentials.json`), through `clockout connect erp <url>`, a Setup section, a `/connect erp` command and a `connect` setting operation. Since then two generic targets arrived: `http` (any server answering Clockout's five-request JSON API, [timesheet-api.md](../timesheet-api.md)) and `command` (a program you name, ADR 0009).
+ADR 0006 made Frappe's next-pms the first timesheet target: its REST methods, signed in to with OAuth (discovery, dynamic client registration, PKCE, a rotating refresh token in `credentials.json`), through `clockout connect erp <url>`, a Setup section, a `/connect erp` command and a `connect` setting operation. Since then two generic targets arrived: `http` (any server answering Clockout's five-request JSON API, [timesheet-api.md](../timesheet-api.md)) and `command` (a program you name, ADR 0009).
 
 Keeping one company's ERP in the CLI means several hundred lines of Frappe-specific code, a second sign-in flow to keep working, and a product that looks like it is for one employer. Anything next-pms can do, a small service in front of it can do through the generic API, and that service can live next to the ERP, where its rules and its sign-in belong.
 

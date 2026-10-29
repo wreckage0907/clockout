@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// A `command` timesheet target for rtCamp's next-pms (Frappe/ERPNext), kept outside Clockout
+// A `command` timesheet target for next-pms (Frappe/ERPNext), kept outside Clockout
 // itself (ADR 0013). Clockout runs it with one JSON request on stdin and reads one JSON answer on
 // stdout, in the shapes of docs/timesheet-api.md. It calls the same whitelisted methods next-pms's
 // own web app calls, so all of next-pms's rules apply.
