@@ -35,7 +35,7 @@ One npm package, `clockout-cli` (bin: `clockout`), Node ≥ 22.12. The bare `clo
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **TUI** (`clockout`, built with Ink)            | Main surface, clickable ([ADR 0005](adr/0005-clickable-tui.md)). Home: the logo on the day's hours against a daily target, and the chat bar. The day: one card per timesheet row with an editable duration. Setup (ctrl+p) ticks sources and sets the target. |
 | **Plain CLI** (`clockout today --md`, `--json`) | Scripting and piping; no interactive UI.                                                                                                                                                                                                                      |
-| **MCP server + skill** (`clockout mcp`)         | Run Clockout from inside your agent: "fill in yesterday's timesheet". The agent's own model does the AI work.                                                                                                                                                 |
+| `clockout mcp` + skill _(stretch)_              | Run Clockout from inside your agent: "fill in yesterday's timesheet". The agent's own model does the AI work.                                                                                                                                                 |
 | `clockout serve` _(stretch)_                    | Small local web view of the same data.                                                                                                                                                                                                                        |
 
 Why a TUI and not a web page: the main advantage of a web UI is dragging and resizing blocks, and voice corrections replace that. A TUI matches where developers already are, runs with plain `npx`, and records well for the demo (VHS GIFs). Why Ink and not OpenTUI: OpenTUI needs Bun or Node ≥ 26 with an experimental flag, which breaks `npx` for most people. Ink is what Claude Code uses.
@@ -118,13 +118,13 @@ Read from local files; nothing to set up. Never read auth or token files. A conf
 | Pi                                                 | `$PI_CODING_AGENT_DIR/sessions/*/*.jsonl` (default `~/.pi/agent`) — `session` header has `cwd`; `message` role `user` (with text) and `bashExecution` (a `!` command) = human activity, `assistant` = agent work, `toolResult` ignored; title only from a name you gave the session (`session_info`). No branch in the log                                                                                                                                                                                                                          | ✓       |
 | Copilot CLI                                        | `~/.copilot/session-store.db` `sessions`, `turns`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | stretch |
 | Gemini CLI, Goose, Crush, Amp, Kiro, Cline, Cursor | see RESEARCH.md                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | later   |
-| Anything else                                      | `command` / `jsonl` source, or a hook that appends to Clockout's JSONL                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | ✓       |
+| Anything else                                      | `command` / `jsonl` source, or a hook that appends to Clockout's JSONL                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | later   |
 
 ### Code hosting
 
 | Source             | Reads                                                                                                                                                                                                                                                                                                        | MVP   |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
-| `git`              | `git log --author=<me>` in repos seen in agent `cwd`s + configured roots                                                                                                                                                                                                                                     | ✓     |
+| `git`              | `git log --author=<me>` in repos seen in agent `cwd`s + configured roots                                                                                                                                                                                                                                     | later |
 | `github`           | `gh auth token` or `GITHUB_TOKEN` → GraphQL (github.com, or `GITHUB_GRAPHQL_URL` for GitHub Enterprise) `contributionsCollection` (PRs and issues opened, reviews with their comments and the PR's branch) and your latest 100 issue and PR comments (a comment on someone else's PR counts as reviewing it) | ✓     |
 | GitLab / Bitbucket | via `command` source for now                                                                                                                                                                                                                                                                                 | later |
 
@@ -132,13 +132,14 @@ Read from local files; nothing to set up. Never read auth or token files. A conf
 
 No single method covers everyone. `clockout init` asks which calendar you use and picks the first method that works:
 
-| Tier | Method                                  | Covers                                                                                          | RSVP                                         | MVP     |
-| ---- | --------------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------- | ------- |
-| 1    | **ICS URL**                             | Google personal; Google Workspace if your admin allows the secret address; Proton (times only)  | Google: yes (`PARTSTAT`)                     | ✓       |
-| 2    | **OS calendar** — macOS EventKit helper | Every account added to macOS Calendar: Google, M365 work, Exchange, iCloud. No OAuth, no admin. | Yes                                          | ✓       |
-| 3    | **CalDAV** + app password               | iCloud, Fastmail, Zoho                                                                          | Yes                                          | stretch |
-| 4    | **Microsoft Graph** device-code sign-in | Outlook.com personal; M365 work only if an admin consents (blocked by default since Nov 2025)   | Yes                                          | stretch |
-| 5    | **Times only**                          | Anything with a feed but no attendee data                                                       | Treated as attended unless you say otherwise | ✓       |
+| Tier | Method                                              | Covers                                                                                          | RSVP                                         | MVP     |
+| ---- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------- | ------- |
+| 1    | **ICS URL**                                         | Google personal; Google Workspace if your admin allows the secret address; Proton (times only)  | Google: yes (`PARTSTAT`)                     | ✓       |
+| 1b   | **Google Calendar API** (`clockout connect google`) | Google accounts whose Workspace admin blocks the secret address; read-only, loopback + PKCE     | Yes (the `self` attendee)                    | ✓       |
+| 2    | **OS calendar** — macOS EventKit helper             | Every account added to macOS Calendar: Google, M365 work, Exchange, iCloud. No OAuth, no admin. | Yes                                          | later   |
+| 3    | **CalDAV** + app password                           | iCloud, Fastmail, Zoho                                                                          | Yes                                          | stretch |
+| 4    | **Microsoft Graph** device-code sign-in             | Outlook.com personal; M365 work only if an admin consents (blocked by default since Nov 2025)   | Yes                                          | stretch |
+| 5    | **Times only**                                      | Anything with a feed but no attendee data                                                       | Treated as attended unless you say otherwise | ✓       |
 
 **Hostile or broken invites** can't take the calendar down. The ICS feed is limited to 10 MB. An event that repeats every second or minute, or whose repeat rule can't be read, is skipped on its own and counted in one warning ("Calendar: skipped N events…"); at most 48 instances of one event, and 500 meetings a day, are kept. Google Calendar keeps at most 500 events a day per calendar and warns when it stops.
 
@@ -156,6 +157,8 @@ A calendar says a meeting was planned; a recording says you were there and for h
 - **Connecting turns it on**: `clockout connect wispr` adds `[[mcp]] name = "wispr"` and the `[[sources]] type = "wispr-flow"` entry, so nothing else has to be set up; Setup's Sources section signs in the same way and turns it off again.
 
 ### Generic
+
+Not built yet; these are how tools without an adapter will plug in.
 
 - **`command`**: runs your command with `CLOCKOUT_FROM` / `CLOCKOUT_TO` env vars and reads JSONL `Activity` from stdout.
 - **`jsonl`**: reads a file of `Activity` lines. Any agent with hooks can append to it.
@@ -200,7 +203,7 @@ Rules for every CLI backend: run in an empty temp dir with tools off (denied or 
 
 **Processes.** Each helper runs in its own process group: on the 2-minute timeout, or when Clockout quits (Ctrl+C, a closed terminal, a kill), the helper and anything it started are stopped and its temp folder removed.
 
-**Inside your agent (MCP mode):** `clockout mcp` exposes `get_day`, `get_blocks`, `apply_edits`, `export`. In Claude Code, Codex, Copilot, opencode, pi or Antigravity you say "clockout: fill in yesterday, the gap after lunch was the design review" and the agent's own model does the work — no subprocess, no credentials.
+**Inside your agent (MCP mode, stretch):** `clockout mcp` exposes `get_day`, `get_blocks`, `apply_edits`, `export`. In Claude Code, Codex, Copilot, opencode, pi or Antigravity you say "clockout: fill in yesterday, the gap after lunch was the design review" and the agent's own model does the work — no subprocess, no credentials.
 
 ## 7. Configuration
 
@@ -291,7 +294,7 @@ collect → store → resolve projects → blocks → attendance → summarize �
 ```
 
 1. **Collect** from each configured source for the date range.
-2. **Store** in local SQLite (`~/.local/share/clockout/`). Days survive agents deleting their logs; corrections are saved.
+2. **Store** as local JSON files (`~/.local/share/clockout/`, [ADR 0003](adr/0003-json-store.md)). Days survive agents deleting their logs; corrections are saved.
 3. **Resolve projects**: `[[projects]]` rules → git remote → repo root → `cwd`. A project an `ignore` rule names is dropped before blocks are built, with a note under the day. Ticket keys from branch names. Meetings: links/ticket keys in the description → title rules → attendee domain → past corrections for the same series → AI pick from the project list.
 4. **Blocks**: merge activity on the same project + branch/PR; a gap longer than `idle_cutoff` splits a block. Duration comes from **your** activity (prompts, commits, reviews), not agent runtime. Review blocks: cluster of comment/submit times, plus up to 15 min of reading before the first one where nothing else claims that time. A session where you try out a PR you reviewed (it ran on the PR's branch, by name or fetched as `pr-2305`, or its title names the PR) is part of the review. A comment on an issue joins whatever you were doing in that project then, or is its own short block. Calendar wins on overlap. Sessions running side by side: at any moment the one you last prompted wins, and a stretch of switching between them (pieces under 5 min in a row) is shared out by how long each had, one piece each, rather than folded into the first; a lone piece under 5 min joins its neighbour. Round to `round_to`.
 5. **Attendance**: accepted → count; tentative / no response → ask; declined → drop; no attendees → count. An event of 10 hours or more (an offsite, a conference, a block over several days) counts only for the day's working hours and is always asked about. Dense prompts or commits during an accepted meeting → ask "skipped or multitasking?". Never drop a meeting silently.
@@ -350,19 +353,21 @@ allow_open = false  # false: open questions make the run exit 1
 
 ## 9. MVP (must ship)
 
-- [ ] Core: collect, SQLite store, project resolution, blocks, gaps, attendance, heuristic summaries
-- [ ] Agent sources: Claude Code, Codex, Antigravity, opencode, pi
-- [ ] `git`, `github`
-- [ ] Calendar: ICS URL, macOS EventKit helper, times-only fallback
-- [ ] `command` and `jsonl` sources
-- [ ] AI backends: Claude Code, Ollama, API key, none (others behind the same interface as time allows)
-- [ ] Edit operations + diff + undo
-- [ ] Ink TUI review screen with the "say it" bar
-- [ ] `clockout today | yesterday | week | --from --to`, `--md`, `--json`
-- [ ] Export: clipboard, Markdown, CSV with date, project, task, hours, description
-- [ ] `clockout init` with auto-detect
+Shipped in 0.1. What changed on the way is noted; what didn't make it moved to §10.
+
+- [x] Core: collect, JSON store ([ADR 0003](adr/0003-json-store.md), not SQLite), project resolution, blocks, gaps, attendance, heuristic summaries
+- [x] Agent sources: Claude Code, Codex, Antigravity (CLI only), opencode, Pi
+- [x] `github` (the local `git` source moved to §10)
+- [x] Calendar: ICS URL, Google Calendar API, times only when a feed has no attendees (the macOS EventKit helper moved to §10)
+- [x] AI backends: Claude Code, opencode, Pi, none (Ollama and API keys moved to §10)
+- [x] Edit operations + diff + undo
+- [x] Ink TUI review screen with the "say it" bar
+- [x] `clockout today | yesterday | day <date>`, `--md`, `--json`; `export --from --to` for a range
+- [x] Export: clipboard, Markdown, CSV, TSV, JSON with date, project, task, hours, description
+- [x] `clockout init` with auto-detect
+- [x] README
 - [ ] VHS demo GIF (records a real day; the `--demo` command was removed)
-- [ ] README + demo video
+- [ ] Demo video
 
 ### Before release (added 2026-10-25)
 
@@ -380,8 +385,9 @@ See [plan.md](plan.md) for the order.
 ## 10. Stretch
 
 - `clockout mcp` + skill
-- AI backends: Copilot, opencode, pi, Antigravity (opt-in)
-- Sources: Copilot CLI, Gemini CLI, Goose, Crush; CalDAV; Microsoft Graph
+- AI backends: Copilot, Ollama / LM Studio, API keys
+- Sources: local `git` commits, `command` and `jsonl`, Copilot CLI, Gemini CLI, Goose, Crush; macOS EventKit, CalDAV, Microsoft Graph
+- `clockout week`
 - `clockout hooks install`, OTLP receiver
 - `clockout serve`
 - Any timesheet API or MCP server as a mapped target the AI drafts, and presets for Toggl / Harvest / Clockify / Jira ([ADR 0009](adr/0009-change-clockout-through-config.md), after release)
@@ -404,32 +410,22 @@ See [ADR 0004](adr/0004-toolchain.md) for the toolchain and [docs/plan.md](plan.
 - TUI: `ink` 8 + `ink-text-input`; CLI: `commander`; setup wizard: `@clack/prompts`
 - Config: `smol-toml`; validation: `zod`
 - Store: JSON files ([ADR 0003](adr/0003-json-store.md)); opencode's and Antigravity's SQLite are read with `node:sqlite` ([ADR 0008](adr/0008-read-agent-sqlite-with-node-sqlite.md))
-- Calendar: `node-ical`; macOS EventKit helper later
+- Calendar: `node-ical`; the Google Calendar API over `fetch`
 - GitHub: `@octokit/graphql`; git and agent CLIs via `execa`
 - `clipboardy`, `date-fns` + `@date-fns/tz`
-- Tests: fixture sessions (also power `--demo`); demo recording: VHS
+- Tests: synthetic fixture sessions; demo recording: VHS
 
 ## 13. Two-week plan
 
-| Days  | Goal                                                                                  |
-| ----- | ------------------------------------------------------------------------------------- |
-| 1     | Scaffold, config + `init`, fixtures, SQLite store. Start logging own build.           |
-| 2–3   | Agent sources (Claude Code, Codex, Antigravity, opencode, pi) + `git`                 |
-| 4     | `github`, calendar ICS + EventKit helper, attendance                                  |
-| 5–6   | Project resolution, blocks, gaps, heuristic summaries, `--md` / `--json` output       |
-| 7–8   | AI backend interface (Claude Code, Ollama, API key), summaries, edit operations, undo |
-| 9–10  | Ink TUI review screen, "say it" bar, Wispr testing across terminals                   |
-| 11    | Exports, `command` / `jsonl` sources                                                  |
-| 12    | Publish to npm; run on own two weeks → **real result**                                |
-| 13–14 | README, VHS GIF, demo video, submission. Stretch items if time allows.                |
+Day by day in [plan.md](plan.md), which replaced the first draft of this table. Built 2026-10-18 to 2026-11-01; on npm since 2026-10-29. What's left for the submission: the demo GIF and video, the real result (§15) and the final post.
 
 Weekly: export Wispr usage card; post progress with `#NoHandsChallenge`.
 
 ## 14. Open decisions
 
-- Daily hours available for the build
 - Accuracy target for the real result (e.g. within ±15 min/day of a manually kept log)
-- Whether MCP mode moves into the MVP (it's cheap once the core exists)
+- ~~Daily hours available for the build~~ (the build is done)
+- ~~Whether MCP mode moves into the MVP~~ (no: it stays in §10)
 
 ## 15. Success metric (for the submission)
 

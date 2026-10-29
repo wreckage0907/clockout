@@ -210,12 +210,14 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 ## Day 12 — Publish (milestone)
 
 - [x] npm trusted publishing workflow on version tags (needs one-time setup on npmjs.com)
-- [ ] `clockout-cli@0.1.0` published
+- [x] `clockout-cli@0.1.0` published (2026-10-29, by hand); 0.1.1 the first release through the workflow
 
 ## Day 13–14 — Submission
 
 - [ ] VHS demo GIF, demo video
-- [ ] Repo public, final #NoHandsChallenge post
+- [ ] The real result ([spec §15](spec.md#15-success-metric-for-the-submission)): Clockout's timesheet for its own build
+- [x] Repo public
+- [ ] Final #NoHandsChallenge post
 
 ## After release
 
