@@ -22,6 +22,10 @@
 
 </samp>
 
+<p align="center">
+  <img src="docs/images/demo.gif" alt="clockout on a sample day: the hours against an 8h target, one card per timesheet row, Setup, and /exit">
+</p>
+
 <br>
 
 # ⚙️ Installation

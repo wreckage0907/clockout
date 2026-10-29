@@ -366,7 +366,7 @@ Shipped in 0.1. What changed on the way is noted; what didn't make it moved to �
 - [x] Export: clipboard, Markdown, CSV, TSV, JSON with date, project, task, hours, description
 - [x] `clockout init` with auto-detect
 - [x] README
-- [ ] VHS demo GIF (records a real day; the `--demo` command was removed)
+- [x] VHS demo GIF (records a real day; the `--demo` command was removed)
 - [ ] Demo video
 
 ### Before release (added 2026-10-25)
@@ -417,7 +417,7 @@ See [ADR 0004](adr/0004-toolchain.md) for the toolchain and [docs/plan.md](plan.
 
 ## 13. Two-week plan
 
-Day by day in [plan.md](plan.md), which replaced the first draft of this table. Built 2026-10-18 to 2026-11-01; on npm since 2026-10-29. What's left for the submission: the demo GIF and video, the real result (§15) and the final post.
+Day by day in [plan.md](plan.md), which replaced the first draft of this table. Built 2026-10-18 to 2026-11-01; on npm since 2026-10-29. What's left for the submission: the demo video, the real result (§15) and the final post.
 
 Weekly: export Wispr usage card; post progress with `#NoHandsChallenge`.
 

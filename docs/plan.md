@@ -214,7 +214,8 @@ Tick items as they land. Each day ends with `pnpm check` passing.
 
 ## Day 13–14 — Submission
 
-- [ ] VHS demo GIF, demo video
+- [x] VHS demo GIF (`docs/images/demo.gif`, in the README)
+- [ ] Demo video
 - [ ] The real result ([spec §15](spec.md#15-success-metric-for-the-submission)): Clockout's timesheet for its own build
 - [x] Repo public
 - [ ] Final #NoHandsChallenge post
